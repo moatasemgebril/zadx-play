@@ -30,6 +30,7 @@ jobs:
           mkdir -p /tmp/keep && cp -r android ios /tmp/keep/
           flutter create --org com.zadx --project-name zadx --platforms android,ios,web,windows,macos .
           cp -r /tmp/keep/android/. android/ && cp -r /tmp/keep/ios/. ios/
+          rm -f test/widget_test.dart   # template test from flutter create, not ours
       - run: flutter pub get
       - run: flutter gen-l10n
       - name: Analyze
@@ -109,8 +110,10 @@ jobs:
           mkdir -p /tmp/keep && cp -r android ios /tmp/keep/
           flutter create --org com.zadx --project-name zadx --platforms android,ios .
           cp -r /tmp/keep/ios/. ios/
+          rm -f test/widget_test.dart
           flutter pub get && flutter gen-l10n
-          flutter build ios --no-codesign --debug
+          # Simulator build: proves the iOS app compiles without an Apple signing team.
+          flutter build ios --simulator --debug
 
   # 5) Backend (Firebase Functions) compiles
   backend:

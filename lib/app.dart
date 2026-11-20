@@ -14,27 +14,41 @@ import 'router.dart';
 import 'services/app_lock/app_lock_service.dart';
 import 'services/notifications/prayer_notification_service.dart';
 
-class ZadXApp extends ConsumerWidget {
+class ZadXApp extends ConsumerStatefulWidget {
   const ZadXApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ZadXApp> createState() => _ZadXAppState();
+}
+
+class _ZadXAppState extends ConsumerState<ZadXApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Reschedule adhan notifications whenever location/method changes,
+    // and once at start-up (fireImmediately is only available on listenManual).
+    ref.listenManual<AppSettings>(
+      settingsProvider,
+      (prev, next) {
+        if (prev == null ||
+            prev.cityId != next.cityId ||
+            prev.methodId != next.methodId ||
+            prev.asrFactor != next.asrFactor ||
+            prev.language != next.language) {
+          _reschedule(ref, next);
+        }
+        _syncSettings(ref, next);
+      },
+      fireImmediately: true,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
 
     // Keeps native lock policy in sync with the wallet for the app's lifetime.
     ref.watch(lockCoordinatorProvider);
-
-    // Reschedule adhan notifications whenever location/method changes.
-    ref.listen<AppSettings>(settingsProvider, (prev, next) {
-      if (prev == null ||
-          prev.cityId != next.cityId ||
-          prev.methodId != next.methodId ||
-          prev.asrFactor != next.asrFactor ||
-          prev.language != next.language) {
-        _reschedule(ref, next);
-      }
-      _syncSettings(ref, next);
-    }, fireImmediately: true);
 
     return MaterialApp.router(
       title: AppConfig.storeName,
