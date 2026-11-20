@@ -1,12 +1,19 @@
 # ZADX Team — automatic build & device testing (GitHub Actions)
-# Runs on every push / PR, and on demand (Actions tab → "Run workflow").
+# Owner decision 2026-11-20: save Actions minutes.
+#   Pull requests  -> LIGHT checks only: analyze, tests, Android APK, backend.
+#   Push to main   -> light checks + heavy jobs ONLY for the platforms whose files changed.
+#   Nightly / manual ("Run workflow") -> everything (emulator, iOS, Windows, real phones).
+# Docs-only changes (*.md, docs/, reports/) do not run CI at all.
 name: ZADX CI – build & device tests
 
 on:
-  # Save GitHub Actions minutes: run once per change (PRs), plus on main after merge.
   push:
     branches: [main]
+    paths-ignore: ["**/*.md", "docs/**", "reports/**"]
   pull_request:
+    paths-ignore: ["**/*.md", "docs/**", "reports/**"]
+  schedule:
+    - cron: "17 10 * * *"   # nightly full run (~2-3 AM Pacific)
   workflow_dispatch:
 
 permissions:
@@ -17,6 +24,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 0) Which platforms changed? (used only on push to main, to skip heavy jobs)
+  changes:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      app: ${{ steps.f.outputs.app }}
+      ios: ${{ steps.f.outputs.ios }}
+      windows: ${{ steps.f.outputs.windows }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: f
+        with:
+          filters: |
+            app:
+              - 'lib/**'
+              - 'android/**'
+              - 'assets/**'
+              - 'pubspec.*'
+            ios:
+              - 'ios/**'
+              - 'lib/**'
+              - 'pubspec.*'
+            windows:
+              - 'windows_guard/**'
+
   # 1) Static checks + unit tests + Android APK
   flutter:
     runs-on: ubuntu-latest
@@ -24,7 +58,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "17" }
+        with: { distribution: temurin, java-version: "17", cache: gradle }
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
       - name: Generate native shells (keeps our native files)
@@ -48,15 +82,21 @@ jobs:
         with:
           name: zadx-android-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 14
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
           path: coverage/lcov.info
+          retention-days: 7
 
-  # 2) Run the app on an Android emulator (smoke test: installs + launches)
+  # 2) Run the app on an Android emulator (smoke test: installs + launches + 300 taps)
+  #    Heavy: nightly/manual, or on main when app code changed. Never on PRs.
   android-emulator:
-    needs: flutter
+    needs: [flutter, changes]
+    if: >-
+      always() && needs.flutter.result == 'success' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.changes.outputs.app == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -78,8 +118,10 @@ jobs:
             adb shell monkey -p com.zadx.app --throttle 300 -v 300
 
   # 3) Real devices in Firebase Test Lab (runs only when the secret is set)
+  #    Nightly/manual only.
   firebase-test-lab:
     needs: flutter
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     env:
       HAS_KEY: ${{ secrets.GCP_SA_KEY != '' }}
@@ -103,8 +145,12 @@ jobs:
 
   # 4) iOS compile check (no signing)
   ios:
-    # macOS minutes cost 10x on private repos: build iOS only on main and manual runs.
-    if: github.event_name != 'pull_request'
+    # macOS minutes are the most expensive: nightly/manual, or on main when iOS/app code changed.
+    needs: changes
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.changes.outputs.ios == 'true'))
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -125,19 +171,32 @@ jobs:
   # 5) Backend (Firebase Functions) compiles
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults: { run: { working-directory: backend/functions } }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('backend/functions/package.json', 'backend/functions/package-lock.json') }}
+          restore-keys: npm-${{ runner.os }}-
       - run: npm install
       - run: npm run build
       - run: npm test
       - run: npm audit --audit-level=high
 
   # 6) Windows "Zad X Guard" builds
+  #    Windows minutes cost extra: nightly/manual, or on main when windows_guard/ changed.
   windows-guard:
+    needs: changes
+    if: >-
+      always() &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && needs.changes.outputs.windows == 'true'))
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

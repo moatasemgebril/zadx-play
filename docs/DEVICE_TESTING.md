@@ -12,6 +12,17 @@ The ZADX Team's sandbox has no Flutter SDK and no phones, so real builds and dev
 | Backend | GitHub Actions | Cloud Functions compile, `npm audit` has no high/critical issues |
 | Windows Guard | GitHub Actions (Windows) | the C# service builds |
 
+## When each check runs (owner decision 2026-11-20: save GitHub Actions minutes)
+| Event | What runs |
+|---|---|
+| Pull request | light checks only: analyze, unit tests, Android APK, web build, backend |
+| Merge to `main` | light checks + the heavy job only for what changed (emulator if `lib/`/`android/` changed, iOS if `ios/`/`lib/` changed, Windows if `windows_guard/` changed) |
+| Nightly (~2–3 AM Pacific) and "Run workflow" | everything: emulator + 300 taps, iOS, Windows, real phones |
+| Docs only (`*.md`, `docs/`, `reports/`) | nothing |
+
+Merge rule: a PR merges when its light checks are green and the Quality Gate approves. If the nightly or `main` heavy run fails, fixing it is P0 in the next morning cycle, and no new features merge until it is green again.
+Artifacts (APK, coverage) are kept 7 days.
+
 ## One-time setup by the owner
 1. Create a free GitHub account and a **private** repository `zadx-play`, and upload this project (or connect GitHub to Claude so the team can push it).
 2. (Optional, real phones) In Firebase → Test Lab, create a service account with the "Firebase Test Lab Admin" role, and add its JSON key as the repository secret `GCP_SA_KEY`.
