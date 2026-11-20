@@ -44,9 +44,18 @@ public sealed class PolicyClient
 
     private string Url(string fn) => $"{_options.FunctionsBaseUrl.TrimEnd('/')}/{fn}";
 
+    /// <summary>The device secret travels in headers, so never talk to the backend over plain HTTP.</summary>
+    private bool BaseUrlIsSecure()
+    {
+        if (Uri.TryCreate(_options.FunctionsBaseUrl, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps) return true;
+        _log.LogError("Guard:FunctionsBaseUrl must be an https:// URL");
+        return false;
+    }
+
     /// <summary>Redeems a pairing code (Firebase callable protocol: {"data": {...}} → {"result": {...}}).</summary>
     public async Task<bool> PairAsync(string code, string deviceName)
     {
+        if (!BaseUrlIsSecure()) return false;
         var res = await _http.PostAsJsonAsync(Url("redeemPairingCode"), new { data = new { code, target = "windows", deviceName } });
         if (!res.IsSuccessStatusCode) return false;
         using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
@@ -96,6 +105,7 @@ public sealed class PolicyClient
 
     private HttpRequestMessage? Authorized(HttpMethod method, string fn)
     {
+        if (!BaseUrlIsSecure()) return null;
         var c = _credentials.Load();
         if (c is null) return null;
         var request = new HttpRequestMessage(method, Url(fn));

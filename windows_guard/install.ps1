@@ -21,9 +21,15 @@ $exe        = Join-Path $installDir 'ZadXGuard.exe'
 New-Item -ItemType Directory -Force -Path $installDir | Out-Null
 Copy-Item -Path (Join-Path $PSScriptRoot 'ZadXGuard.exe'), (Join-Path $PSScriptRoot 'appsettings.json') -Destination $installDir -Force
 
-# 2. Lock down the data folder: SYSTEM + Administrators only (child accounts must be Standard users)
+# 2. Lock down the data folder: SYSTEM + Administrators only (child accounts must be Standard users).
+#    Any Standard user may create folders in %ProgramData%, so a folder that already exists could be
+#    owned by the child (owners can rewrite the ACL) or hold planted files: start from a fresh folder
+#    and make Administrators the owner. Re-installing always re-pairs, so nothing is lost.
+if (Test-Path $dataDir) { Remove-Item -Path $dataDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
-icacls $dataDir /inheritance:r /grant:r 'SYSTEM:(OI)(CI)F' 'Administrators:(OI)(CI)F' | Out-Null
+icacls $dataDir /setowner '*S-1-5-32-544' /T | Out-Null
+icacls $dataDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not secure the Zad X data folder.' }
 
 # 3. Pair this PC with the family
 & $exe pair $PairingCode
