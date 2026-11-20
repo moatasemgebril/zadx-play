@@ -121,21 +121,4 @@ export function sanitiseHistory(raw: unknown, maxTurns = 8, maxChars = 1000, max
   return turns;
 }
 
-// ---------------------------------------------------------------------------
-// Push notification payload
-// ---------------------------------------------------------------------------
-
-export const NOTIFY_TYPES: readonly string[] = ["task_submitted", "adhan"];
-
-/** FCM data must be string → string; we allow a few short, non-reserved keys only. */
-export function sanitiseNotifyData(raw: unknown): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
-  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 5)) {
-    if (!/^[a-zA-Z][a-zA-Z0-9_]{0,30}$/.test(k)) continue;
-    if (k === "type" || k === "childId" || k === "from" || /^(google|gcm)/i.test(k)) continue;
-    if (typeof v !== "string" && typeof v !== "number" && typeof v !== "boolean") continue;
-    out[k] = String(v).slice(0, 100);
-  }
-  return out;
-}
+// Push notification payloads: see push.ts (allow-listed ids only).
