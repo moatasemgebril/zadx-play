@@ -1,0 +1,408 @@
+{
+  "@@locale": "ar",
+  "appTagline": "العب • تعلّم • تألّق",
+  "tabHome": "الرئيسية",
+  "tabGames": "الألعاب",
+  "tabQuran": "القرآن",
+  "tabTasks": "المهام",
+  "tabParent": "ولي الأمر",
+  "minutesLeft": "باقي {n} دقيقة",
+  "@minutesLeft": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "greet": "السلام عليكم يا بطل",
+  "homeHeroSub": "يلا نبدأ يومنا بالصلاة والمهام",
+  "promoBanner": "عرض الإطلاق: جرّب Zad X بلس ١٤ يوم مجانًا",
+  "prayerToday": "مواقيت الصلاة النهارده",
+  "change": "تغيير",
+  "nextPrayer": "الصلاة الجاية: {name} الساعة {time}",
+  "@nextPrayer": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "fajr": "الفجر",
+  "dhuhr": "الظهر",
+  "asr": "العصر",
+  "maghrib": "المغرب",
+  "isha": "العشاء",
+  "adhanTitle": "الأذان",
+  "chooseMuezzin": "اختار صوت المؤذن",
+  "hearAdhan": "اسمع الأذان",
+  "stop": "إيقاف",
+  "tasksToday": "مهام النهارده",
+  "progressOf": "{done} من {total}",
+  "@progressOf": {
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "earned": "وقت كسبته",
+  "played": "لعبت",
+  "minutesShort": "{n} د",
+  "@minutesShort": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "goTasks": "روح للمهام",
+  "gamesHeroTitle": "وقت اللعب!",
+  "gamesHeroSub": "خلّص مهامك وافتح ألعابك",
+  "zadGames": "ألعاب Zad X",
+  "zadGamesNote": "مفتوحة دايماً — ألعاب تعليمية ممتعة",
+  "zadGameLetters": "حروف القرآن",
+  "zadGameProphets": "أبطال الأنبياء",
+  "zadGameMasjid": "ابنِ مسجدك",
+  "deviceGames": "ألعاب الجهاز",
+  "deviceGamesNote": "بتتفتح بعد المهام وبتقفل مع الأذان",
+  "gamesOpen": "الألعاب مفتوحة — باقي لك {n} دقيقة",
+  "@gamesOpen": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "lockPrayer": "وقت الصلاة — الألعاب مقفولة لحد ما تصلي",
+  "lockRequired": "خلّص المهام الأساسية الأول: الصلاة والواجب",
+  "lockTime": "خلص وقتك — اعمل مهمة إضافية تكسب وقت",
+  "prayerNow": "حان الآن وقت صلاة {name}",
+  "@prayerNow": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "prayerSub": "قوم اتوضى وصلّي، وبعدها اضغط الزرار",
+  "iPrayed": "صلّيت",
+  "waitParent": "مستني موافقة ولي الأمر",
+  "play": "العب",
+  "locked": "مقفولة",
+  "gamesCount": "{n} لعبة من الأشهر عند الأطفال",
+  "@gamesCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "quran": "القرآن الكريم",
+  "chooseReciter": "اختار القارئ",
+  "ayatCount": "{n} آيات",
+  "@ayatCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "playSurah": "تشغيل سورة {name}",
+  "@playSurah": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "tasks": "المهام",
+  "tasksNote": "المهام الأساسية بتفتح الألعاب، والإضافية بتزوّد وقتك.",
+  "mustDo": "أساسية",
+  "bonus": "إضافية",
+  "doneBtn": "خلّصتها",
+  "pendingApproval": "مستنية موافقة ولي الأمر",
+  "completed": "تمت",
+  "minsPlus": "+{n} دقيقة",
+  "@minsPlus": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "exTitle": "تمارين رياضية",
+  "exNote": "كل تمرين بيكسبك وقت لعب. اعمله بهدوء، وخد راحة لو تعبت.",
+  "exReps": "{n} عدّة",
+  "@exReps": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "exCount": "{a} من {b}",
+  "@exCount": {
+    "placeholders": {
+      "a": {
+        "type": "String"
+      },
+      "b": {
+        "type": "String"
+      }
+    }
+  },
+  "exPending": "مستني موافقة",
+  "exCountOne": "عدّة {name}",
+  "@exCountOne": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "parentTitle": "لوحة ولي الأمر",
+  "pendingTitle": "مهام مستنية موافقتك",
+  "noPending": "مفيش حاجة دلوقتي.",
+  "reject": "رفض",
+  "approve": "موافق",
+  "yourPlan": "اشتراكك",
+  "currentPlan": "الباقة الحالية: {plan}",
+  "@currentPlan": {
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      }
+    }
+  },
+  "freeTrial": "تجربة مجانية",
+  "plans": "الباقات",
+  "playstation": "البلايستيشن",
+  "psSub": "ربط ذكي مع تطبيق PlayStation Family",
+  "psEarned": "الوقت اللي ابنك كسبه النهارده: {n} دقيقة",
+  "@psEarned": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "psOpen": "افتح PlayStation Family",
+  "psNotifyTasks": "نبّهني لما يخلّص مهامه",
+  "psNotifyAdhan": "نبّهني مع الأذان لو بيلعب",
+  "psSchedule": "مواعيد لعب مقترحة بين الصلوات",
+  "psScheduleNote": "انقل المواعيد دي مرة واحدة في إعدادات وقت اللعب في PlayStation Family.",
+  "psAlertAdhan": "وقت الصلاة — لو ابنك بيلعب بلايستيشن، اقفله من PlayStation Family",
+  "psAskTime": "اطلب وقت",
+  "psRequestSent": "اتبعت طلب وقت لولي الأمر",
+  "xboxWindows": "إكس بوكس وكمبيوتر ويندوز",
+  "msSub": "ربط ذكي مع Microsoft Family Safety",
+  "msOpen": "افتح Microsoft Family Safety",
+  "msAlertAdhan": "وقت الصلاة — لو ابنك بيلعب على الكمبيوتر أو الإكس بوكس، اقفله من Microsoft Family Safety",
+  "msScheduleNote": "انقل المواعيد دي مرة واحدة في حدود وقت الشاشة في Microsoft Family Safety.",
+  "consolesTitle": "البلايستيشن والإكس بوكس والكمبيوتر",
+  "consolesNote": "الأجهزة دي مش بتسمح لتطبيقات تانية تقفلها، فـ Zad X بينبّهك وانت تقفل أو تفتح من التطبيق الرسمي بضغطة.",
+  "playOnDevice": "من الموبايل",
+  "subscribeOnPhone": "الاشتراك بيتم من تطبيق Zad X على الموبايل.",
+  "computerTitle": "كمبيوتر ويندوز",
+  "computerNote": "نزّل برنامج Zad X Guard على كمبيوتر ابنك. بيقفل الألعاب (Roblox وMinecraft وFortnite وSteam) لحد ما يخلّص مهامه، ومع كل أذان.",
+  "downloadWindows": "نزّل Zad X Guard لويندوز",
+  "pairTitle": "ربط الأجهزة",
+  "pairNote": "افتح Zad X على جهاز الطفل أو Zad X Guard على الكمبيوتر، واكتب الكود ده.",
+  "pairPhone": "موبايل أو تابلت الطفل",
+  "pairCreate": "اعمل كود ربط",
+  "pairValid": "الكود صالح لمدة ١٠ دقايق",
+  "pairEnter": "عندك كود ربط؟",
+  "pairEnterHint": "اكتب الكود من جهاز ولي الأمر",
+  "pairJoin": "اربط الجهاز",
+  "pairDone": "تم ربط الجهاز بالعيلة",
+  "pairError": "الكود غلط أو انتهى. اطلب كود جديد.",
+  "pairOffline": "الربط محتاج إعداد Firebase.",
+  "afterDhuhr": "بعد الظهر",
+  "afterAsr": "بعد العصر",
+  "afterMaghrib": "بعد المغرب",
+  "settings": "الإعدادات",
+  "lockAtAdhan": "قفل الألعاب مع الأذان",
+  "on": "مفعّل",
+  "controlledGames": "الألعاب المتحكَّم فيها",
+  "chooseGames": "اختار الألعاب",
+  "parentPin": "رقم سري لولي الأمر",
+  "enterPin": "اكتب الرقم السري",
+  "wrongPin": "الرقم السري غلط",
+  "lockPermission": "فعّل صلاحية قفل الألعاب",
+  "settingsTitle": "اللغة والبلد",
+  "language": "اللغة",
+  "country": "البلد",
+  "city": "المدينة",
+  "method": "طريقة حساب المواقيت",
+  "asrCalc": "حساب العصر",
+  "asrStandard": "الجمهور (شافعي)",
+  "asrHanafi": "حنفي",
+  "soon": "قريباً",
+  "useMyLocation": "استخدم موقعي",
+  "helpTitle": "المساعدة",
+  "assistantTitle": "مساعد Zad X",
+  "assistantSub": "اسأل أي سؤال عن التطبيق",
+  "typing": "بيكتب...",
+  "askPlaceholder": "اكتب سؤالك هنا",
+  "send": "إرسال",
+  "assistantHello": "أهلاً بيك! أنا مساعد Zad X. اسألني عن فتح الألعاب، أو الأذان، أو المواقيت، أو المهام، أو البلايستيشن.",
+  "assistantError": "حصلت مشكلة في الاتصال. جرّب تاني بعد شوية.",
+  "howTitle": "طريقة الاستخدام",
+  "faqTitle": "الأسئلة الشائعة",
+  "how1T": "اظبط البلد واللغة",
+  "how1B": "اضغط أيقونة الكرة الأرضية اللي فوق واختار البلد والمدينة.",
+  "how2T": "حدد المهام",
+  "how2B": "المهام الأساسية بتفتح الألعاب، والإضافية بتزوّد الوقت.",
+  "how3T": "الطفل يخلّص مهمته",
+  "how3B": "يضغط \"خلّصتها\" في صفحة المهام، فتوصلك على طول.",
+  "how4T": "وافق من موبايلك",
+  "how4B": "لما توافق، الدقايق بتتضاف لرصيده والألعاب بتتفتح.",
+  "how5T": "الأذان بيقفل اللعب",
+  "how5B": "مع كل أذان الألعاب بتتقفل لحد ما الطفل يصلي وانت توافق.",
+  "faq1Q": "إزاي الألعاب بتتفتح؟",
+  "faq1A": "الطفل يخلّص المهام الأساسية وولي الأمر يوافق، وبعدها الألعاب بتتفتح بعدد الدقايق اللي كسبها.",
+  "faq2Q": "إيه اللي بيحصل وقت الأذان؟",
+  "faq2A": "الأذان بيشتغل والألعاب بتتقفل تلقائياً لحد ما الطفل يضغط \"صلّيت\" وولي الأمر يوافق.",
+  "faq3Q": "إزاي أغيّر البلد أو المواقيت؟",
+  "faq3A": "من أيقونة الكرة الأرضية اللي فوق اختار البلد والمدينة، وطريقة الحساب بتتظبط لوحدها.",
+  "faq4Q": "هل Zad X بيتحكم في البلايستيشن؟",
+  "faq4A": "مش مباشرة. بنبعتلك تنبيه، وانت تفتح أو تقفل من تطبيق PlayStation Family.",
+  "faq5Q": "هل الطفل يقدر يلغي القفل؟",
+  "faq5A": "لأ. القفل على مستوى الجهاز وإعدادات ولي الأمر محمية برقم سري.",
+  "subTitle": "اشتراك Zad X",
+  "subIntro": "اختار الباقة المناسبة لعيلتك",
+  "monthly": "شهري",
+  "yearly": "سنوي",
+  "saveUpTo": "وفّر لحد ٣٧٪",
+  "mostPopular": "الأكثر طلبًا",
+  "basicName": "Zad X أساسي",
+  "plusName": "Zad X بلس",
+  "perMonth": "/ شهر",
+  "perYear": "/ سنة",
+  "yearEq": "يعني {price} في الشهر",
+  "@yearEq": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "startTrial": "ابدأ ١٤ يوم مجانًا",
+  "launchOffers": "عروض الإطلاق",
+  "offer1": "١٤ يوم تجربة مجانية للباقتين",
+  "offer2": "أول سنة من بلس بسعر مخفّض",
+  "offer3": "في رمضان: شهر مجاني مع أي اشتراك سنوي",
+  "inviteTitle": "ادعُ أصحابك واكسب شهور مجانية",
+  "inviteRule": "لما صاحبك يشترك ويدفع بكود الدعوة بتاعك:",
+  "invite1": "صديق واحد ← شهرين مجانًا",
+  "invite2": "صديقين ← ٤ شهور مجانًا",
+  "invite3": "٣ أصدقاء ← ٦ شهور مجانًا",
+  "yourCode": "كود الدعوة بتاعك",
+  "copy": "انسخ",
+  "copied": "اتنسخ الكود",
+  "inviteFriend": "ادعُ صديق",
+  "invitedOf": "دعيت {n} من ٣",
+  "@invitedOf": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "rewardMonths": "مكافأتك: {n} شهور مجانًا",
+  "@rewardMonths": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "noRewardYet": "لسه مفيش مكافأة",
+  "inviteShareText": "جرّب Zad X لأولادك واستخدم كودي {code} علشان تاخد خصم",
+  "@inviteShareText": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "pricesNote": "الأسعار بتتحدد من المتجر حسب كل بلد.",
+  "featTasks": "المهام وموافقة ولي الأمر",
+  "featPrayer": "مواقيت الصلاة والأذان وقفل الألعاب",
+  "featQuran": "القرآن الكريم والتمارين",
+  "featGames": "الألعاب المتحكَّم فيها",
+  "featPs": "ربط البلايستيشن",
+  "featAi": "مساعد الذكاء الاصطناعي",
+  "featKids": "عدد الأطفال",
+  "featReport": "تقرير أسبوعي لولي الأمر",
+  "limited": "محدود",
+  "unlimited": "غير محدود",
+  "gamesN": "{n} لعبة",
+  "@gamesN": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "toastSent": "اتبعتت لولي الأمر يوافق: {x}",
+  "@toastSent": {
+    "placeholders": {
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "toastApproved": "تمت الموافقة على: {x}",
+  "@toastApproved": {
+    "placeholders": {
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "toastRejected": "اترفضت: {x}",
+  "@toastRejected": {
+    "placeholders": {
+      "x": {
+        "type": "String"
+      }
+    }
+  },
+  "toastOpened": "اتفتحت {game}",
+  "@toastOpened": {
+    "placeholders": {
+      "game": {
+        "type": "String"
+      }
+    }
+  },
+  "juz30": "جزء عمّ",
+  "juz29": "جزء تبارك",
+  "adhkar": "الأذكار",
+  "morningAdhkar": "أذكار الصباح",
+  "eveningAdhkar": "أذكار المساء",
+  "salawat": "الصلاة على النبي ﷺ",
+  "tapToCount": "اضغط للعدّ",
+  "dhikrTimes": "{n} مرات",
+  "@dhikrTimes": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "sectionDone": "ما شاء الله! خلّصت الأذكار واتبعتت لولي الأمر",
+  "loadingText": "بيحمّل الآيات...",
+  "textError": "مقدرناش نحمّل الآيات. اتأكد من النت وجرّب تاني.",
+  "resetCount": "ابدأ من الأول",
+  "restorePurchases": "استرجاع المشتريات",
+  "inviteCodeField": "كود دعوة من صاحبك (اختياري)",
+  "purchaseError": "مقدرناش نكمّل الاشتراك. جرّب تاني."
+}

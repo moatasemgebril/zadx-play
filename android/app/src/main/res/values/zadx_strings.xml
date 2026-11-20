@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="zadx_accessibility_description">Zad X uses this permission only to detect when a game chosen by the parent is opened, so it can lock it during prayer time or until tasks are done. Zad X does not read what is on the screen.</string>
+</resources>

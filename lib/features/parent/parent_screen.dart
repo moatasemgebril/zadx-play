@@ -1,0 +1,323 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/l10n_ext.dart';
+import '../../core/platform.dart';
+import '../../core/theme/app_colors.dart';
+import '../../core/utils/formatters.dart';
+import '../../data/catalog/games.dart';
+import '../../data/models/plan.dart';
+import '../../router.dart';
+import '../../services/app_lock/app_lock_service.dart';
+import '../../services/billing/subscription_service.dart';
+import '../../shared/widgets/zad_widgets.dart';
+import '../prayer/prayer_calculator.dart';
+import '../prayer/prayer_providers.dart';
+import '../settings/settings_controller.dart';
+import '../tasks/wallet_controller.dart';
+import 'devices_card.dart';
+import 'parent_gate.dart';
+
+class ParentScreen extends ConsumerWidget {
+  const ParentScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    return PatternBackground(
+      tint: AppColors.pageTints['parent']!,
+      seed: 5,
+      child: ParentGate(
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          PageTitle(l10n.parentTitle),
+          const SizedBox(height: 12),
+          const _PlanCard(),
+          const SizedBox(height: 12),
+          const _ApprovalsCard(),
+          const SizedBox(height: 12),
+          const DevicesCard(),
+          const SizedBox(height: 12),
+          const _ConsolesCard(),
+          const SizedBox(height: 12),
+          const _GamesPickerCard(),
+          const SizedBox(height: 12),
+          const _SettingsCard(),
+        ]),
+      ),
+    );
+  }
+}
+
+class _PlanCard extends ConsumerWidget {
+  const _PlanCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
+    final planName = ent.inTrial ? l10n.freeTrial : (ent.isPlus ? l10n.plusName : l10n.basicName);
+    return ZadCard(
+      color: AppColors.ink,
+      child: Row(children: [
+        const Icon(Icons.workspace_premium_rounded, color: AppColors.yellow, size: 40),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(l10n.yourPlan, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+            Text(l10n.currentPlan(planName), style: const TextStyle(color: Colors.white, fontSize: 15)),
+          ]),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: AppColors.yellow, foregroundColor: AppColors.ink, minimumSize: const Size(0, 46)),
+          onPressed: () => context.push(Routes.subscription),
+          child: Text(l10n.plans),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ApprovalsCard extends ConsumerWidget {
+  const _ApprovalsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final lang = context.lang;
+    final wallet = ref.watch(walletProvider);
+    final pending = wallet.pending;
+
+    return ZadCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(l10n.pendingTitle, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        if (pending.isEmpty) Text(l10n.noPending, style: const TextStyle(fontSize: 16, color: AppColors.muted)),
+        for (final t in pending)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.purpleSoft))),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(t.title.of(lang), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                  Text(l10n.minsPlus(Fmt.digits(t.rewardMinutes, lang)), style: const TextStyle(fontSize: 15, color: AppColors.muted)),
+                ]),
+              ),
+              TextButton(
+                onPressed: () {
+                  ref.read(walletProvider.notifier).reject(t.id);
+                  showToast(context, l10n.toastRejected(t.title.of(lang)));
+                },
+                child: Text(l10n.reject),
+              ),
+              const SizedBox(width: 6),
+              FilledButton(
+                style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
+                onPressed: () {
+                  ref.read(walletProvider.notifier).approve(t.id);
+                  showToast(context, l10n.toastApproved(t.title.of(lang)));
+                },
+                child: Text(l10n.approve),
+              ),
+            ]),
+          ),
+      ]),
+    );
+  }
+}
+
+/// PlayStation and Xbox/Windows have no public control API, so Zad X alerts the
+/// parent and deep-links to the official parental-control app.
+class _ConsolesCard extends ConsumerWidget {
+  const _ConsolesCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final lang = context.lang;
+    final wallet = ref.watch(walletProvider);
+    final times = ref.watch(prayerTimesProvider);
+    final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
+    final windows = playWindows(times);
+
+    String label(Prayer p) => switch (p) {
+          Prayer.dhuhr => l10n.afterDhuhr,
+          Prayer.asr => l10n.afterAsr,
+          _ => l10n.afterMaghrib,
+        };
+
+    return ZadCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(l10n.consolesTitle, style: Theme.of(context).textTheme.titleMedium),
+        Text(l10n.consolesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted, height: 1.5)),
+        const SizedBox(height: 12),
+        if (!ent.isPlus)
+          FilledButton(onPressed: () => context.push(Routes.subscription), child: Text(l10n.plusName))
+        else ...[
+          Banner2(text: l10n.psEarned(Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
+          const SizedBox(height: 12),
+          _CompanionSection(
+            icon: Icons.sports_esports_rounded,
+            color: AppColors.psBlue,
+            title: l10n.playstation,
+            subtitle: l10n.psSub,
+            alert: wallet.prayerLock ? l10n.psAlertAdhan : null,
+            buttonText: l10n.psOpen,
+            note: l10n.psScheduleNote,
+            onOpen: () => ref.read(appLockServiceProvider).openCompanionApp(CompanionApp.playStation),
+          ),
+          const SizedBox(height: 14),
+          _CompanionSection(
+            icon: Icons.desktop_windows_rounded,
+            color: const Color(0xFF107C10),
+            title: l10n.xboxWindows,
+            subtitle: l10n.msSub,
+            alert: wallet.prayerLock ? l10n.msAlertAdhan : null,
+            buttonText: l10n.msOpen,
+            note: l10n.msScheduleNote,
+            onOpen: () => ref.read(appLockServiceProvider).openCompanionApp(CompanionApp.microsoftFamily),
+          ),
+          const SizedBox(height: 12),
+          Text(l10n.psSchedule, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          for (final w in windows)
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFFE6EEFF), borderRadius: BorderRadius.circular(12)),
+              child: Row(children: [
+                Expanded(child: Text(label(w.after), style: const TextStyle(fontSize: 16))),
+                Text('${Fmt.hours(w.start, lang)} – ${Fmt.hours(w.end, lang)}',
+                    textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+              ]),
+            ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _CompanionSection extends StatelessWidget {
+  const _CompanionSection({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.buttonText,
+    required this.note,
+    required this.onOpen,
+    this.alert,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final String buttonText;
+  final String note;
+  final String? alert;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(14)),
+            child: Icon(icon, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              Text(subtitle, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+            ]),
+          ),
+        ]),
+        if (alert != null) ...[
+          const SizedBox(height: 8),
+          Banner2(text: alert!, bg: AppColors.lockBg, fg: AppColors.lockText),
+        ],
+        const SizedBox(height: 8),
+        FilledButton(style: FilledButton.styleFrom(backgroundColor: color), onPressed: onOpen, child: Text(buttonText)),
+        const SizedBox(height: 4),
+        Text(note, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+      ]);
+}
+
+class _GamesPickerCard extends ConsumerWidget {
+  const _GamesPickerCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final lang = context.lang;
+    final s = ref.watch(settingsProvider);
+    final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
+    final maxGames = ent.limits.maxGames;
+
+    return ZadCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(child: Text(l10n.controlledGames, style: Theme.of(context).textTheme.titleMedium)),
+          Text('${Fmt.digits(s.controlledGameIds.length, lang)} / ${Fmt.digits(maxGames, lang)}',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.purpleDark)),
+        ]),
+        const SizedBox(height: 8),
+        Wrap(spacing: 6, runSpacing: 6, children: [
+          for (final g in controlledGames)
+            FilterChip(
+              label: Text(g.name, style: const TextStyle(fontSize: 15)),
+              avatar: Icon(g.icon, size: 18, color: g.fg),
+              selected: s.controlledGameIds.contains(g.id),
+              onSelected: (_) {
+                final ok = ref.read(settingsProvider.notifier).toggleGame(g.id, maxGames: maxGames);
+                if (!ok) context.push(Routes.subscription);
+              },
+            ),
+        ]),
+        if (AppPlatform.canLockGames) ...[
+        const SizedBox(height: 10),
+        // iOS: Apple requires choosing apps through its own picker.
+        OutlinedButton.icon(
+          onPressed: () async {
+            final lock = ref.read(appLockServiceProvider);
+            if (!await lock.hasPermissions()) await lock.requestPermissions();
+            await lock.pickGamesIos();
+          },
+          icon: const Icon(Icons.lock_person_rounded),
+          label: Text(l10n.lockPermission, style: const TextStyle(fontSize: 16)),
+        ),
+        ],
+      ]),
+    );
+  }
+}
+
+class _SettingsCard extends ConsumerWidget {
+  const _SettingsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final s = ref.watch(settingsProvider);
+    final ctrl = ref.read(settingsProvider.notifier);
+    return ZadCard(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Text(l10n.settings, style: Theme.of(context).textTheme.titleMedium),
+        _switchRow(l10n.lockAtAdhan, s.lockAtAdhan, ctrl.setLockAtAdhan),
+        _switchRow(l10n.psNotifyTasks, s.notifyParentOnTasks, ctrl.setNotifyOnTasks),
+        _switchRow(l10n.psNotifyAdhan, s.notifyParentOnAdhan, ctrl.setNotifyOnAdhan),
+      ]),
+    );
+  }
+
+  Widget _switchRow(String label, bool value, ValueChanged<bool> onChanged) => SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: Text(label, style: const TextStyle(fontSize: 16)),
+        value: value,
+        onChanged: onChanged,
+      );
+}

@@ -1,0 +1,134 @@
+# ZADX Team — automatic build & device testing (GitHub Actions)
+# Runs on every push / PR, and on demand (Actions tab → "Run workflow").
+name: ZADX CI – build & device tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zadx-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1) Static checks + unit tests + Android APK
+  flutter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "17" }
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - name: Generate native shells (keeps our native files)
+        run: |
+          mkdir -p /tmp/keep && cp -r android ios /tmp/keep/
+          flutter create --org com.zadx --project-name zadx --platforms android,ios,web,windows,macos .
+          cp -r /tmp/keep/android/. android/ && cp -r /tmp/keep/ios/. ios/
+      - run: flutter pub get
+      - run: flutter gen-l10n
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+      - name: Unit tests
+        run: flutter test --coverage
+      - name: Build Android APK (debug, installable for testing)
+        run: flutter build apk --debug
+      - name: Build web (parent dashboard)
+        run: flutter build web --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zadx-android-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/lcov.info
+
+  # 2) Run the app on an Android emulator (smoke test: installs + launches)
+  android-emulator:
+    needs: flutter
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: zadx-android-apk }
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          script: |
+            adb install -r app-debug.apk
+            adb shell monkey -p com.zadx.zadx -c android.intent.category.LAUNCHER 1
+            sleep 15
+            adb shell pidof com.zadx.zadx && echo "App is running" || (adb logcat -d | tail -200; exit 1)
+            adb shell monkey -p com.zadx.zadx --throttle 300 -v 300
+
+  # 3) Real devices in Firebase Test Lab (runs only when the secret is set)
+  firebase-test-lab:
+    needs: flutter
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.GCP_SA_KEY != '' }}
+    steps:
+      - if: env.HAS_KEY != 'true'
+        run: echo "GCP_SA_KEY not set - skipping real-device tests"
+      - if: env.HAS_KEY == 'true'
+        uses: actions/download-artifact@v4
+        with: { name: zadx-android-apk }
+      - if: env.HAS_KEY == 'true'
+        uses: google-github-actions/auth@v2
+        with: { credentials_json: "${{ secrets.GCP_SA_KEY }}" }
+      - if: env.HAS_KEY == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+      - if: env.HAS_KEY == 'true'
+        name: Robo test on real phones
+        run: |
+          gcloud firebase test android run --type robo --app app-debug.apk \
+            --device model=oriole,version=33 --device model=a10,version=29 \
+            --timeout 5m --locales ar,en
+
+  # 4) iOS compile check (no signing)
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with: { channel: stable, cache: true }
+      - run: |
+          mkdir -p /tmp/keep && cp -r android ios /tmp/keep/
+          flutter create --org com.zadx --project-name zadx --platforms android,ios .
+          cp -r /tmp/keep/ios/. ios/
+          flutter pub get && flutter gen-l10n
+          flutter build ios --no-codesign --debug
+
+  # 5) Backend (Firebase Functions) compiles
+  backend:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend/functions } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm install
+      - run: npm run build
+      - run: npm audit --audit-level=high
+
+  # 6) Windows "Zad X Guard" builds
+  windows-guard:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: "8.0.x" }
+      - run: dotnet build windows_guard/ZadXGuard.csproj -c Release

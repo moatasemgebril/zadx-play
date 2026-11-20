@@ -1,0 +1,49 @@
+import '../../core/localized.dart';
+
+enum AdhkarSection { morning, evening, salawat }
+
+/// One remembrance with how many times it is said.
+class Dhikr {
+  const Dhikr({required this.id, required this.text, required this.times, required this.source});
+
+  final String id;
+  final String text; // Arabic text, recited in Arabic in every language
+  final int times;
+  final String source;
+}
+
+/// Morning/evening adhkar and salawat, from Hisn al-Muslim (Sa'id al-Qahtani).
+///
+/// TODO(review): have a qualified scholar review every text and its count
+/// before release. Add more adhkar here; ids must be unique.
+const adhkar = <AdhkarSection, List<Dhikr>>{
+  AdhkarSection.morning: [
+    Dhikr(id: 'm_asbahna', times: 1, source: 'مسلم', text: 'أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ'),
+    Dhikr(id: 'm_bika', times: 1, source: 'الترمذي', text: 'اللَّهُمَّ بِكَ أَصْبَحْنَا، وَبِكَ أَمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ النُّشُورُ'),
+    Dhikr(id: 'm_bismillah', times: 3, source: 'أبو داود والترمذي', text: 'بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ'),
+    Dhikr(id: 'm_radeetu', times: 3, source: 'أبو داود والترمذي', text: 'رَضِيتُ بِاللَّهِ رَبًّا، وَبِالْإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ صَلَّى اللَّهُ عَلَيْهِ وَسَلَّمَ نَبِيًّا'),
+    Dhikr(id: 'm_hasbi', times: 7, source: 'أبو داود', text: 'حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ'),
+    Dhikr(id: 'm_subhan', times: 100, source: 'مسلم', text: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ'),
+  ],
+  AdhkarSection.evening: [
+    Dhikr(id: 'e_amsayna', times: 1, source: 'مسلم', text: 'أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ'),
+    Dhikr(id: 'e_bika', times: 1, source: 'الترمذي', text: 'اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ'),
+    Dhikr(id: 'e_kalimat', times: 3, source: 'مسلم', text: 'أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ'),
+    Dhikr(id: 'e_bismillah', times: 3, source: 'أبو داود والترمذي', text: 'بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ'),
+    Dhikr(id: 'e_hasbi', times: 7, source: 'أبو داود', text: 'حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ'),
+    Dhikr(id: 'e_subhan', times: 100, source: 'مسلم', text: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ'),
+  ],
+  AdhkarSection.salawat: [
+    Dhikr(id: 's_short', times: 10, source: 'الطبراني', text: 'اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ'),
+    Dhikr(id: 's_ibrahimiya', times: 1, source: 'البخاري', text: 'اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ، كَمَا صَلَّيْتَ عَلَى إِبْرَاهِيمَ وَعَلَى آلِ إِبْرَاهِيمَ، إِنَّكَ حَمِيدٌ مَجِيدٌ، اللَّهُمَّ بَارِكْ عَلَى مُحَمَّدٍ وَعَلَى آلِ مُحَمَّدٍ، كَمَا بَارَكْتَ عَلَى إِبْرَاهِيمَ وَعَلَى آلِ إِبْرَاهِيمَ، إِنَّكَ حَمِيدٌ مَجِيدٌ'),
+  ],
+};
+
+/// The three Quls are said 3 times morning and evening; shown as a reminder card.
+const qulsReminder = Localized(
+  'اقرأ الإخلاص والفلق والناس ٣ مرات',
+  'Recite Al-Ikhlas, Al-Falaq and An-Nas 3 times',
+);
+
+/// Minutes of play time earned when a full section is completed.
+const adhkarRewardMinutes = 10;

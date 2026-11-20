@@ -1,0 +1,73 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../../core/backend.dart';
+import 'family_repository.dart';
+
+/// Firestore layout (see backend/firestore.rules):
+///
+/// families/{familyId}
+///   members: [uid...]          parents + paired child devices
+///   children/{childId}
+///     days/{yyyy-MM-dd}        FamilyDay
+class FirestoreFamilyRepository implements FamilyRepository {
+  FirestoreFamilyRepository({
+    required this.familyId,
+    FirebaseFirestore? db,
+    FirebaseFunctions? functions,
+  })  : _db = db ?? FirebaseFirestore.instance,
+        _functions = functions ?? zadFunctions();
+
+  final String familyId;
+  final FirebaseFirestore _db;
+  final FirebaseFunctions _functions;
+
+  DocumentReference<Map<String, dynamic>> _dayDoc(String childId, String day) =>
+      _db.doc('families/$familyId/children/$childId/days/$day');
+
+  @override
+  Stream<FamilyDay> watchDay(String childId, String day) {
+    return _dayDoc(childId, day)
+        .snapshots(includeMetadataChanges: false)
+        .where((s) => s.exists && !s.metadata.hasPendingWrites)
+        .map((s) => FamilyDay.fromJson(s.data()!));
+  }
+
+  @override
+  Future<void> saveDay(String childId, FamilyDay day) async {
+    await _dayDoc(childId, day.day).set({
+      ...day.toJson(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+    }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> saveSettings(Map<String, Object?> settings) =>
+      _db.doc('families/$familyId').set({'settings': settings}, SetOptions(merge: true));
+
+  @override
+  Future<void> notifyParent(String childId, String type, {Map<String, Object?> data = const {}}) async {
+    await _functions.httpsCallable('notifyParent').call({
+      'familyId': familyId,
+      'childId': childId,
+      'type': type,
+      'data': data,
+    });
+  }
+
+  /// Signs in anonymously and creates a family for this device on first launch.
+  /// Pairing a second device (parent ⇄ child) adds its uid to `members`
+  /// via a short pairing code — see docs/ARCHITECTURE.md.
+  static Future<String> ensureFamily(String? existingFamilyId) async {
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser ?? (await auth.signInAnonymously()).user!;
+    if (existingFamilyId != null) return existingFamilyId;
+    final doc = await FirebaseFirestore.instance.collection('families').add({
+      'members': [user.uid],
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    return doc.id;
+  }
+}

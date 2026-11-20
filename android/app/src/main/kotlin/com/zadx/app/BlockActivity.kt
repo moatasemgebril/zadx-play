@@ -1,0 +1,79 @@
+package com.zadx.app
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
+import android.os.Bundle
+import android.util.TypedValue
+import android.view.Gravity
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.TextView
+
+/** Full-screen shield shown over a locked game. */
+class BlockActivity : Activity() {
+
+    companion object {
+        const val EXTRA_REASON = "reason"
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val arabic = resources.configuration.locales[0].language == "ar"
+        val reason = intent.getStringExtra(EXTRA_REASON) ?: "requiredTasks"
+
+        val message = when (reason) {
+            "prayer" -> if (arabic) "وقت الصلاة\nالألعاب مقفولة لحد ما تصلي" else "Prayer time\nGames are locked until you pray"
+            "noTime" -> if (arabic) "خلص وقتك النهارده\nاعمل مهمة تكسب وقت" else "Out of time today\nDo a task to earn more"
+            else -> if (arabic) "خلّص مهامك الأول\nوبعدها اللعبة تتفتح" else "Finish your tasks first\nthen the game unlocks"
+        }
+
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.parseColor("#0A225E"))
+            setPadding(dp(32), dp(32), dp(32), dp(32))
+        }
+        root.addView(TextView(this).apply {
+            text = "Zad X"
+            setTextColor(Color.parseColor("#FFC83D"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 40f)
+            gravity = Gravity.CENTER
+        })
+        root.addView(TextView(this).apply {
+            text = message
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 24f)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(24), 0, dp(32))
+        })
+        root.addView(Button(this).apply {
+            text = if (arabic) "افتح Zad X" else "Open Zad X"
+            setTextColor(Color.parseColor("#1F1A3D"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+            background = GradientDrawable().apply {
+                cornerRadius = dp(16).toFloat()
+                setColor(Color.parseColor("#FFC83D"))
+            }
+            minHeight = dp(56)
+            setOnClickListener {
+                startActivity(
+                    Intent(this@BlockActivity, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                )
+                finish()
+            }
+        })
+        setContentView(root)
+    }
+
+    /** Back goes to the home screen, never back into the locked game. */
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        finish()
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+}

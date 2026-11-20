@@ -1,0 +1,14 @@
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+lib/l10n/app_localizations*.dart
+**/GoogleService-Info.plist
+**/google-services.json
+lib/firebase_options.dart
+backend/functions/node_modules/
+backend/functions/lib/
+.DS_Store
+*.iml
+.idea/
