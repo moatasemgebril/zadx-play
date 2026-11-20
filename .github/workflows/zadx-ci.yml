@@ -4,10 +4,16 @@ name: ZADX CI – build & device tests
 
 on:
   # Save GitHub Actions minutes: run once per change (PRs), plus on main after merge.
+  # Docs/report-only changes do not need a build.
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**", "reports/**"]
   pull_request:
+    paths-ignore: ["**.md", "docs/**", "reports/**"]
   workflow_dispatch:
+  # Weekly full run (includes the costly iOS build) - Fridays 10:23 UTC.
+  schedule:
+    - cron: "23 10 * * 5"
 
 permissions:
   contents: read
@@ -43,6 +49,7 @@ jobs:
       - name: Build Android APK (debug, installable for testing)
         run: flutter build apk --debug
       - name: Build web (parent dashboard)
+        if: github.event_name != 'pull_request'
         run: flutter build web --release
       - uses: actions/upload-artifact@v4
         with:
@@ -103,8 +110,9 @@ jobs:
 
   # 4) iOS compile check (no signing)
   ios:
-    # macOS minutes cost 10x on private repos: build iOS only on main and manual runs.
-    if: github.event_name != 'pull_request'
+    # macOS minutes cost 10x on private repos (~40 billed minutes per build):
+    # build iOS only on manual runs and the weekly scheduled run.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
