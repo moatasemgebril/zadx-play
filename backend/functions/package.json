@@ -5,6 +5,7 @@
   "engines": { "node": "20" },
   "scripts": {
     "build": "tsc",
+    "test": "tsc && node --test test/security.test.js",
     "serve": "npm run build && firebase emulators:start --only functions,firestore",
     "deploy": "firebase deploy --only functions,firestore:rules"
   },
