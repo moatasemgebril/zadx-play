@@ -29,6 +29,9 @@ class AppSettings {
     this.notifyParentOnAdhan = true,
     this.controlledGameIds = const {'roblox', 'minecraft', 'brawlstars', 'subway', 'stumble'},
     this.parentPinHash,
+    this.soundEffectsOn = true,
+    this.musicOn = false,
+    this.sfxVolume = 0.6,
   });
 
   final String language;
@@ -43,6 +46,16 @@ class AppSettings {
   final bool notifyParentOnAdhan;
   final Set<String> controlledGameIds;
   final String? parentPinHash;
+
+  /// Short sound effects (taps, stars, chimes). On by default.
+  final bool soundEffectsOn;
+
+  /// Calm background music. OFF by default: some families avoid music, so the
+  /// parent opts in from the parent area.
+  final bool musicOn;
+
+  /// 0.0–1.0, applies to effects (music plays at a fraction of this).
+  final double sfxVolume;
 
   Locale get locale => Locale(language);
   bool get isRtl => language == 'ar' || language == 'ur';
@@ -60,6 +73,9 @@ class AppSettings {
     bool? notifyParentOnAdhan,
     Set<String>? controlledGameIds,
     String? parentPinHash,
+    bool? soundEffectsOn,
+    bool? musicOn,
+    double? sfxVolume,
   }) =>
       AppSettings(
         language: language ?? this.language,
@@ -74,6 +90,9 @@ class AppSettings {
         notifyParentOnAdhan: notifyParentOnAdhan ?? this.notifyParentOnAdhan,
         controlledGameIds: controlledGameIds ?? this.controlledGameIds,
         parentPinHash: parentPinHash ?? this.parentPinHash,
+        soundEffectsOn: soundEffectsOn ?? this.soundEffectsOn,
+        musicOn: musicOn ?? this.musicOn,
+        sfxVolume: sfxVolume ?? this.sfxVolume,
       );
 }
 
@@ -99,6 +118,9 @@ class SettingsController extends Notifier<AppSettings> {
       notifyParentOnAdhan: p.getBool('${_k}notifyAdhan') ?? d.notifyParentOnAdhan,
       controlledGameIds: p.getStringList('${_k}games')?.toSet() ?? d.controlledGameIds,
       parentPinHash: p.getString('${_k}pin'),
+      soundEffectsOn: p.getBool('${_k}sfxOn') ?? d.soundEffectsOn,
+      musicOn: p.getBool('${_k}musicOn') ?? d.musicOn,
+      sfxVolume: (p.getDouble('${_k}sfxVolume') ?? d.sfxVolume).clamp(0.0, 1.0),
     );
   }
 
@@ -182,6 +204,22 @@ class SettingsController extends Notifier<AppSettings> {
   void setNotifyOnAdhan(bool v) {
     state = state.copyWith(notifyParentOnAdhan: v);
     _prefs.setBool('${_k}notifyAdhan', v);
+  }
+
+  void setSoundEffectsOn(bool v) {
+    state = state.copyWith(soundEffectsOn: v);
+    _prefs.setBool('${_k}sfxOn', v);
+  }
+
+  void setMusicOn(bool v) {
+    state = state.copyWith(musicOn: v);
+    _prefs.setBool('${_k}musicOn', v);
+  }
+
+  void setSfxVolume(double v) {
+    final clamped = v.isNaN ? const AppSettings().sfxVolume : v.clamp(0.0, 1.0);
+    state = state.copyWith(sfxVolume: clamped);
+    _prefs.setDouble('${_k}sfxVolume', clamped);
   }
 
   void setParentPinHash(String hash) {

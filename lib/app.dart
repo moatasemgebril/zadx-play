@@ -8,10 +8,12 @@ import 'services/family/family_repository.dart';
 import 'core/platform.dart';
 import 'core/theme/app_theme.dart';
 import 'features/prayer/prayer_calculator.dart';
+import 'features/shell/sound_coordinator.dart';
 import 'features/settings/settings_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
 import 'services/app_lock/app_lock_service.dart';
+import 'services/audio/sfx_service.dart';
 import 'services/notifications/prayer_notification_service.dart';
 
 class ZadXApp extends ConsumerStatefulWidget {
@@ -22,9 +24,14 @@ class ZadXApp extends ConsumerStatefulWidget {
 }
 
 class _ZadXAppState extends ConsumerState<ZadXApp> {
+  late final RouteChangeSound _routeSound;
+
   @override
   void initState() {
     super.initState();
+    _routeSound = RouteChangeSound(appRouter, () => ref.read(sfxProvider).play(Sfx.transition))..attach();
+    // Only actually plays if the parent turned music on (off by default).
+    ref.read(sfxProvider).startMusic();
     // Reschedule adhan notifications whenever location/method changes,
     // and once at start-up (fireImmediately is only available on listenManual).
     ref.listenManual<AppSettings>(
@@ -44,11 +51,19 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
   }
 
   @override
+  void dispose() {
+    _routeSound.detach();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final settings = ref.watch(settingsProvider);
 
     // Keeps native lock policy in sync with the wallet for the app's lifetime.
     ref.watch(lockCoordinatorProvider);
+    // Star / task / unlock sounds, and no music during the prayer lock.
+    ref.watch(soundCoordinatorProvider);
 
     return MaterialApp.router(
       title: AppConfig.storeName,
