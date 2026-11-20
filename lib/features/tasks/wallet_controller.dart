@@ -3,9 +3,13 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/catalog/default_tasks.dart';
+import '../../data/models/child_profile.dart';
 import '../../data/models/family_task.dart';
+import '../../services/family/child_storage.dart';
+import '../../services/family/children_controller.dart';
 import '../../services/family/family_repository.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
@@ -88,18 +92,22 @@ enum LockReason { prayer, requiredTasks, noTime }
 
 /// Business rules for tasks and play time. UI and native lock code only *read*
 /// [WalletState]; every change goes through this controller.
+///
+/// Each child has its own wallet (tasks, progress, minutes, prayer lock). This
+/// controller always serves the active child ([activeChildIdProvider]) and
+/// rebuilds when the parent switches child.
 class WalletController extends Notifier<WalletState> {
-  static const _storageKey = 'wallet.state';
   StreamSubscription<FamilyDay>? _remoteSub;
+  String _childId = ChildProfile.defaultId;
 
   FamilyRepository get _repo => ref.read(familyRepositoryProvider);
-  String get _childId => ref.read(activeChildIdProvider);
 
   @override
   WalletState build() {
+    _childId = ref.watch(activeChildIdProvider);
     // Rebuild only when the date changes (not every minute).
-    final today = ref.watch(cityNowProvider.select((n) => _dayKey(n.local)));
-    final restored = _restore(today);
+    final today = ref.watch(cityNowProvider.select((n) => dayKey(n.local)));
+    final restored = restoreFrom(ref.read(sharedPrefsProvider), _childId, today);
 
     // Re-subscribes automatically when the device is paired to another family.
     final repo = ref.watch(familyRepositoryProvider);
@@ -213,10 +221,11 @@ class WalletController extends Notifier<WalletState> {
     _persist(state);
   }
 
-  WalletState _restore(String today) {
-    final prefs = ref.read(sharedPrefsProvider);
-    final raw = prefs.getString(_storageKey);
-    final tasksRaw = prefs.getString('$_storageKey.tasks');
+  /// Loads [childId]'s saved wallet for [today] (new day → progress resets,
+  /// task definitions stay). Also used for the per-child summaries.
+  static WalletState restoreFrom(SharedPreferences prefs, String childId, String today) {
+    final raw = prefs.getString(ChildStorage.walletKey(childId));
+    final tasksRaw = prefs.getString(ChildStorage.tasksKey(childId));
     final tasks = tasksRaw == null
         ? defaultTasks
         : (jsonDecode(tasksRaw) as List).map((e) => TaskDefinition.fromJson(e as Map<String, dynamic>)).toList();
@@ -239,11 +248,11 @@ class WalletController extends Notifier<WalletState> {
 
   void _persist(WalletState s) {
     final prefs = ref.read(sharedPrefsProvider);
-    prefs.setString(_storageKey, jsonEncode(s.toFamilyDay().toJson()));
-    prefs.setString('$_storageKey.tasks', jsonEncode(s.tasks.map((t) => t.toJson()).toList()));
+    prefs.setString(ChildStorage.walletKey(_childId), jsonEncode(s.toFamilyDay().toJson()));
+    prefs.setString(ChildStorage.tasksKey(_childId), jsonEncode(s.tasks.map((t) => t.toJson()).toList()));
   }
 
-  static String _dayKey(DateTime d) =>
+  static String dayKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 

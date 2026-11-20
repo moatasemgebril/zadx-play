@@ -9,7 +9,7 @@ service cloud.firestore {
     // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
     function serverOnlyFamilyKeys() {
       return ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
-              'referralPaid', 'referralCode', 'members', 'createdAt'];
+              'referralPaid', 'referralCode', 'members', 'childDevices', 'createdAt'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
     function validDay(day) {
@@ -23,6 +23,32 @@ service cloud.firestore {
         && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
     }
 
+    // ---- Multi-child -------------------------------------------------------
+    // families/{id}.childDevices = { uid: childId } is written only by Cloud Functions
+    // (redeemPairingCode). A member listed there is a child device bound to one child;
+    // any other member is a parent device.
+    function boundChildOf(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)).data.get('childDevices', {}).get(request.auth.uid, null);
+    }
+    function isParent(familyId) {
+      return isMember(familyId) && boundChildOf(familyId) == null;
+    }
+    function isChildDevice(familyId, childId) {
+      return isMember(familyId) && boundChildOf(familyId) == childId;
+    }
+    function validChildId(childId) {
+      return childId.matches('^[A-Za-z0-9_-]{1,40}$');
+    }
+    // COPPA data minimisation: nickname + built-in avatar id only.
+    function validChildProfile() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['nickname', 'avatar', 'updatedAt'])
+        && d.nickname is string && d.nickname.size() <= 40
+        && d.avatar is string && d.avatar.matches('^[a-z]{1,16}$')
+        && (!('updatedAt' in d) || d.updatedAt == request.time);
+    }
+    // -----------------------------------------------------------------------
+
     match /families/{familyId} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
       // A new family has exactly one member (the creator) and no entitlement / referral fields.
@@ -33,14 +59,19 @@ service cloud.firestore {
       // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
-        && (!('settings' in request.resource.data) || request.resource.data.settings is map);
+        && (!('settings' in request.resource.data) || request.resource.data.settings is map)
+        // Multi-child: child devices may only sync `settings`.
+        && (isParent(familyId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings']));
 
+      // Multi-child: parents manage every child; a paired child device sees only its own child.
       match /children/{childId} {
-        allow read, write: if isMember(familyId);
+        allow read: if isParent(familyId) || isChildDevice(familyId, childId);
+        allow create, update: if isParent(familyId) && validChildId(childId) && validChildProfile();
+        allow delete: if isParent(familyId);
 
         match /days/{day} {
-          allow read, delete: if isMember(familyId);
-          allow create, update: if isMember(familyId) && validDay(day);
+          allow read, delete: if isParent(familyId) || isChildDevice(familyId, childId);
+          allow create, update: if (isParent(familyId) || isChildDevice(familyId, childId)) && validDay(day);
         }
       }
 

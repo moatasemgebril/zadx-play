@@ -1,0 +1,14 @@
+Zad X Play - sound effects and background music
+================================================
+
+All audio files in this folder (tap.wav, correct.wav, wrong.wav, star.wav,
+level_up.wav, task_complete.wav, unlock.wav, transition.wav, music_calm.wav)
+are ORIGINAL works, synthesised from scratch by tools/gen_sfx.py using only
+the Python standard library (sine tones, envelopes and filtered noise).
+No third-party samples, recordings or loops were used or downloaded.
+
+Copyright (c) 2026 Zad X. All rights reserved.
+Owned by Zad X for use in Zad X Play and Zad X marketing material.
+
+To regenerate (output is deterministic):
+    python3 tools/gen_sfx.py

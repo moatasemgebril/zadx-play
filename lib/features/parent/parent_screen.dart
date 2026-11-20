@@ -11,11 +11,14 @@ import '../../data/models/plan.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
 import '../../services/billing/subscription_service.dart';
+import '../../services/family/children_controller.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
 import '../settings/settings_controller.dart';
+import '../settings/sound_settings_card.dart';
 import '../tasks/wallet_controller.dart';
+import 'children_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
 
@@ -34,6 +37,8 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const _PlanCard(),
           const SizedBox(height: 12),
+          const ChildrenCard(),
+          const SizedBox(height: 12),
           const _ApprovalsCard(),
           const SizedBox(height: 12),
           const DevicesCard(),
@@ -43,6 +48,8 @@ class ParentScreen extends ConsumerWidget {
           const _GamesPickerCard(),
           const SizedBox(height: 12),
           const _SettingsCard(),
+          const SizedBox(height: 12),
+          const SoundSettingsCard(),
         ]),
       ),
     );
@@ -86,11 +93,15 @@ class _ApprovalsCard extends ConsumerWidget {
     final l10n = context.l10n;
     final lang = context.lang;
     final wallet = ref.watch(walletProvider);
+    final children = ref.watch(childrenProvider);
     final pending = wallet.pending;
 
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.pendingTitle, style: Theme.of(context).textTheme.titleMedium),
+        if (children.children.length > 1)
+          Text(l10n.viewingChild(childDisplayName(children.active, l10n)),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.purpleDark)),
         const SizedBox(height: 6),
         if (pending.isEmpty) Text(l10n.noPending, style: const TextStyle(fontSize: 16, color: AppColors.muted)),
         for (final t in pending)

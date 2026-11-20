@@ -3,13 +3,15 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/backend.dart';
+import '../../data/models/child_profile.dart';
 import 'family_repository.dart';
 
 /// Firestore layout (see backend/firestore.rules):
 ///
 /// families/{familyId}
 ///   members: [uid...]          parents + paired child devices
-///   children/{childId}
+///   childDevices: {uid: childId} paired child devices (Cloud Functions only)
+///   children/{childId}         {nickname, avatar} — no other personal data
 ///     days/{yyyy-MM-dd}        FamilyDay
 class FirestoreFamilyRepository implements FamilyRepository {
   FirestoreFamilyRepository({
@@ -41,6 +43,28 @@ class FirestoreFamilyRepository implements FamilyRepository {
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': FirebaseAuth.instance.currentUser?.uid,
     }, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> saveChild(ChildProfile child) => _db.doc('families/$familyId/children/${child.id}').set({
+        'nickname': child.nickname,
+        'avatar': child.avatar.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+  @override
+  Future<void> deleteChild(String childId) async {
+    final days = _db.collection('families/$familyId/children/$childId/days');
+    while (true) {
+      final page = await days.limit(200).get();
+      if (page.docs.isEmpty) break;
+      final batch = _db.batch();
+      for (final d in page.docs) {
+        batch.delete(d.reference);
+      }
+      await batch.commit();
+    }
+    await _db.doc('families/$familyId/children/$childId').delete();
   }
 
   @override

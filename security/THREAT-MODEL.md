@@ -47,7 +47,7 @@ Status legend: **Fixed** (this branch) · **Open** (see risk register id) · **A
 | T | Client creates a family with `plan: "plus"` → free paid features | **Fixed** (create rule forbids server-only keys) |
 | T | Member adds arbitrary uids to `members` (persistence, sharing) | **Fixed** (`members` server-only) |
 | T | Malformed days doc breaks lock maths on other devices | **Fixed** (type/range validation) |
-| T | Paired child device (also a "member") approves its own tasks / edits settings by calling Firestore directly | **Open R-03** — no parent/child roles yet |
+| T | Paired child device (also a "member") approves its own tasks / edits settings by calling Firestore directly | Partially fixed by multi-child `childDevices` roles (R-03); legacy unbound child devices count as parents (**Open R-28**); stale bindings after child removal (**Open R-29**); child limit client-only (**Open R-30**) |
 | I | Child data readable by every member device | Accepted by design (single family) |
 | D | Unbounded writes / doc growth | Partially: day doc size bounded; settings not bounded (R-15) |
 | E | Deleting the family / data deletion | No client delete; no deletion function yet (**Open R-08**) |

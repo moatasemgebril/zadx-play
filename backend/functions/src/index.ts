@@ -10,7 +10,7 @@
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  */
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
@@ -116,6 +116,8 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
 
   // Only active subscriptions (paid or store trial) may use the AI; every plan has a daily cap.
   const family = await familyOf(uid);
+  // The assistant is for parents: paired child devices may not use it (child-safety).
+  if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
   const plan = family.get("plan");
   if (!hasActivePlan(plan, family.get("planExpiresAt"), Date.now())) {
     throw new HttpsError("permission-denied", "subscription_required");
@@ -164,6 +166,7 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
     throw new HttpsError("invalid-argument", "Bad notification.");
   }
   const family = await requireFamilyMember(familyId, uid);
+  assertChildAccess(family, uid, childId);
   await enforceRateLimit("notify", uid, 30, 60 * 60_000); // no push spam to parents
   const settings = family.get("settings") ?? {};
   if (type === "task_submitted" && settings.notifyOnTasks === false) return { sent: 0 };
@@ -389,6 +392,33 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
 });
 
 // ---------------------------------------------------------------------------
+// Multi-child: each paired child device is bound to one child
+// (families/{id}.childDevices = { uid: childId }, written only here).
+// ---------------------------------------------------------------------------
+
+const DEFAULT_CHILD_ID = "child-1";
+const CHILD_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
+function boundChildOf(family: FirebaseFirestore.DocumentSnapshot, uid: string): string | null {
+  const map = family.get("childDevices");
+  const value = map && typeof map === "object" ? (map as Record<string, unknown>)[uid] : undefined;
+  return typeof value === "string" ? value : null;
+}
+
+function parseChildId(raw: unknown): string {
+  const childId = raw === undefined || raw === null || raw === "" ? DEFAULT_CHILD_ID : String(raw);
+  if (!CHILD_ID_RE.test(childId)) throw new HttpsError("invalid-argument", "Invalid childId.");
+  return childId;
+}
+
+/** Child devices may act only for the child they are bound to. */
+function assertChildAccess(family: FirebaseFirestore.DocumentSnapshot, uid: string, rawChildId: unknown) {
+  const childId = parseChildId(rawChildId);
+  const bound = boundChildOf(family, uid);
+  if (bound !== null && bound !== childId) throw new HttpsError("permission-denied", "Not this child's device.");
+}
+
+// ---------------------------------------------------------------------------
 // Device pairing
 // ---------------------------------------------------------------------------
 
@@ -398,15 +428,21 @@ export const createPairingCode = onCall({ region: "europe-west1" }, async (req) 
   const uid = requireUid(req.auth);
   const familyId = String(req.data?.familyId ?? "");
   const target = req.data?.target === "windows" ? "windows" : "phone";
-  await requireFamilyMember(familyId, uid);
+  const family = await requireFamilyMember(familyId, uid);
+  // Only parent devices link devices, and only to an existing child profile.
+  if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
   await enforceRateLimit("pairCreate", uid, 10, 60 * 60_000);
+  const childId = parseChildId(req.data?.childId);
+  if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
+    throw new HttpsError("not-found", "Unknown child.");
+  }
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const ref = db.collection("pairingCodes").doc(code);
     const ok = await db.runTransaction(async (tx) => {
       const existing = await tx.get(ref);
       if (existing.exists && existing.get("expiresAt") > Date.now()) return false;
-      tx.set(ref, { familyId, target, createdBy: uid, expiresAt: Date.now() + PAIRING_TTL_MS });
+      tx.set(ref, { familyId, target, childId, createdBy: uid, expiresAt: Date.now() + PAIRING_TTL_MS });
       return true;
     });
     if (ok) return { code };
@@ -435,21 +471,25 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
   if (!isPairingCode(code)) throw new HttpsError("not-found", "invalid_code");
   const ref = db.collection("pairingCodes").doc(code);
   // Read + delete in one transaction so a code can never be redeemed twice.
-  const { familyId, target } = await db.runTransaction(async (tx) => {
+  const { familyId, target, childId } = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists || !(snap.get("expiresAt") > Date.now())) throw new HttpsError("not-found", "invalid_code");
     const t: string = snap.get("target");
     // A phone joins as a family member, so it must be signed in; check before burning the code.
     if (t !== "windows" && !req.auth) throw new HttpsError("unauthenticated", "Sign in first.");
+    // The parent device that created the code must not bind (demote) itself to a child.
+    if (t !== "windows" && req.auth?.uid === snap.get("createdBy")) {
+      throw new HttpsError("failed-precondition", "own_code");
+    }
     tx.delete(ref); // single use
-    return { familyId: snap.get("familyId") as string, target: t };
+    return { familyId: snap.get("familyId") as string, target: t, childId: parseChildId(snap.get("childId")) };
   });
 
   if (target === "windows") {
     const deviceSecret = randomBytes(32).toString("hex");
     const device = await db.collection(`families/${familyId}/devices`).add({
       type: "windows",
-      childId: "child-1",
+      childId,
       name: (typeof req.data?.deviceName === "string" ? req.data.deviceName : "Windows PC").slice(0, 60),
       secretHash: hashSecret(deviceSecret),
       createdAt: FieldValue.serverTimestamp(),
@@ -458,8 +498,13 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
   }
 
   const uid = requireUid(req.auth);
-  await db.doc(`families/${familyId}`).update({ members: FieldValue.arrayUnion(uid) });
-  return { familyId };
+  const familyRef = db.doc(`families/${familyId}`);
+  await familyRef.update(
+    new FieldPath("members"), FieldValue.arrayUnion(uid),
+    new FieldPath("childDevices", uid), childId,
+  );
+  const child = await familyRef.collection("children").doc(childId).get();
+  return { familyId, childId, nickname: child.get("nickname") ?? "", avatar: child.get("avatar") ?? "star" };
 });
 
 // ---------------------------------------------------------------------------
