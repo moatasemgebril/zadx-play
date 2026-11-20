@@ -234,6 +234,14 @@
   "parentPin": "رقم سري لولي الأمر",
   "enterPin": "اكتب الرقم السري",
   "wrongPin": "الرقم السري غلط",
+  "pinTooManyTries": "محاولات غلط كتير. جرّب تاني بعد {seconds} ثانية",
+  "@pinTooManyTries": {
+    "placeholders": {
+      "seconds": {
+        "type": "String"
+      }
+    }
+  },
   "lockPermission": "فعّل صلاحية قفل الألعاب",
   "settingsTitle": "اللغة والبلد",
   "language": "اللغة",

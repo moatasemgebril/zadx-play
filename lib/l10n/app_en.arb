@@ -120,6 +120,7 @@
   "parentPin": "Parent PIN",
   "enterPin": "Enter the PIN",
   "wrongPin": "Wrong PIN",
+  "pinTooManyTries": "Too many wrong tries. Try again in {seconds} seconds",
   "lockPermission": "Enable game-lock permission",
   "settingsTitle": "Language & location",
   "language": "Language",

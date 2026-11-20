@@ -63,6 +63,9 @@ def merge_manifest() -> None:
     inner = re.search(r"<application[^>]*>(.*)</application>", a, re.S).group(1)
     m = re.sub(r"(<application)", top.strip() + "\n    \\1", m, count=1)
     m = re.sub(r'android:label="[^"]*"', 'android:label="Zad X Play"', m, count=1)
+    # No adb/cloud backup of the lock state, PIN hash or family id (restoring old prefs could
+    # unlock games or reset the PIN throttle).
+    m = re.sub(r"<application(?![^>]*allowBackup)", '<application android:allowBackup="false"', m, count=1)
     m = m.replace("</application>", inner.rstrip() + "\n    </application>", 1)
     manifest.write_text(m)
     print("merged AndroidManifest.additions.xml")

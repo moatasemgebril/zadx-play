@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 
 /**
@@ -37,6 +38,9 @@ class AppBlockerService : AccessibilityService() {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName) return
+        // The notification shade, volume dialog or keyboard opening over a game must not stop
+        // the minute counter (otherwise pulling down the shade gave unmetered play time).
+        if (isTransientOverlay(pkg)) return
 
         if (!LockStore.isControlled(this, pkg)) {
             stopTicking()
@@ -52,9 +56,18 @@ class AppBlockerService : AccessibilityService() {
         }
     }
 
+    private fun isTransientOverlay(pkg: String): Boolean {
+        if (pkg == "com.android.systemui") return true
+        val ime = Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: return false
+        return ime.substringBefore('/') == pkg
+    }
+
     private fun block(pkg: String) {
         stopTicking()
         AppLockChannel.emit(mapOf("type" to "blocked_attempt", "package" to pkg))
+        // Send the game to the background first so it cannot keep running beside the shield
+        // (split-screen / pop-up window), then show the shield.
+        performGlobalAction(GLOBAL_ACTION_HOME)
         startActivity(
             Intent(this, BlockActivity::class.java)
                 .putExtra(BlockActivity.EXTRA_REASON, LockStore.reason(this))
