@@ -21,6 +21,7 @@ import '../tasks/wallet_controller.dart';
 import 'children_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
+import 'push_settings_card.dart';
 
 class ParentScreen extends ConsumerWidget {
   const ParentScreen({super.key});
@@ -49,6 +50,8 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const _SettingsCard(),
           const SizedBox(height: 12),
+          // Adds its own bottom gap; hidden when push is unavailable on this device.
+          const PushSettingsCard(),
           const SoundSettingsCard(),
         ]),
       ),

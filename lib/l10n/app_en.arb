@@ -296,5 +296,15 @@
   "prophetsIntro": "Questions about the prophets' stories in the Quran",
   "prophetsDidYouKnow": "Did you know?",
   "prophetsRef": "Surah {surah} ({ref})",
-  "parentReviewNote": "For parents: the religious content in this game is still awaiting review by a qualified scholar before final release."
+  "parentReviewNote": "For parents: the religious content in this game is still awaiting review by a qualified scholar before final release.",
+  "pushTitle": "Parent notifications",
+  "pushToggle": "Receive notifications on this device",
+  "pushSub": "Finished tasks, unlock requests, newly linked devices and a weekly summary. No ads, ever.",
+  "pushPrivacyNote": "Notifications never include your child's name or any personal data, and are never sent to children's devices.",
+  "pushAskTitle": "Allow notifications?",
+  "pushAskBody": "We'll ask your phone for permission so we can tell you when your child finishes tasks or asks to unlock games. You can turn this off at any time.",
+  "pushAskAllow": "Allow",
+  "pushAskLater": "Not now",
+  "pushDenied": "Notifications are turned off in your device settings. Open Settings and allow them for Zad X.",
+  "pushFailed": "Couldn't turn on notifications right now. Please try again later."
 }
