@@ -65,10 +65,26 @@ derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
 | Web | — | ✓ dashboard |
 | PlayStation / Xbox | no public API → parent alerts + deep link to PlayStation Family / Microsoft Family Safety, plus suggested play windows between prayers | — |
 
-## Multiple children (next step)
-`activeChildIdProvider` is fixed to `child-1`. To support Basic (2) / Plus (5) children: add a
-`children` collection with names/avatars, a child picker on the parent dashboard, and pass the
-selected child id to `WalletController`, pairing (`childId` on the device) and the guard.
+## Multiple children
+Basic = up to 2 children, Plus = up to 5 (`PlanPricing.maxChildren`).
+
+- **Profile** (`lib/data/models/child_profile.dart`): random id, nickname, built-in avatar.
+  No birthdate, photo or last name (COPPA / GDPR-K data minimisation); nicknames that look
+  like e-mails or phone numbers are rejected.
+- **On device** (`lib/services/family/children_controller.dart`, `child_storage.dart`):
+  `childrenProvider` holds the list, the active child and — on a paired child device — the
+  bound child. `activeChildIdProvider` drives `WalletController` and `AdhkarController`, so each
+  child has its own tasks, minutes and prayer lock (`wallet.child.<id>.*`). The first launch
+  after the update moves the old single-child keys into `child-1` (idempotent migration).
+- **Parent dashboard** (`lib/features/parent/children_card.dart`): list with per-child summary,
+  switch, add (plan limit → upsell), edit, remove (confirmation; deletes local + synced data).
+- **Sync**: `families/{id}/children/{childId}` = `{nickname, avatar, updatedAt}`; days below it.
+  Pairing codes carry a `childId`; redeeming binds the phone via `families/{id}.childDevices[uid]`
+  (Cloud Functions only) and Windows guards via `devices/{id}.childId`.
+- **Rules**: a member without a `childDevices` entry is a parent and can manage every child; a
+  bound child device can read only its own child doc and read/write only its own days, and may
+  update only `settings` on the family doc. `members` / `childDevices` are server-only.
+- On a device that is not bound, the active child's wallet also drives the device game lock.
 
 ## Built-in learning games
 `lib/features/edu_games/` (plain Flutter widgets + CustomPainter, routes `/edu/<id>`):

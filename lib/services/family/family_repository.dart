@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/models/child_profile.dart';
 import 'firestore_family_repository.dart';
 
 /// Snapshot of a child's day that both the child and parent devices share.
@@ -60,6 +61,12 @@ abstract class FamilyRepository {
 
   /// Push notification to the parent devices (handled server-side).
   Future<void> notifyParent(String childId, String type, {Map<String, Object?> data = const {}});
+
+  /// Child profile (nickname + built-in avatar only) shared with the family's devices.
+  Future<void> saveChild(ChildProfile child);
+
+  /// Deletes a child's profile and synced days.
+  Future<void> deleteChild(String childId);
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -76,6 +83,12 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> notifyParent(String childId, String type, {Map<String, Object?> data = const {}}) async {}
+
+  @override
+  Future<void> saveChild(ChildProfile child) async {}
+
+  @override
+  Future<void> deleteChild(String childId) async {}
 }
 
 /// True when Firebase initialised (overridden in main()).
@@ -90,5 +103,4 @@ final familyRepositoryProvider = Provider<FamilyRepository>((ref) {
   return LocalFamilyRepository();
 });
 
-/// The child profile used on this device. Pairing flow sets it (see docs/ARCHITECTURE.md).
-final activeChildIdProvider = Provider<String>((_) => 'child-1');
+// The active child id lives in children_controller.dart (`activeChildIdProvider`).

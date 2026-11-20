@@ -405,6 +405,7 @@
   "restorePurchases": "استرجاع المشتريات",
   "inviteCodeField": "كود دعوة من صاحبك (اختياري)",
   "purchaseError": "مقدرناش نكمّل الاشتراك. جرّب تاني.",
+<<<<<<< HEAD
   "eduStarsLabel": "نجومك: {n}",
   "@eduStarsLabel": {
     "placeholders": {
@@ -425,15 +426,25 @@
   "eduChooseLevel": "اختار المستوى",
   "eduQuestionOf": "سؤال {n} من {total}",
   "@eduQuestionOf": {
+=======
+  "childrenTitle": "الأطفال",
+  "childrenCount": "{n} من {max}",
+  "@childrenCount": {
+>>>>>>> origin/main
     "placeholders": {
       "n": {
         "type": "String"
       },
+<<<<<<< HEAD
       "total": {
+=======
+      "max": {
+>>>>>>> origin/main
         "type": "String"
       }
     }
   },
+<<<<<<< HEAD
   "eduWellDone": "أحسنت!",
   "eduTryAgain": "قرّبت! جرّب تاني",
   "eduNext": "التالي",
@@ -468,20 +479,41 @@
   "lettersAskName": "إيه اسم الحرف ده؟",
   "lettersAskLetter": "فين حرف «{name}»؟",
   "@lettersAskLetter": {
+=======
+  "addChild": "إضافة طفل",
+  "childNickname": "اسم الدلع",
+  "childNicknameHint": "اسم أول أو اسم دلع بس — من غير اسم العيلة أو صورة أو تاريخ ميلاد",
+  "childNicknameInvalid": "اكتب اسم دلع قصير (من غير إيميل أو رقم تليفون)",
+  "chooseAvatar": "اختار صورة رمزية",
+  "saveButton": "حفظ",
+  "cancelButton": "إلغاء",
+  "editChild": "تعديل",
+  "removeChild": "حذف",
+  "removeChildTitle": "تحذف {name}؟",
+  "@removeChildTitle": {
+>>>>>>> origin/main
     "placeholders": {
       "name": {
         "type": "String"
       }
     }
   },
+<<<<<<< HEAD
   "lettersAskForm": "الحرف ده مكتوب {position}. هو أنهي حرف؟",
   "@lettersAskForm": {
     "placeholders": {
       "position": {
+=======
+  "removeChildBody": "ده هيمسح مهام {name} ودقايقه وتقدّمه من الجهاز ده ومن مزامنة العيلة. مش هينفع ترجّعه.",
+  "@removeChildBody": {
+    "placeholders": {
+      "name": {
+>>>>>>> origin/main
         "type": "String"
       }
     }
   },
+<<<<<<< HEAD
   "lettersPosIsolated": "لوحده",
   "lettersPosInitial": "في أول الكلمة",
   "lettersPosMedial": "في نص الكلمة",
@@ -490,19 +522,38 @@
   "@mosqueNext": {
     "placeholders": {
       "part": {
+=======
+  "childLimitTitle": "باقتك وصلت للحد",
+  "childLimitBody": "باقتك فيها لحد {max} أطفال. مع Zad X بلس تقدر تضيف لحد {plus}.",
+  "@childLimitBody": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      },
+      "plus": {
+>>>>>>> origin/main
         "type": "String"
       }
     }
   },
+<<<<<<< HEAD
   "mosqueBuild": "ابنِ",
   "mosqueCost": "التكلفة: {n}",
   "@mosqueCost": {
     "placeholders": {
       "n": {
+=======
+  "childDefaultName": "طفلي",
+  "viewingChild": "المعروض دلوقتي: {name}",
+  "@viewingChild": {
+    "placeholders": {
+      "name": {
+>>>>>>> origin/main
         "type": "String"
       }
     }
   },
+<<<<<<< HEAD
   "mosqueNeedStars": "ناقصك {n} من النجوم. العب «حروف القرآن» أو «أبطال الأنبياء» واكسب نجوم!",
   "@mosqueNeedStars": {
     "placeholders": {
@@ -522,12 +573,17 @@
   },
   "mosquePartsDone": "الأجزاء: {done} من {total}",
   "@mosquePartsDone": {
+=======
+  "childSummary": "{done}/{total} مهام • باقي {mins} دقيقة",
+  "@childSummary": {
+>>>>>>> origin/main
     "placeholders": {
       "done": {
         "type": "String"
       },
       "total": {
         "type": "String"
+<<<<<<< HEAD
       }
     }
   },
@@ -540,9 +596,58 @@
         "type": "String"
       },
       "ref": {
+=======
+      },
+      "mins": {
+>>>>>>> origin/main
         "type": "String"
       }
     }
   },
+<<<<<<< HEAD
   "parentReviewNote": "لولي الأمر: المحتوى الديني في اللعبة دي لسه بيراجعه شيخ متخصص قبل النشر النهائي."
 }
+=======
+  "childPrayerLocked": "وقت الصلاة — الألعاب مقفولة",
+  "childDeviceBound": "الجهاز ده خاص بـ {name}",
+  "@childDeviceBound": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "pairForChild": "الجهاز ده لأنهي طفل؟",
+  "childAdded": "اتضاف {name}",
+  "@childAdded": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "childRemoved": "اتحذف {name}",
+  "@childRemoved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "childActive": "معروض دلوقتي",
+  "avatarStar": "نجمة",
+  "avatarMoon": "قمر",
+  "avatarSun": "شمس",
+  "avatarRocket": "صاروخ",
+  "avatarFlower": "وردة",
+  "avatarKitten": "قطة",
+  "soundTitle": "الأصوات",
+  "soundEffects": "أصوات اللعب والنجوم",
+  "soundEffectsSub": "أصوات خفيفة لما البطل يخلّص مهمة أو ياخد نجمة",
+  "soundVolume": "علوّ الصوت",
+  "soundMusic": "موسيقى هادية في الخلفية",
+  "soundMusicSub": "مقفولة من الأول، وانت اللي تقرر تشغّلها",
+  "soundNoMusicMode": "وضع بدون موسيقى: التطبيق شغّال من غير أي موسيقى في الخلفية، ولو أصوات اللعب مفعّلة هتفضل بس الأصوات الخفيفة. مناسب للعائلات اللي بتفضّل تبعد عن الموسيقى.",
+  "soundSacredNote": "كل الأصوات بتسكت لوحدها وقت الأذان وتلاوة القرآن."
+}
+>>>>>>> origin/main
