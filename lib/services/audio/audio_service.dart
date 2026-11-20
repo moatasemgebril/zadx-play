@@ -10,14 +10,24 @@ enum PlayerKind { none, adhan, quran }
 
 @immutable
 class ZadPlayerState {
-  const ZadPlayerState({this.kind = PlayerKind.none, this.surahNumber, this.index = 0, this.loading = false});
+  const ZadPlayerState({
+    this.kind = PlayerKind.none,
+    this.surahNumber,
+    this.index = 0,
+    this.loading = false,
+    this.progress,
+  });
 
   final PlayerKind kind;
   final int? surahNumber;
 
   /// Current ayah index (Quran) or adhan phrase index (approximate).
+  /// -1 while a whole-surah file plays: the current ayah is unknown, so none is highlighted.
   final int index;
   final bool loading;
+
+  /// 0–1 playback progress for whole-surah recitations; null for per-ayah playback.
+  final double? progress;
 
   bool get isPlaying => kind != PlayerKind.none;
 }
@@ -29,11 +39,12 @@ class ZadPlayerState {
 /// TODO(release): confirm usage terms or host recitations on your own CDN.
 class PlayerController extends Notifier<ZadPlayerState> {
   final AudioPlayer _player = AudioPlayer();
+  bool _wholeSurah = false;
 
   @override
   ZadPlayerState build() {
     final sub = _player.currentIndexStream.listen((i) {
-      if (i != null && state.kind == PlayerKind.quran) state = ZadPlayerState(kind: state.kind, surahNumber: state.surahNumber, index: i);
+      if (i != null && state.kind == PlayerKind.quran && !_wholeSurah) state = ZadPlayerState(kind: state.kind, surahNumber: state.surahNumber, index: i);
     });
     final done = _player.playerStateStream.listen((s) {
       if (s.processingState == ProcessingState.completed) stop();
@@ -44,6 +55,14 @@ class PlayerController extends Notifier<ZadPlayerState> {
         if (total > 0) {
           final idx = (p.inMilliseconds / total * adhanPhrases.length).floor().clamp(0, adhanPhrases.length - 1);
           if (idx != state.index) state = ZadPlayerState(kind: PlayerKind.adhan, index: idx);
+        }
+      } else if (state.kind == PlayerKind.quran && _wholeSurah && !state.loading) {
+        final total = _player.duration?.inMilliseconds ?? 0;
+        if (total > 0) {
+          final progress = (p.inMilliseconds / total).clamp(0.0, 1.0);
+          if ((progress - (state.progress ?? 0)).abs() >= 0.005) {
+            state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: state.surahNumber, index: -1, progress: progress);
+          }
         }
       }
     });
@@ -73,17 +92,32 @@ class PlayerController extends Notifier<ZadPlayerState> {
   Future<void> playSurah(SurahInfo surah) async {
     final id = ref.read(settingsProvider).reciterId;
     final reciter = reciters.firstWhere((v) => v.id == id, orElse: () => reciters.first);
-    state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: surah.number, loading: true);
+    final wholeUrl = reciter.surahUrlFor(surah.number);
+    _wholeSurah = wholeUrl != null;
+    state = ZadPlayerState(
+      kind: PlayerKind.quran,
+      surahNumber: surah.number,
+      loading: true,
+      index: _wholeSurah ? -1 : 0,
+      progress: _wholeSurah ? 0 : null,
+    );
     final s = surah.number.toString().padLeft(3, '0');
-    final playlist = ConcatenatingAudioSource(children: [
-      for (var a = 1; a <= surah.ayahCount; a++)
-        AudioSource.uri(Uri.parse(
-          'https://everyayah.com/data/${reciter.source}/$s${a.toString().padLeft(3, '0')}.mp3',
-        )),
-    ]);
+    final AudioSource source = wholeUrl != null
+        ? AudioSource.uri(Uri.parse(wholeUrl))
+        : ConcatenatingAudioSource(children: [
+            for (var a = 1; a <= surah.ayahCount; a++)
+              AudioSource.uri(Uri.parse(
+                'https://everyayah.com/data/${reciter.source}/$s${a.toString().padLeft(3, '0')}.mp3',
+              )),
+          ]);
     try {
-      await _player.setAudioSource(playlist);
-      state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: surah.number);
+      await _player.setAudioSource(source);
+      state = ZadPlayerState(
+        kind: PlayerKind.quran,
+        surahNumber: surah.number,
+        index: _wholeSurah ? -1 : 0,
+        progress: _wholeSurah ? 0 : null,
+      );
       await _player.play();
     } catch (e) {
       debugPrint('quran audio failed: $e');

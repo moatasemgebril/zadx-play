@@ -136,7 +136,7 @@ class _SurahCard extends ConsumerWidget {
         ]),
         if (playing) ...[
           const SizedBox(height: 10),
-          ProgressBar(value: (player.index + 1) / surah.ayahCount, color: AppColors.purple, height: 6),
+          ProgressBar(value: player.progress ?? (player.index + 1) / surah.ayahCount, color: AppColors.purple, height: 6),
           const SizedBox(height: 8),
           _AyatText(surah: surah, currentIndex: player.index),
         ],
