@@ -31,7 +31,6 @@ dependencies:
   # Notifications at prayer times
   flutter_local_notifications: ^18.0.1
   timezone: ^0.10.0
-  flutter_timezone: ^3.0.1
 
   # Location (optional auto-detect city)
   geolocator: ^13.0.2

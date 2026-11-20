@@ -112,6 +112,8 @@ jobs:
           cp -r /tmp/keep/ios/. ios/
           rm -f test/widget_test.dart
           flutter pub get && flutter gen-l10n
+          ruby ios/scripts/add_native_files.rb
+          sed -i '' "s/^# platform :ios.*/platform :ios, '16.0'/" ios/Podfile || true
           # Simulator build: proves the iOS app compiles without an Apple signing team.
           flutter build ios --simulator --debug
 
