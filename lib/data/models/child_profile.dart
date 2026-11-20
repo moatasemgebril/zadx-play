@@ -18,7 +18,7 @@ class ChildProfile {
   static const maxNicknameLength = 20;
 
   static final _idPattern = RegExp(r'^[A-Za-z0-9_-]{1,40}$');
-  static final _controlChars = RegExp(r'[\u0000-\u001F\u007F-\u009F​-‏‪-‮⁦-⁩]');
+  static final _controlChars = RegExp(r'[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u202A-\u202E\u2066-\u2069]');
   static final _spaces = RegExp(r'\s+');
   static final _longNumber = RegExp(r'\d{4,}');
 
