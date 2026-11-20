@@ -9,7 +9,9 @@ service cloud.firestore {
     // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
     function serverOnlyFamilyKeys() {
       return ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
-              'referralPaid', 'referralCode', 'members', 'childDevices', 'createdAt'];
+              'referralPaid', 'referralCode', 'members', 'childDevices', 'createdAt',
+              // Legacy push tokens (readable by every member): never written by clients again.
+              'parentTokens'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
     function validDay(day) {
@@ -49,6 +51,22 @@ service cloud.firestore {
     }
     // -----------------------------------------------------------------------
 
+    // ---- Parent push (docs/PUSH_NOTIFICATIONS.md) ---------------------------
+    // One doc per parent device, id = that device's uid. FCM token + language only.
+    function validParentDevice() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['token', 'platform', 'lang', 'updatedAt'])
+        && d.token is string && d.token.size() >= 20 && d.token.size() <= 4096
+        && d.token.matches('^[A-Za-z0-9_:.-]+$')
+        && d.platform in ['android', 'ios']
+        && d.lang in ['ar', 'en']
+        && d.updatedAt == request.time;
+    }
+    function isOwnParentDevice(familyId, deviceUid) {
+      return signedIn() && request.auth.uid == deviceUid && isParent(familyId);
+    }
+    // -----------------------------------------------------------------------
+
     match /families/{familyId} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
       // A new family has exactly one member (the creator) and no entitlement / referral fields.
@@ -78,6 +96,13 @@ service cloud.firestore {
       // Windows guard devices: created and read by Cloud Functions only.
       match /devices/{deviceId} {
         allow read, write: if false;
+      }
+
+      // Push tokens: only the owning PARENT device can read/write its own doc. Child devices,
+      // other parents and non-members are denied; Cloud Functions read them with the admin SDK.
+      match /parentDevices/{deviceUid} {
+        allow read, delete: if isOwnParentDevice(familyId, deviceUid);
+        allow create, update: if isOwnParentDevice(familyId, deviceUid) && validParentDevice();
       }
 
       match /assistantUsage/{day} {
