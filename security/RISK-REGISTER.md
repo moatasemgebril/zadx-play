@@ -1,0 +1,35 @@
+# Zad X Play — Security risk register
+
+Updated 2026-11-20 (branch `sec/hardening-1`). Severity: Critical / High / Medium / Low.
+Likelihood: High / Medium / Low. Status: Fixed (this branch, pending Quality Gate) / Open / Accepted.
+"Owner" is a role; **OWNER** = Moatasem (business owner) must act personally.
+
+| ID | Risk | Sev. | Likelihood | Owner role | Mitigation | Status |
+|---|---|---|---|---|---|---|
+| R-01 | Any signed-in user could create a family doc with `plan: "plus"` (create rule did not protect entitlement fields) → free paid features | Critical | High | Backend | Create rule: single member = creator, no server-only keys | Fixed |
+| R-02 | 6-digit pairing code brute force → attacker device joins a family and reads child data | Critical → Medium (residual) | Medium | Backend | Rate limits (20/10 min per IP, 10/10 min per uid, 120/min global), format check, transactional single use, 10 min TTL. **Next:** parent must confirm a newly paired device in the dashboard; App Check | Partially fixed / Open |
+| R-03 | Paired child phone is a full family member: with a rooted device / raw API calls it can approve its own tasks, edit settings, create pairing codes | High | Low | Backend + Engineering (wallet/parent screens) | Add roles (`parents` vs `childDevices`), approvals written via a Function that checks the parent role; rules restrict child devices to submit-only fields | Open |
+| R-04 | Android lock bypass: child disables the accessibility service, force-stops/uninstalls Zad X, or changes the clock | High | Medium | Android engineer | Detect service disabled (`hasPermissions` on resume + heartbeat) and notify parent; server-side day boundary; optional Device Admin to block uninstall; guide parents to Google Family Link | Open |
+| R-05 | Anthropic spend abuse / runaway cost | High → Low | Medium | Backend + **OWNER** | Fixed in code: subscription required, 10/100 per family per day, 6/min per user, max_tokens 500, timeout. **OWNER:** set monthly spend limit in Anthropic Console, GCP budget alerts, enable App Check | Fixed (code) / Open (owner) |
+| R-06 | AI may output content unsuitable for a child or receive child PII | High | Low | Backend + Child-safety | Kid-safe system prompt added. **Next:** output moderation pass, parent-only access to the assistant (behind ParentGate), red-team prompt set | Partially fixed |
+| R-07 | AI states Quran/hadith text or rulings inaccurately | High | Medium | Islamic Content Reviewer | Prompt forbids quoting from memory; reviewer must approve prompt + 30 sample answers (AR/EN) | Open |
+| R-08 | No data deletion path (COPPA/GDPR-K right to delete); anonymous accounts orphan data | High | High | Backend + **OWNER** (legal) | `deleteFamily` Function (recursive delete of family, devices, codes, usage) callable by a parent only after R-03 roles; in-app "Delete my data" + web form; retention policy | Open |
+| R-09 | Windows Guard matches games by process name; a child can copy/rename a per-user game exe (e.g. Roblox in AppData) | Medium | Medium | Windows engineer | Match by path/publisher signature or hash; block executables from user-writable folders while locked; AppLocker/WDAC guidance for parents | Open |
+| R-10 | iOS purchases not verified on the server (`verifyPurchase` returns unimplemented); iOS users rely on client entitlement | Medium | High | Backend | Implement App Store Server API verification + Notifications v2 endpoint with JWS validation | Open |
+| R-11 | First person to open the parent area sets the PIN (could be the child) | Medium | Medium | Parent-screen owner (Engineering) | Force PIN creation (with confirmation) during parent onboarding; PIN reset via parent account re-auth | Open |
+| R-12 | PIN residual: 4–6 digits crackable offline on a rooted device; clock change skips lock-out | Low | Low | Engineering | PBKDF2 + salt + throttling done; optional: store hash in Android Keystore / iOS Keychain, monotonic clock | Accepted |
+| R-13 | iOS: child can revoke Screen Time authorization when set up as `.individual` | Medium | Medium | iOS engineer | Default to `.child` authorization through Family Sharing; detect revocation and alert parent | Open |
+| R-14 | No audit trail (approvals, pairing, purchases, device revocation) | Medium | Medium | Backend | Append-only `families/*/audit` written by Functions; show in parent dashboard | Open |
+| R-15 | `settings` map and `children/{childId}` docs not size/shape-validated in rules | Low | Low | Backend (with multi-child work) | Add validation once the multi-child schema lands | Open |
+| R-16 | Client-side entitlement defaults to "Plus trial" and game limits (5/15) are enforced only in the app | Low | Medium | Engineering (billing) | Read entitlement from the server-written family doc; treat client value as display only | Open |
+| R-17 | Pub/Sub webhook rejects everything until owner configures `PUBSUB_PUSH_SERVICE_ACCOUNT` + `PUBSUB_PUSH_AUDIENCE` (fail-closed) | Low | High | **OWNER** / DevOps | Set params at deploy (see checklist) | Open (config) |
+| R-18 | Rate-limit IP is taken from the right-most `X-Forwarded-For`; if the platform reports a proxy IP the per-IP limit becomes shared | Low | Low | Backend | Verify in staging; adjust to the platform's documented client-IP header | Open |
+| R-19 | Unsigned Windows installer/binary; PowerShell `-ExecutionPolicy Bypass` install | Medium | Medium | **OWNER** (certificate) + Windows engineer | Authenticode certificate, MSI/MSIX | Open |
+| R-20 | Forged Play RTDN webhook | High | Medium | Backend | OIDC verification + Play API re-check | Fixed |
+| R-21 | Basic receipt claimed as Plus; one receipt shared across families | High | Medium | Backend | Tier from Google lineItems; token bound to one family | Fixed |
+| R-22 | Android: notification shade / keyboard stopped minute counting (unmetered play); split-screen beside shield | Medium | High | Android engineer | Ignore transient overlays; go Home before shield | Fixed |
+| R-23 | Parent PIN unsalted SHA-256, unlimited attempts | High | High | Engineering | PBKDF2 + salt + persisted throttling | Fixed |
+| R-24 | Windows data folder could be pre-owned by the child | Medium | Low | Windows engineer | Fresh folder, Admin owner, SID ACL | Fixed |
+| R-25 | Push spam / arbitrary FCM data via `notifyParent` | Low | Medium | Backend | Allowlist + sanitised data + rate limit | Fixed |
+| R-26 | Error responses/logs leaking internals or purchase tokens | Low | Medium | Backend | Generic errors, token-free logs | Fixed |
+| R-27 | Anonymous Firebase auth only: no verifiable parent identity, no account recovery, no VPC | High | High | **OWNER** (legal) + Backend | Parent sign-in (Apple/Google/email) + COPPA verifiable parental consent before any child data leaves the device | Open |
