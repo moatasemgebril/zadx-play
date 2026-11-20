@@ -10,7 +10,7 @@
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  */
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { defineSecret } from "firebase-functions/params";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
@@ -112,6 +112,7 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
   if (!family.exists || !(family.get("members") as string[]).includes(uid)) {
     throw new HttpsError("permission-denied", "Not a family member.");
   }
+  assertChildAccess(family, uid, childId);
   const settings = family.get("settings") ?? {};
   if (type === "task_submitted" && settings.notifyOnTasks === false) return { sent: 0 };
   if (type === "adhan" && settings.notifyOnAdhan === false) return { sent: 0 };
@@ -282,6 +283,33 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
 });
 
 // ---------------------------------------------------------------------------
+// Multi-child: each paired child device is bound to one child
+// (families/{id}.childDevices = { uid: childId }, written only here).
+// ---------------------------------------------------------------------------
+
+const DEFAULT_CHILD_ID = "child-1";
+const CHILD_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
+function boundChildOf(family: FirebaseFirestore.DocumentSnapshot, uid: string): string | null {
+  const map = family.get("childDevices");
+  const value = map && typeof map === "object" ? (map as Record<string, unknown>)[uid] : undefined;
+  return typeof value === "string" ? value : null;
+}
+
+function parseChildId(raw: unknown): string {
+  const childId = raw === undefined || raw === null || raw === "" ? DEFAULT_CHILD_ID : String(raw);
+  if (!CHILD_ID_RE.test(childId)) throw new HttpsError("invalid-argument", "Invalid childId.");
+  return childId;
+}
+
+/** Child devices may act only for the child they are bound to. */
+function assertChildAccess(family: FirebaseFirestore.DocumentSnapshot, uid: string, rawChildId: unknown) {
+  const childId = parseChildId(rawChildId);
+  const bound = boundChildOf(family, uid);
+  if (bound !== null && bound !== childId) throw new HttpsError("permission-denied", "Not this child's device.");
+}
+
+// ---------------------------------------------------------------------------
 // Device pairing
 // ---------------------------------------------------------------------------
 
@@ -295,13 +323,19 @@ export const createPairingCode = onCall({ region: "europe-west1" }, async (req) 
   if (!family.exists || !(family.get("members") as string[]).includes(uid)) {
     throw new HttpsError("permission-denied", "Not a family member.");
   }
+  // Only parent devices link devices, and only to an existing child profile.
+  if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
+  const childId = parseChildId(req.data?.childId);
+  if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
+    throw new HttpsError("not-found", "Unknown child.");
+  }
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const ref = db.collection("pairingCodes").doc(code);
     const ok = await db.runTransaction(async (tx) => {
       const existing = await tx.get(ref);
       if (existing.exists && existing.get("expiresAt") > Date.now()) return false;
-      tx.set(ref, { familyId, target, createdBy: uid, expiresAt: Date.now() + PAIRING_TTL_MS });
+      tx.set(ref, { familyId, target, childId, createdBy: uid, expiresAt: Date.now() + PAIRING_TTL_MS });
       return true;
     });
     if (ok) return { code };
@@ -325,13 +359,18 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
   if (!snap.exists || snap.get("expiresAt") < Date.now()) throw new HttpsError("not-found", "invalid_code");
   const familyId: string = snap.get("familyId");
   const target: string = snap.get("target");
+  const childId = parseChildId(snap.get("childId"));
+  // The parent device that created the code must not bind (demote) itself to a child.
+  if (target !== "windows" && req.auth?.uid === snap.get("createdBy")) {
+    throw new HttpsError("failed-precondition", "own_code");
+  }
   await ref.delete(); // single use
 
   if (target === "windows") {
     const deviceSecret = randomBytes(32).toString("hex");
     const device = await db.collection(`families/${familyId}/devices`).add({
       type: "windows",
-      childId: "child-1",
+      childId,
       name: String(req.data?.deviceName ?? "Windows PC").slice(0, 60),
       secretHash: hashSecret(deviceSecret),
       createdAt: FieldValue.serverTimestamp(),
@@ -340,8 +379,13 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
   }
 
   const uid = requireUid(req.auth);
-  await db.doc(`families/${familyId}`).update({ members: FieldValue.arrayUnion(uid) });
-  return { familyId };
+  const familyRef = db.doc(`families/${familyId}`);
+  await familyRef.update(
+    new FieldPath("members"), FieldValue.arrayUnion(uid),
+    new FieldPath("childDevices", uid), childId,
+  );
+  const child = await familyRef.collection("children").doc(childId).get();
+  return { familyId, childId, nickname: child.get("nickname") ?? "", avatar: child.get("avatar") ?? "star" };
 });
 
 // ---------------------------------------------------------------------------

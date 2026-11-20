@@ -7,19 +7,51 @@ service cloud.firestore {
       return signedIn() && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.members;
     }
 
+    // ---- Multi-child -------------------------------------------------------
+    // families/{id}.childDevices = { uid: childId } is written only by Cloud Functions
+    // (redeemPairingCode). A member listed there is a child device bound to one child;
+    // any other member is a parent device.
+    function boundChildOf(familyId) {
+      return get(/databases/$(database)/documents/families/$(familyId)).data.get('childDevices', {}).get(request.auth.uid, null);
+    }
+    function isParent(familyId) {
+      return isMember(familyId) && boundChildOf(familyId) == null;
+    }
+    function isChildDevice(familyId, childId) {
+      return isMember(familyId) && boundChildOf(familyId) == childId;
+    }
+    function validChildId(childId) {
+      return childId.matches('^[A-Za-z0-9_-]{1,40}$');
+    }
+    // COPPA data minimisation: nickname + built-in avatar id only.
+    function validChildProfile() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['nickname', 'avatar', 'updatedAt'])
+        && d.nickname is string && d.nickname.size() <= 40
+        && d.avatar is string && d.avatar.matches('^[a-z]{1,16}$')
+        && (!('updatedAt' in d) || d.updatedAt == request.time);
+    }
+    // -----------------------------------------------------------------------
+
     match /families/{familyId} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
       allow create: if signedIn() && request.auth.uid in request.resource.data.members;
       // Plan, referral and purchase fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
-             ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy', 'referralPaid', 'referralCode']);
+             ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy', 'referralPaid', 'referralCode'])
+        // Multi-child: device bindings are server-only; child devices may only sync `settings`.
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['members', 'childDevices'])
+        && (isParent(familyId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings']));
 
+      // Multi-child: parents manage every child; a paired child device sees only its own child.
       match /children/{childId} {
-        allow read, write: if isMember(familyId);
+        allow read: if isParent(familyId) || isChildDevice(familyId, childId);
+        allow create, update: if isParent(familyId) && validChildId(childId) && validChildProfile();
+        allow delete: if isParent(familyId);
 
         match /days/{day} {
-          allow read, write: if isMember(familyId);
+          allow read, write: if isParent(familyId) || isChildDevice(familyId, childId);
         }
       }
 

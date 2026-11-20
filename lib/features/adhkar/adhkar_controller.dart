@@ -4,16 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/catalog/adhkar.dart';
 import '../../data/models/family_task.dart';
+import '../../services/family/child_storage.dart';
+import '../../services/family/children_controller.dart';
 import '../prayer/prayer_providers.dart';
 import '../settings/settings_controller.dart';
 import '../tasks/wallet_controller.dart';
 
-/// Today's tasbeeh counts per dhikr id. Resets every day.
+/// Today's tasbeeh counts per dhikr id for the active child. Resets every day.
 class AdhkarController extends Notifier<Map<String, int>> {
-  static const _key = 'adhkar.counts';
+  String _key = ChildStorage.adhkarKey('child-1');
 
   @override
   Map<String, int> build() {
+    _key = ChildStorage.adhkarKey(ref.watch(activeChildIdProvider));
     final day = ref.watch(cityNowProvider.select((n) => '${n.local.year}-${n.local.month}-${n.local.day}'));
     final raw = ref.read(sharedPrefsProvider).getString(_key);
     if (raw != null) {
