@@ -517,5 +517,145 @@
   "soundMusic": "موسيقى هادية في الخلفية",
   "soundMusicSub": "مقفولة من الأول، وانت اللي تقرر تشغّلها",
   "soundNoMusicMode": "وضع بدون موسيقى: التطبيق شغّال من غير أي موسيقى في الخلفية، ولو أصوات اللعب مفعّلة هتفضل بس الأصوات الخفيفة. مناسب للعائلات اللي بتفضّل تبعد عن الموسيقى.",
-  "soundSacredNote": "كل الأصوات بتسكت لوحدها وقت الأذان وتلاوة القرآن."
+  "soundSacredNote": "كل الأصوات بتسكت لوحدها وقت الأذان وتلاوة القرآن.",
+  "eduStarsLabel": "نجومك: {n}",
+  "@eduStarsLabel": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "eduLevelN": "المستوى {n}",
+  "@eduLevelN": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "eduLevelLocked": "خلّص المستوى اللي قبله عشان يتفتح",
+  "eduChooseLevel": "اختار المستوى",
+  "eduQuestionOf": "سؤال {n} من {total}",
+  "@eduQuestionOf": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "eduWellDone": "أحسنت!",
+  "eduTryAgain": "قرّبت! جرّب تاني",
+  "eduNext": "التالي",
+  "eduPlayAgain": "العب تاني",
+  "eduBackToGames": "رجوع للألعاب",
+  "eduRoundDone": "ما شاء الله! خلّصت الجولة",
+  "eduFirstTry": "صح من أول محاولة: {n} من {total}",
+  "@eduFirstTry": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "eduStarsEarned": "النجوم اللي كسبتها: {n}",
+  "@eduStarsEarned": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "eduGoBuild": "ابنِ مسجدك بنجومك",
+  "lettersLevel1": "أول ١٠ حروف: إيه اسم الحرف؟",
+  "lettersLevel2": "١٨ حرف: دوّر على الحرف",
+  "lettersLevel3": "الحروف الـ٢٨ كلها",
+  "lettersLevel4": "حروف شبه بعض: ركّز في النقط!",
+  "lettersLevel5": "أشكال الحروف في أول ونص وآخر الكلمة (للكبار)",
+  "lettersAskName": "إيه اسم الحرف ده؟",
+  "lettersAskLetter": "فين حرف «{name}»؟",
+  "@lettersAskLetter": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "lettersAskForm": "الحرف ده مكتوب {position}. هو أنهي حرف؟",
+  "@lettersAskForm": {
+    "placeholders": {
+      "position": {
+        "type": "String"
+      }
+    }
+  },
+  "lettersPosIsolated": "لوحده",
+  "lettersPosInitial": "في أول الكلمة",
+  "lettersPosMedial": "في نص الكلمة",
+  "lettersPosFinal": "في آخر الكلمة",
+  "mosqueNext": "الجزء الجاي: {part}",
+  "@mosqueNext": {
+    "placeholders": {
+      "part": {
+        "type": "String"
+      }
+    }
+  },
+  "mosqueBuild": "ابنِ",
+  "mosqueCost": "التكلفة: {n}",
+  "@mosqueCost": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "mosqueNeedStars": "ناقصك {n} من النجوم. العب «حروف القرآن» أو «أبطال الأنبياء» واكسب نجوم!",
+  "@mosqueNeedStars": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "mosqueComplete": "ما شاء الله! مسجدك اكتمل",
+  "mosqueBuiltPart": "أحسنت! أضفت {part}",
+  "@mosqueBuiltPart": {
+    "placeholders": {
+      "part": {
+        "type": "String"
+      }
+    }
+  },
+  "mosquePartsDone": "الأجزاء: {done} من {total}",
+  "@mosquePartsDone": {
+    "placeholders": {
+      "done": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
+  "prophetsIntro": "أسئلة عن قصص الأنبياء في القرآن",
+  "prophetsDidYouKnow": "هل تعرف؟",
+  "prophetsRef": "سورة {surah} ({ref})",
+  "@prophetsRef": {
+    "placeholders": {
+      "surah": {
+        "type": "String"
+      },
+      "ref": {
+        "type": "String"
+      }
+    }
+  },
+  "parentReviewNote": "لولي الأمر: المحتوى الديني في اللعبة دي لسه بيراجعه شيخ متخصص قبل النشر النهائي."
 }
