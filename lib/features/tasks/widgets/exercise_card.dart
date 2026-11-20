@@ -6,6 +6,7 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/family_task.dart';
+import '../../../services/audio/sfx_service.dart';
 import '../../../shared/widgets/zad_widgets.dart';
 import '../wallet_controller.dart';
 
@@ -62,6 +63,7 @@ class ExerciseCard extends ConsumerWidget {
                 ),
                 onPressed: () {
                   HapticFeedback.lightImpact();
+                  ref.read(sfxProvider).play(Sfx.tap);
                   ref.read(walletProvider.notifier).addRep(task.id);
                 },
                 child: Text(Fmt.digits('+1', lang)),
