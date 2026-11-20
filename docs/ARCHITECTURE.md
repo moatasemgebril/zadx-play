@@ -70,10 +70,17 @@ derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
 `children` collection with names/avatars, a child picker on the parent dashboard, and pass the
 selected child id to `WalletController`, pairing (`childId` on the device) and the guard.
 
-## Built-in learning games (to build)
-Three tiles exist on the Games screen (Quran letters, Prophet heroes, Build your masjid).
-Suggested: plain Flutter widgets or the Flame engine, each finishing with a reward screen
-that can award bonus minutes through a new `TaskKind.custom` task.
+## Built-in learning games
+`lib/features/edu_games/` (plain Flutter widgets + CustomPainter, routes `/edu/<id>`):
+- **Quran Letters** (`letters/`): 28 letters, 5 levels (name↔letter, look-alikes, letter shapes).
+- **Heroes of the Prophets** (`prophets/`): story quiz; content in `data/catalog/prophets_quiz.dart`
+  (`reviewedByScholar = false` until a scholar signs off; prophets are never depicted).
+- **Build Your Mosque** (`mosque/`): spends stars on parts, progress in shared_preferences.
+
+Rounds award **stars** (`starsProvider`), a separate cosmetic currency: stars never add play
+minutes and never touch `WalletController`, so the game-time lock can't be bypassed here.
+Sound/haptic hooks: override `eduGameHooksProvider` (`onCorrect`, `onWrong`, `onRoundComplete`,
+`onPartBuilt`; no-ops by default).
 
 ## Localization
 ARB files in `lib/l10n` (Arabic is the template). Add `fr`, `tr`, `ur`, `id` by creating
