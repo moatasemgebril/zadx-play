@@ -6,20 +6,41 @@ service cloud.firestore {
     function isMember(familyId) {
       return signedIn() && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.members;
     }
+    // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
+    function serverOnlyFamilyKeys() {
+      return ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
+              'referralPaid', 'referralCode', 'members', 'createdAt'];
+    }
+    // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
+    function validDay(day) {
+      let d = request.resource.data;
+      return d.size() <= 20
+        && (!('day' in d) || d.day == day)
+        && (!('earnedMinutes' in d) || (d.earnedMinutes is int && d.earnedMinutes >= 0 && d.earnedMinutes <= 100000))
+        && (!('usedMinutes' in d) || (d.usedMinutes is int && d.usedMinutes >= 0 && d.usedMinutes <= 100000))
+        && (!('requiredDone' in d) || d.requiredDone is bool)
+        && (!('prayerLock' in d) || d.prayerLock is bool)
+        && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
+    }
 
     match /families/{familyId} {
       allow read: if signedIn() && request.auth.uid in resource.data.members;
-      allow create: if signedIn() && request.auth.uid in request.resource.data.members;
-      // Plan, referral and purchase fields are written only by Cloud Functions (admin SDK).
+      // A new family has exactly one member (the creator) and no entitlement / referral fields.
+      allow create: if signedIn()
+        && request.resource.data.members == [request.auth.uid]
+        && !request.resource.data.keys().hasAny(serverOnlyFamilyKeys().removeAll(['members', 'createdAt']))
+        && (!('settings' in request.resource.data) || request.resource.data.settings is map);
+      // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(
-             ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy', 'referralPaid', 'referralCode']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
+        && (!('settings' in request.resource.data) || request.resource.data.settings is map);
 
       match /children/{childId} {
         allow read, write: if isMember(familyId);
 
         match /days/{day} {
-          allow read, write: if isMember(familyId);
+          allow read, delete: if isMember(familyId);
+          allow create, update: if isMember(familyId) && validDay(day);
         }
       }
 
@@ -39,6 +60,11 @@ service cloud.firestore {
     }
 
     match /referralCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Rate-limit counters (Cloud Functions only). Anything not matched above is denied by default.
+    match /rateLimits/{key} {
       allow read, write: if false;
     }
   }
