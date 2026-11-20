@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
@@ -10,6 +11,7 @@ import '../../data/catalog/games.dart';
 import '../../data/models/family_task.dart';
 import '../../data/models/game.dart';
 import '../../l10n/app_localizations.dart';
+import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../settings/settings_controller.dart';
@@ -114,8 +116,7 @@ class _ZadGameTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(height: 40, child: Center(child: Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)))),
-          // TODO(content): route to the built-in learning games (Flame or plain Flutter widgets).
-          FilledButton(onPressed: () {}, child: Text(context.l10n.play)),
+          FilledButton(onPressed: () => context.push(Routes.eduGame(game.id)), child: Text(context.l10n.play)),
         ]),
       );
 }
