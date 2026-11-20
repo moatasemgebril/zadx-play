@@ -6,9 +6,11 @@ import '../../core/app_config.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../services/family/children_controller.dart';
 import '../../services/family/family_repository.dart';
 import '../../services/family/pairing_service.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import 'children_card.dart';
 
 /// Parent side: create a code to link the child's phone or a Windows PC (Zad X Guard).
 class DevicesCard extends ConsumerStatefulWidget {
@@ -20,15 +22,18 @@ class DevicesCard extends ConsumerStatefulWidget {
 
 class _DevicesCardState extends ConsumerState<DevicesCard> {
   PairingTarget _target = PairingTarget.phone;
+  String? _childId;
   String? _code;
   bool _busy = false;
 
   Future<void> _create() async {
     final l10n = context.l10n;
     if (!ref.read(firebaseReadyProvider)) return showToast(context, l10n.pairOffline);
+    final children = ref.read(childrenProvider);
+    final child = children.byId(_childId ?? children.activeId) ?? children.active;
     setState(() => _busy = true);
     try {
-      final code = await ref.read(pairingServiceProvider).createCode(_target);
+      final code = await ref.read(pairingServiceProvider).createCode(_target, child);
       setState(() => _code = code);
     } catch (_) {
       if (mounted) showToast(context, l10n.pairError);
@@ -40,6 +45,8 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final children = ref.watch(childrenProvider);
+    final selectedChild = children.byId(_childId ?? children.activeId) ?? children.active;
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.pairTitle, style: Theme.of(context).textTheme.titleMedium),
@@ -55,6 +62,21 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
             _code = null;
           }),
         ),
+        if (children.children.length > 1) ...[
+          const SizedBox(height: 10),
+          Text(l10n.pairForChild, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 6),
+          ChoiceGrid<String>(
+            items: [for (final c in children.children) c.id],
+            selected: selectedChild.id,
+            columns: 2,
+            label: (id) => childDisplayName(children.byId(id) ?? children.active, l10n),
+            onSelected: (id) => setState(() {
+              _childId = id;
+              _code = null;
+            }),
+          ),
+        ],
         const SizedBox(height: 10),
         if (_code != null) ...[
           Container(
