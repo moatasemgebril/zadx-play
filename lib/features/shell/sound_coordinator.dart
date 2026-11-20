@@ -25,13 +25,11 @@ int _finished(WalletState s) => s.tasks.where((t) => s.progressOf(t.id).status !
 bool isRouteChange(String? previous, String next) =>
     previous != null && previous.isNotEmpty && next.isNotEmpty && previous != next;
 
-/// Listens to the wallet and plays effects; keeps music paused during prayer lock.
+/// Listens to the wallet and plays effects.
 /// Watched once from the app root, like the lock coordinator.
 final soundCoordinatorProvider = Provider<void>((ref) {
   final sfx = ref.read(sfxProvider);
-  sfx.setPrayerLock(ref.read(walletProvider).prayerLock);
   ref.listen<WalletState>(walletProvider, (prev, next) {
-    sfx.setPrayerLock(next.prayerLock);
     final effect = walletSfx(prev, next);
     if (effect != null) sfx.play(effect);
   });

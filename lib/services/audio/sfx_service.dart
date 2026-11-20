@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -29,34 +28,20 @@ extension SfxAsset on Sfx {
       };
 }
 
-const musicAsset = 'assets/sfx/music_calm.wav';
-
 // ---- pure rules (unit tested) -------------------------------------------------
 
 /// Effects never play while the adhan or Quran recitation is playing.
 bool shouldPlaySfx(PlayerKind kind, AppSettings settings) =>
     kind == PlayerKind.none && settings.soundEffectsOn && settings.sfxVolume > 0;
 
-/// Background music only when the parent turned it on, nothing sacred is
-/// playing, games are not locked for prayer, and the app is on screen.
-bool shouldPlayMusic(
-  PlayerKind kind,
-  AppSettings settings, {
-  bool prayerLock = false,
-  bool inForeground = true,
-}) =>
-    kind == PlayerKind.none && settings.musicOn && settings.sfxVolume > 0 && !prayerLock && inForeground;
-
 /// Effect loudness; quieter effects (transition) are already quiet in the file.
 double sfxVolumeFor(AppSettings settings) => settings.sfxVolume.clamp(0.0, 1.0);
 
-/// Music stays well under the effects.
-double musicVolumeFor(AppSettings settings) => settings.sfxVolume.clamp(0.0, 1.0) * 0.35;
-
 // ---- service --------------------------------------------------------------------
 
-/// Plays effects from a small player pool (so quick sounds can overlap) and a
-/// looping background pad. Never throws: audio problems only reach debugPrint.
+/// Plays effects from a small player pool (so quick sounds can overlap).
+/// The app has no background music. Never throws: audio problems only reach
+/// debugPrint.
 class SfxService {
   SfxService(this._ref);
 
@@ -70,13 +55,6 @@ class SfxService {
   int _next = 0;
   final Map<Sfx, DateTime> _lastPlayed = {};
 
-  AudioPlayer? _music;
-  bool _musicLoaded = false;
-  bool _musicWanted = false;
-  bool _prayerLock = false;
-  bool _foreground = true;
-  AppLifecycleListener? _lifecycle;
-  Future<void> _musicOp = Future<void>.value();
   bool _disposed = false;
 
   PlayerKind get _kind => _ref.read(playerProvider).kind;
@@ -121,31 +99,6 @@ class SfxService {
     }
   }
 
-  /// Requests background music. It only actually plays when [shouldPlayMusic]
-  /// allows it (parent setting on, no adhan/Quran, no prayer lock, app visible).
-  Future<void> startMusic() {
-    _musicWanted = true;
-    _lifecycle ??= AppLifecycleListener(onStateChange: _onLifecycle);
-    return _syncMusic();
-  }
-
-  Future<void> stopMusic() {
-    _musicWanted = false;
-    return _syncMusic();
-  }
-
-  /// Called by the sound coordinator when the prayer lock starts/ends.
-  void setPrayerLock(bool locked) {
-    if (_prayerLock == locked) return;
-    _prayerLock = locked;
-    _syncMusic();
-  }
-
-  void _onLifecycle(AppLifecycleState s) {
-    _foreground = s == AppLifecycleState.resumed || s == AppLifecycleState.inactive;
-    _syncMusic();
-  }
-
   void _onPlayerChanged(PlayerKind kind) {
     if (kind != PlayerKind.none) {
       // Adhan or Quran started: silence everything immediately.
@@ -153,59 +106,19 @@ class SfxService {
         p.stop().catchError((Object e) => debugPrint('sfx stop failed: $e'));
       }
     }
-    _syncMusic();
-  }
-
-  /// Serialised so rapid changes (adhan start + settings) never race.
-  Future<void> _syncMusic() => _musicOp = _musicOp.then((_) => _applyMusic());
-
-  Future<void> _applyMusic() async {
-    if (_disposed) return;
-    try {
-      final settings = _settings;
-      final want = _musicWanted &&
-          shouldPlayMusic(_kind, settings, prayerLock: _prayerLock, inForeground: _foreground);
-      if (!want) {
-        final m = _music;
-        if (m != null && m.playing) await m.pause();
-        return;
-      }
-      final m = _music ??= _newPlayer();
-      if (!_musicLoaded) {
-        await m.setAsset(musicAsset);
-        await m.setLoopMode(LoopMode.one);
-        _musicLoaded = true;
-      }
-      await m.setVolume(musicVolumeFor(settings));
-      if (!m.playing && shouldPlayMusic(_kind, _settings, prayerLock: _prayerLock, inForeground: _foreground)) {
-        unawaited(m.play().catchError((Object e) => debugPrint('music play failed: $e')));
-      }
-    } catch (e) {
-      debugPrint('music failed: $e');
-    }
   }
 
   void dispose() {
     _disposed = true;
-    _lifecycle?.dispose();
     for (final p in _pool) {
       p.dispose();
     }
-    _music?.dispose();
   }
 }
 
 final sfxProvider = Provider<SfxService>((ref) {
   final service = SfxService(ref);
   ref.listen<PlayerKind>(playerProvider.select((s) => s.kind), (_, kind) => service._onPlayerChanged(kind));
-  ref.listen<AppSettings>(settingsProvider, (prev, next) {
-    if (prev == null ||
-        prev.musicOn != next.musicOn ||
-        prev.soundEffectsOn != next.soundEffectsOn ||
-        prev.sfxVolume != next.sfxVolume) {
-      service._syncMusic();
-    }
-  });
   ref.onDispose(service.dispose);
   return service;
 });

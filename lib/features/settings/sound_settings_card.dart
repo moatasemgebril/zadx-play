@@ -7,7 +7,7 @@ import '../../services/audio/sfx_service.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import 'settings_controller.dart';
 
-/// Parent area: sound effects, volume and the opt-in background music.
+/// Parent area: sound effects and their volume (the app has no music).
 class SoundSettingsCard extends ConsumerWidget {
   const SoundSettingsCard({super.key});
 
@@ -35,24 +35,10 @@ class SoundSettingsCard extends ConsumerWidget {
           divisions: 10,
           label: '${(s.sfxVolume * 100).round()}%',
           semanticFormatterCallback: (v) => '${(v * 100).round()}%',
-          onChanged: s.soundEffectsOn || s.musicOn ? ctrl.setSfxVolume : null,
+          onChanged: s.soundEffectsOn ? ctrl.setSfxVolume : null,
           // Let the parent hear the new level.
           onChangeEnd: (_) => ref.read(sfxProvider).play(Sfx.star),
         ),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.soundMusic, style: const TextStyle(fontSize: 16)),
-          subtitle: Text(l10n.soundMusicSub, style: const TextStyle(fontSize: 14)),
-          value: s.musicOn,
-          onChanged: ctrl.setMusicOn,
-        ),
-        if (!s.musicOn)
-          Container(
-            margin: const EdgeInsets.only(top: 4),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(14)),
-            child: Text(l10n.soundNoMusicMode, style: const TextStyle(fontSize: 14, color: AppColors.ink)),
-          ),
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(l10n.soundSacredNote, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
