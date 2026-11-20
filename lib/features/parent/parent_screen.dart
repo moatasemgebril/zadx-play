@@ -16,6 +16,7 @@ import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
 import '../settings/settings_controller.dart';
+import '../settings/sound_settings_card.dart';
 import '../tasks/wallet_controller.dart';
 import 'children_card.dart';
 import 'devices_card.dart';
@@ -47,6 +48,8 @@ class ParentScreen extends ConsumerWidget {
           const _GamesPickerCard(),
           const SizedBox(height: 12),
           const _SettingsCard(),
+          const SizedBox(height: 12),
+          const SoundSettingsCard(),
         ]),
       ),
     );

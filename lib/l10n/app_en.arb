@@ -250,5 +250,13 @@
   "avatarSun": "Sun",
   "avatarRocket": "Rocket",
   "avatarFlower": "Flower",
-  "avatarKitten": "Kitten"
+  "avatarKitten": "Kitten",
+  "soundTitle": "Sounds",
+  "soundEffects": "Game and star sounds",
+  "soundEffectsSub": "Gentle sounds when your child finishes a task or earns a star",
+  "soundVolume": "Volume",
+  "soundMusic": "Calm background music",
+  "soundMusicSub": "Off by default. You decide whether to turn it on",
+  "soundNoMusicMode": "No-music mode: the app runs without any background music. If game sounds are on, only the gentle effects play. Good for families who prefer to avoid music.",
+  "soundSacredNote": "All sounds go quiet automatically during the adhan and Quran recitation."
 }
