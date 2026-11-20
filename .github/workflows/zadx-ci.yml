@@ -3,7 +3,9 @@
 name: ZADX CI – build & device tests
 
 on:
+  # Save GitHub Actions minutes: run once per change (PRs), plus on main after merge.
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -101,6 +103,8 @@ jobs:
 
   # 4) iOS compile check (no signing)
   ios:
+    # macOS minutes cost 10x on private repos: build iOS only on main and manual runs.
+    if: github.event_name != 'pull_request'
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
