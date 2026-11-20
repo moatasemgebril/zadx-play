@@ -31,6 +31,7 @@ jobs:
           flutter create --org com.zadx --project-name zadx --platforms android,ios,web,windows,macos .
           cp -r /tmp/keep/android/. android/ && cp -r /tmp/keep/ios/. ios/
           rm -f test/widget_test.dart   # template test from flutter create, not ours
+          python3 android/scripts/integrate_native.py
       - run: flutter pub get
       - run: flutter gen-l10n
       - name: Analyze
@@ -69,10 +70,10 @@ jobs:
           arch: x86_64
           script: |
             adb install -r app-debug.apk
-            adb shell monkey -p com.zadx.zadx -c android.intent.category.LAUNCHER 1
+            adb shell monkey -p com.zadx.app -c android.intent.category.LAUNCHER 1
             sleep 15
-            adb shell pidof com.zadx.zadx && echo "App is running" || (adb logcat -d | tail -200; exit 1)
-            adb shell monkey -p com.zadx.zadx --throttle 300 -v 300
+            adb shell pidof com.zadx.app && echo "App is running" || (adb logcat -d | tail -200; exit 1)
+            adb shell monkey -p com.zadx.app --throttle 300 -v 300
 
   # 3) Real devices in Firebase Test Lab (runs only when the secret is set)
   firebase-test-lab:
