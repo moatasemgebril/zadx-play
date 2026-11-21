@@ -22,7 +22,11 @@ Future<void> requestLockPermission(BuildContext context, WidgetRef ref) async {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: Text(l10n.lockDisclosureTitle),
-        content: SingleChildScrollView(child: Text(l10n.lockDisclosureBody, style: const TextStyle(fontSize: 16))),
+        // Google Play prominent disclosure: covers every use of the service, including device
+        // protection (Settings for the parent only, uninstall guard). docs/decisions/DEVICE-PROTECTION.md
+        content: SingleChildScrollView(
+          child: Text('${l10n.lockDisclosureBody}\n\n${l10n.protectDisclosureExtra}', style: const TextStyle(fontSize: 16)),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(l10n.lockDisclosureCancel)),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(l10n.lockDisclosureAgree)),
@@ -79,7 +83,9 @@ class DeviceLockCard extends ConsumerWidget {
         ],
         if (allApps) ...[
           const SizedBox(height: 8),
-          Banner2(text: l10n.deviceLockAlwaysOpen, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.phone_rounded),
+          Banner2(
+              text: AppPlatform.isAndroid && s.lockDeviceSettings ? l10n.deviceLockAlwaysOpenProtected : l10n.deviceLockAlwaysOpen,
+              bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.phone_rounded),
           SwitchListTile.adaptive(
             contentPadding: EdgeInsets.zero,
             title: Text(l10n.deviceLockMessaging, style: const TextStyle(fontSize: 16)),

@@ -41,6 +41,7 @@ class LockPolicy {
     this.allowedPackages = const [],
     this.allowMessaging = true,
     this.prayerAutoEndMinutes = 0,
+    this.prayerLockSinceMs,
   });
 
   final bool locked;
@@ -64,6 +65,10 @@ class LockPolicy {
   /// started. 0 = it ends only when a parent approves "I prayed" (paid plans).
   final int prayerAutoEndMinutes;
 
+  /// When the current prayer lock started (UTC ms), only while [reason] is `prayer`. Native code uses
+  /// it to recognise the same lock; the auto-end timer itself runs on elapsed time since boot.
+  final int? prayerLockSinceMs;
+
   Map<String, Object?> toMap() => {
         'locked': locked,
         'reason': reason,
@@ -73,6 +78,7 @@ class LockPolicy {
         'allowedPackages': allowedPackages,
         'allowMessaging': allowMessaging,
         'prayerAutoEndMinutes': prayerAutoEndMinutes,
+        'prayerLockSinceMs': prayerLockSinceMs,
       };
 
   @override
@@ -84,11 +90,12 @@ class LockPolicy {
       other.mode == mode &&
       other.allowMessaging == allowMessaging &&
       other.prayerAutoEndMinutes == prayerAutoEndMinutes &&
+      other.prayerLockSinceMs == prayerLockSinceMs &&
       listEquals(other.androidPackages, androidPackages) &&
       listEquals(other.allowedPackages, allowedPackages);
 
   @override
-  int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes,
+  int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes, prayerLockSinceMs,
       Object.hashAll(androidPackages), Object.hashAll(allowedPackages));
 }
 
@@ -157,6 +164,39 @@ class AppLockService {
   }
 
   Future<void> applyPolicy(LockPolicy policy) => _channel.invokeMethod('applyPolicy', policy.toMap());
+
+  // ---- Device protection (docs/decisions/DEVICE-PROTECTION.md) ----
+  // The window / admin calls below must only run from the parent area after [confirmParentPin].
+
+  /// Android: Settings for the parent only + uninstall guard. iOS: Screen Time account/passcode/
+  /// clock locks + `denyAppRemoval`. Safe to call repeatedly.
+  Future<void> setProtection({required bool settingsLock, required bool uninstallGuard}) =>
+      _channel.invokeMethod('setProtection', {'settingsLock': settingsLock, 'uninstallGuard': uninstallGuard});
+
+  /// Android: opens the phone's Settings to the parent for [minutes] (max 10). Returns seconds left.
+  Future<int> openParentWindow({int minutes = parentWindowMinutes}) async =>
+      await _channel.invokeMethod<int>('openParentWindow', {'minutes': minutes}) ?? 0;
+
+  Future<void> closeParentWindow() => _channel.invokeMethod('closeParentWindow');
+
+  Future<int> parentWindowSeconds() async => await _channel.invokeMethod<int>('parentWindowSeconds') ?? 0;
+
+  /// Android: one of `settings | accessibility | notifications | appDetails | usageAccess | wifi`.
+  Future<bool> openDeviceSettings(String screen) async =>
+      await _channel.invokeMethod<bool>('openDeviceSettings', {'screen': screen}) ?? false;
+
+  Future<bool> deviceAdminActive() async => await _channel.invokeMethod<bool>('deviceAdminActive') ?? false;
+
+  /// Android's own Device Admin activation screen (shows [explanation]).
+  Future<void> requestDeviceAdmin(String explanation) =>
+      _channel.invokeMethod('requestDeviceAdmin', {'explanation': explanation});
+
+  Future<void> removeDeviceAdmin() => _channel.invokeMethod('removeDeviceAdmin');
+
+  Future<ProtectionStatus> protectionStatus() async {
+    if (!AppPlatform.canLockGames) return ProtectionStatus.none;
+    return ProtectionStatus.fromMap(await _channel.invokeMethod<Object?>('protectionStatus'));
+  }
 
   /// Schedules native re-locks at the given local prayer times (iOS DeviceActivity,
   /// Android AlarmManager) so locking works even if Zad X is not running.
@@ -242,6 +282,7 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
     remainingMinutes: state.remainingMinutes,
     settings: settings,
     prayerAutoEndMinutes: tasksEnabled ? 0 : freePrayerLockWindow.inMinutes,
+    prayerLockSinceMs: state.reason == 'prayer' ? wallet.prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
   );
 });
 
@@ -252,6 +293,7 @@ LockPolicy lockPolicyFrom({
   required int remainingMinutes,
   required AppSettings settings,
   int prayerAutoEndMinutes = 0,
+  int? prayerLockSinceMs,
 }) {
   final packages = controlledGames
       .where((g) => settings.controlledGameIds.contains(g.id))
@@ -267,6 +309,7 @@ LockPolicy lockPolicyFrom({
     allowedPackages: settings.allowedApps.toList()..sort(),
     allowMessaging: settings.allowMessaging,
     prayerAutoEndMinutes: prayerAutoEndMinutes,
+    prayerLockSinceMs: prayerLockSinceMs,
   );
 }
 
@@ -293,6 +336,15 @@ final lockCoordinatorProvider = Provider<void>((ref) {
   ref.listen<LockPolicy>(lockPolicyProvider, (_, policy) {
     service.applyPolicy(policy).catchError((Object e) => debugPrint('applyPolicy failed: $e'));
   }, fireImmediately: true);
+
+  // Device protection (Settings for the parent only, prevent deleting Zad X).
+  ref.listen<({bool settingsLock, bool uninstallGuard})>(
+    settingsProvider.select((s) => (settingsLock: s.lockDeviceSettings, uninstallGuard: s.preventUninstall)),
+    (_, p) => service
+        .setProtection(settingsLock: p.settingsLock, uninstallGuard: p.uninstallGuard)
+        .catchError((Object e) => debugPrint('setProtection failed: $e')),
+    fireImmediately: true,
+  );
 
   final sub = service.events.listen((event) {
     final wallet = ref.read(walletProvider.notifier);

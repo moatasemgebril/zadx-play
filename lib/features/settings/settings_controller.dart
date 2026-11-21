@@ -37,6 +37,8 @@ class AppSettings {
     this.allowMessaging = true,
     this.pcAllowBrowsers = false,
     this.dailyLimitMinutes = 60,
+    this.lockDeviceSettings = true,
+    this.preventUninstall = false,
   });
 
   final String language;
@@ -73,6 +75,14 @@ class AppSettings {
   /// Plans without tasks (Free): screen minutes per day before the lock closes (prayer lock still applies).
   final int dailyLimitMinutes;
 
+  /// Device protection (docs/decisions/DEVICE-PROTECTION.md): the phone's Settings app is for the
+  /// parent only (opened for 5 minutes with the PIN). On by default (owner decision 2026-11-21).
+  final bool lockDeviceSettings;
+
+  /// Device protection: stop the child deleting Zad X (Android: uninstall dialog guard + optional
+  /// Device Admin; iOS: Screen Time `denyAppRemoval`). Off until the parent turns it on.
+  final bool preventUninstall;
+
   Locale get locale => Locale(language);
   bool get isRtl => language == 'ar' || language == 'ur';
 
@@ -96,6 +106,8 @@ class AppSettings {
     bool? allowMessaging,
     bool? pcAllowBrowsers,
     int? dailyLimitMinutes,
+    bool? lockDeviceSettings,
+    bool? preventUninstall,
   }) =>
       AppSettings(
         language: language ?? this.language,
@@ -117,6 +129,8 @@ class AppSettings {
         allowMessaging: allowMessaging ?? this.allowMessaging,
         pcAllowBrowsers: pcAllowBrowsers ?? this.pcAllowBrowsers,
         dailyLimitMinutes: dailyLimitMinutes ?? this.dailyLimitMinutes,
+        lockDeviceSettings: lockDeviceSettings ?? this.lockDeviceSettings,
+        preventUninstall: preventUninstall ?? this.preventUninstall,
       );
 }
 
@@ -149,6 +163,8 @@ class SettingsController extends Notifier<AppSettings> {
       allowMessaging: p.getBool('${_k}allowMessaging') ?? d.allowMessaging,
       pcAllowBrowsers: p.getBool('${_k}pcAllowBrowsers') ?? d.pcAllowBrowsers,
       dailyLimitMinutes: (p.getInt('${_k}dailyLimit') ?? d.dailyLimitMinutes).clamp(0, 24 * 60),
+      lockDeviceSettings: p.getBool('${_k}lockDeviceSettings') ?? d.lockDeviceSettings,
+      preventUninstall: p.getBool('${_k}preventUninstall') ?? d.preventUninstall,
     );
   }
 
@@ -252,6 +268,17 @@ class SettingsController extends Notifier<AppSettings> {
     final v = minutes.clamp(0, 24 * 60);
     state = state.copyWith(dailyLimitMinutes: v);
     _prefs.setInt('${_k}dailyLimit', v);
+  }
+
+  /// Call only after [confirmParentPin] (parent_gate.dart) when turning a protection off.
+  void setLockDeviceSettings(bool v) {
+    state = state.copyWith(lockDeviceSettings: v);
+    _prefs.setBool('${_k}lockDeviceSettings', v);
+  }
+
+  void setPreventUninstall(bool v) {
+    state = state.copyWith(preventUninstall: v);
+    _prefs.setBool('${_k}preventUninstall', v);
   }
 
   void setLockAtAdhan(bool v) {

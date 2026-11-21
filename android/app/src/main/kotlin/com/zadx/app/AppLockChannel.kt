@@ -47,6 +47,10 @@ object AppLockChannel {
 
                 "requestPermissions" -> {
                     // The Flutter UI must show a prominent disclosure before calling this.
+                    // Settings is for the parent only: open a short window so the parent is not sent
+                    // home as soon as the service turns on (Accessibility lives inside Settings). If the
+                    // service is already on, Flutter asks for the PIN and calls openParentWindow itself.
+                    if (!isAccessibilityEnabled(context)) LockStore.openParentWindow(context, 5)
                     context.startActivity(
                         Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                     )
@@ -75,10 +79,99 @@ object AppLockChannel {
                         mode = call.argument<String>("mode") ?: LockRules.MODE_SELECTED_GAMES,
                         allowedPackages = call.argument<List<String>>("allowedPackages") ?: emptyList(),
                         allowMessaging = call.argument<Boolean>("allowMessaging") ?: true,
+                        prayerAutoEndMinutes = call.argument<Int>("prayerAutoEndMinutes") ?: 0,
                     )
-                    // Flutter is the source of truth for the prayer lock once it is running.
-                    LockStore.setPrayerLock(context, reason == "prayer")
+                    // Flutter is the source of truth for the prayer lock once it is running; the native
+                    // auto-end timer (Free) stays anchored to when this lock started (elapsed time).
+                    LockStore.setPrayerLock(
+                        context,
+                        reason == "prayer",
+                        sinceMs = call.argument<Number>("prayerLockSinceMs")?.toLong(),
+                    )
                     result.success(null)
+                }
+
+                // ---- Device protection (docs/decisions/DEVICE-PROTECTION.md) ----
+                // Flutter calls the window / admin methods only from the parent area after asking for
+                // the parent PIN again (confirmParentPin in parent_gate.dart).
+                "setProtection" -> {
+                    LockStore.setProtection(
+                        context,
+                        settingsLock = call.argument<Boolean>("settingsLock") ?: true,
+                        uninstallGuard = call.argument<Boolean>("uninstallGuard") ?: false,
+                    )
+                    result.success(null)
+                }
+
+                "openParentWindow" -> {
+                    LockStore.openParentWindow(context, call.argument<Int>("minutes") ?: 5)
+                    result.success(LockStore.parentWindowSecondsLeft(context))
+                }
+
+                "closeParentWindow" -> {
+                    LockStore.closeParentWindow(context)
+                    result.success(null)
+                }
+
+                "parentWindowSeconds" -> result.success(LockStore.parentWindowSecondsLeft(context))
+
+                // Opens one of a fixed set of Settings screens (no free-form intents from Dart).
+                "openDeviceSettings" -> {
+                    val action = when (call.argument<String>("screen")) {
+                        "accessibility" -> Settings.ACTION_ACCESSIBILITY_SETTINGS
+                        "notifications" -> Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                        "appDetails" -> Settings.ACTION_APPLICATION_DETAILS_SETTINGS
+                        "usageAccess" -> Settings.ACTION_USAGE_ACCESS_SETTINGS
+                        "wifi" -> Settings.ACTION_WIFI_SETTINGS
+                        else -> Settings.ACTION_SETTINGS
+                    }
+                    val intent = Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    when (action) {
+                        Settings.ACTION_APP_NOTIFICATION_SETTINGS ->
+                            intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        Settings.ACTION_APPLICATION_DETAILS_SETTINGS ->
+                            intent.data = Uri.parse("package:${context.packageName}")
+                    }
+                    result.success(runCatching { context.startActivity(intent) }.isSuccess)
+                }
+
+                "deviceAdminActive" -> result.success(ZadXDeviceAdminReceiver.isActive(context))
+
+                "requestDeviceAdmin" -> {
+                    // Android's activation screen is part of Settings: Flutter opened the window already.
+                    ZadXDeviceAdminReceiver.requestActivation(context, call.argument<String>("explanation") ?: "")
+                    result.success(null)
+                }
+
+                "removeDeviceAdmin" -> {
+                    ZadXDeviceAdminReceiver.deactivate(context)
+                    result.success(null)
+                }
+
+                "protectionStatus" -> {
+                    val service = isAccessibilityEnabled(context)
+                    if (service) LockStore.markServiceEnabled(context)
+                    val admin = ZadXDeviceAdminReceiver.isActive(context)
+                    if (admin) LockStore.markAdminEnabled(context, true)
+                    result.success(
+                        mapOf(
+                            "platform" to "android",
+                            "accessibility" to service,
+                            "serviceEverEnabled" to LockStore.serviceEverEnabled(context),
+                            "deviceAdmin" to admin,
+                            "adminEverEnabled" to LockStore.adminEverEnabled(context),
+                            "settingsLock" to LockStore.settingsLock(context),
+                            "uninstallGuard" to LockStore.uninstallGuard(context),
+                            "windowSeconds" to LockStore.parentWindowSecondsLeft(context),
+                            "tamper" to LockRules.tamperReasons(
+                                serviceEverEnabled = LockStore.serviceEverEnabled(context),
+                                serviceEnabled = service,
+                                uninstallGuard = LockStore.uninstallGuard(context),
+                                adminEverEnabled = LockStore.adminEverEnabled(context),
+                                adminActive = admin,
+                            ),
+                        ),
+                    )
                 }
 
                 "schedulePrayerLocks" -> {

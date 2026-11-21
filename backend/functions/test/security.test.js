@@ -125,3 +125,67 @@ test("planAllows: free features always, paid only with an active plan", () => {
   assert.equal(s.planAllows("plus", future, now, "unlimitedAssistant"), true);
   assert.equal(s.planAllows("gold", future, now, "games"), false);
 });
+
+// Device protection (docs/decisions/DEVICE-PROTECTION.md)
+test("parseProtectionReport keeps only known platforms and reasons", () => {
+  assert.deepEqual(s.parseProtectionReport({ platform: "android", reasons: ["accessibility_off", "x", "accessibility_off", 3] }), {
+    platform: "android", reasons: ["accessibility_off"],
+  });
+  assert.deepEqual(s.parseProtectionReport({ platform: "ios" }), { platform: "ios", reasons: [] });
+  for (const bad of [null, [], "android", { platform: "windows" }, { platform: "web", reasons: [] }]) {
+    assert.equal(s.parseProtectionReport(bad), null);
+  }
+});
+
+test("newTamperReasons alerts each reason once", () => {
+  assert.deepEqual(s.newTamperReasons(undefined, ["accessibility_off"]), ["accessibility_off"]);
+  assert.deepEqual(s.newTamperReasons(["accessibility_off"], ["accessibility_off"]), []);
+  assert.deepEqual(s.newTamperReasons(["accessibility_off"], ["accessibility_off", "device_admin_off"]), ["device_admin_off"]);
+  assert.deepEqual(s.newTamperReasons("junk", []), []);
+});
+
+test("needsStaleAlert after a day without a heartbeat, once", () => {
+  const now = Date.UTC(2026, 10, 21);
+  const day = 24 * 60 * 60_000;
+  assert.equal(s.needsStaleAlert(now - day - 1, false, now), true);
+  assert.equal(s.needsStaleAlert(now - day - 1, true, now), false);
+  assert.equal(s.needsStaleAlert(now - 1000, false, now), false);
+  assert.equal(s.needsStaleAlert(undefined, false, now), false);
+});
+
+test("protectionAlertText never names the child", () => {
+  for (const kind of ["tamper", "stale"]) {
+    for (const ar of [true, false]) {
+      const t = s.protectionAlertText(kind, ar);
+      assert.ok(t.length > 20 && t.length < 300);
+    }
+  }
+});
+
+test("heartbeatAction deletes orphans and old docs, alerts once", () => {
+  const now = Date.UTC(2026, 10, 21);
+  const day = 24 * 60 * 60_000;
+  const ok = { familyExists: true, childExists: true };
+  assert.equal(s.heartbeatAction({ ...ok, lastSeenMs: now - 2 * day, staleAlerted: false }, now), "alert");
+  assert.equal(s.heartbeatAction({ ...ok, lastSeenMs: now - 2 * day, staleAlerted: true }, now), "skip");
+  assert.equal(s.heartbeatAction({ ...ok, lastSeenMs: now - 1000, staleAlerted: false }, now), "skip");
+  assert.equal(s.heartbeatAction({ ...ok, lastSeenMs: now - 31 * day, staleAlerted: true }, now), "delete");
+  assert.equal(s.heartbeatAction({ familyExists: true, childExists: false, lastSeenMs: now - 2 * day, staleAlerted: false }, now), "delete");
+  assert.equal(s.heartbeatAction({ familyExists: false, childExists: true, lastSeenMs: now, staleAlerted: false }, now), "delete");
+  assert.equal(s.heartbeatAction({ ...ok, lastSeenMs: "x", staleAlerted: false }, now), "delete");
+});
+
+test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
+  const now = Date.UTC(2026, 10, 21);
+  const first = s.tamperReasonsToAlert([], ["accessibility_off"], undefined, now);
+  assert.deepEqual(first.reasons, ["accessibility_off"]);
+  // Turned back on, then off again 10 minutes later: no second push.
+  const again = s.tamperReasonsToAlert([], ["accessibility_off"], first.alertedAt, now + 10 * 60_000);
+  assert.deepEqual(again.reasons, []);
+  // After the hour: pushed again.
+  assert.deepEqual(s.tamperReasonsToAlert([], ["accessibility_off"], first.alertedAt, now + 61 * 60_000).reasons, ["accessibility_off"]);
+  // Still off (already reported): never re-pushed.
+  assert.deepEqual(s.tamperReasonsToAlert(["accessibility_off"], ["accessibility_off"], {}, now).reasons, []);
+  // Junk in the stored map is dropped.
+  assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
+});

@@ -66,6 +66,8 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
             SharedStore.reason = reason
             SharedStore.prayerLock = reason == "prayer"
             SharedStore.mode = args["mode"] as? String ?? "selectedGames"
+            SharedStore.prayerAutoEndMinutes = args["prayerAutoEndMinutes"] as? Int ?? 0
+            SharedStore.lastRemainingMinutes = remaining
             if locked {
                 SharedStore.shieldGames()
                 center.stopMonitoring([.playBudget])
@@ -75,6 +77,35 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
                 startBudget(minutes: remaining)
             }
             result(nil)
+
+        // MARK: Device protection (docs/decisions/DEVICE-PROTECTION.md)
+        case "setProtection":
+            if AuthorizationCenter.shared.authorizationStatus == .approved {
+                SharedStore.applyProtection(
+                    lockSettings: args["settingsLock"] as? Bool ?? true,
+                    preventRemoval: args["uninstallGuard"] as? Bool ?? false
+                )
+            }
+            result(nil)
+
+        case "protectionStatus":
+            let approved = AuthorizationCenter.shared.authorizationStatus == .approved
+            if approved { SharedStore.authorizationEverApproved = true }
+            let ever = SharedStore.authorizationEverApproved
+            result([
+                "platform": "ios",
+                "authorization": approved,
+                "authorizationEverApproved": ever,
+                "tamper": (ever && !approved) ? ["screen_time_off"] : [String](),
+            ])
+
+        // Android-only (Settings window / Device Admin): iOS cannot lock the Settings app.
+        case "openParentWindow", "parentWindowSeconds":
+            result(0)
+        case "closeParentWindow", "requestDeviceAdmin", "removeDeviceAdmin":
+            result(nil)
+        case "deviceAdminActive", "openDeviceSettings":
+            result(false)
 
         case "schedulePrayerLocks":
             let times = (args["times"] as? [NSNumber] ?? []).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
@@ -143,7 +174,9 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
         center.stopMonitoring(names)
         let cal = Calendar.current
         for (i, start) in times.prefix(names.count).enumerated() {
-            let end = start.addingTimeInterval(15 * 60) // Apple's minimum interval
+            // Free plan: the interval is the auto-end window; its end lifts the prayer shield (ZadXMonitor).
+            let minutes = SharedStore.prayerIntervalMinutes(autoEnd: SharedStore.prayerAutoEndMinutes)
+            let end = start.addingTimeInterval(TimeInterval(minutes * 60))
             let schedule = DeviceActivitySchedule(
                 intervalStart: cal.dateComponents([.year, .month, .day, .hour, .minute], from: start),
                 intervalEnd: cal.dateComponents([.year, .month, .day, .hour, .minute], from: end),

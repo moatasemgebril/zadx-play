@@ -41,6 +41,45 @@ object AllowedApps {
     @Synchronized
     fun invalidate() {
         cache = null
+        settingsCache = null
+    }
+
+    private var settingsCache: Set<String>? = null
+
+    /**
+     * Packages that answer `Settings.ACTION_SETTINGS` on this device (vendor builds may rename the
+     * Settings app). Locked for the child by the protection layer; see [LockRules.protectionGuard].
+     */
+    @Synchronized
+    fun settingsPackages(ctx: Context): Set<String> {
+        settingsCache?.let { return it }
+        val pm = ctx.packageManager
+        val out = mutableSetOf<String>()
+        runCatching {
+            val intent = Intent(Settings.ACTION_SETTINGS)
+            pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.let(out::add)
+            pm.queryIntentActivities(intent, 0)
+                .filter { isSystem(it.activityInfo.applicationInfo) }
+                .forEach { out.add(it.activityInfo.packageName) }
+        }
+        // Safety: a resolver must never make the phone, launcher or Zad X itself a "settings" app.
+        out.remove(ctx.packageName)
+        out.removeAll(LockRules.ALWAYS_ALLOWED - LockRules.SETTINGS_PACKAGES)
+        // Never treat the phone or SMS app as "settings" (a vendor dialer/messaging app may also answer
+        // ACTION_SETTINGS for its own settings screen): calls and texts to parents must keep working.
+        runCatching {
+            val telecom = ctx.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            telecom.defaultDialerPackage?.let(out::remove)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) telecom.systemDialerPackage?.let(out::remove)
+        }
+        runCatching { Telephony.Sms.getDefaultSmsPackage(ctx)?.let(out::remove) }
+        runCatching {
+            // Blocking the home app would send the shield into a HOME loop.
+            val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            pm.resolveActivity(home, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.let(out::remove)
+        }
+        settingsCache = out
+        return out
     }
 
     private fun compute(ctx: Context, allowMessaging: Boolean): Set<String> {

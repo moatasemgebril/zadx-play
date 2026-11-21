@@ -17,6 +17,44 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         }
     }
 
+    /// Free plan: the prayer lock ends on its own when the prayer interval (= auto-end window) ends.
+    /// Paid plans (auto-end 0) keep the shield until a parent approves "I prayed" in Zad X.
+    override func intervalDidEnd(for activity: DeviceActivityName) {
+        super.intervalDidEnd(for: activity)
+        guard activity.rawValue.hasPrefix("zadx.prayer."),
+              SharedStore.prayerAutoEndMinutes > 0,
+              SharedStore.prayerLock else { return }
+        SharedStore.prayerLock = false
+        let remaining = SharedStore.lastRemainingMinutes
+        if SharedStore.shieldAfterPrayerEnds(timeUp: SharedStore.timeUp, remainingMinutes: remaining) {
+            SharedStore.reason = "noTime"
+            SharedStore.shieldGames()
+            return
+        }
+        SharedStore.reason = "none"
+        SharedStore.unshieldGames()
+        // Keep metering the daily limit while Zad X is closed.
+        let s = SharedStore.selection
+        let budget = DeviceActivityName("zadx.playBudget")
+        let center = DeviceActivityCenter()
+        center.stopMonitoring([budget])
+        try? center.startMonitoring(
+            budget,
+            during: DeviceActivitySchedule(
+                intervalStart: DateComponents(hour: 0, minute: 0),
+                intervalEnd: DateComponents(hour: 23, minute: 59),
+                repeats: false
+            ),
+            events: [
+                DeviceActivityEvent.Name("zadx.budgetReached"): DeviceActivityEvent(
+                    applications: s.applicationTokens,
+                    categories: s.categoryTokens,
+                    threshold: DateComponents(minute: remaining)
+                ),
+            ]
+        )
+    }
+
     override func eventDidReachThreshold(_ event: DeviceActivityEvent.Name, activity: DeviceActivityName) {
         super.eventDidReachThreshold(event, activity: activity)
         if activity.rawValue == "zadx.playBudget" {

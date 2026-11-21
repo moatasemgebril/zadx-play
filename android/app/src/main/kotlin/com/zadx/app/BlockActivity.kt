@@ -11,7 +11,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 
-/** Full-screen shield shown over a locked game. */
+/** Full-screen shield shown over a locked app, the Settings app (child) or the uninstall dialog. */
 class BlockActivity : Activity() {
 
     companion object {
@@ -25,7 +25,13 @@ class BlockActivity : Activity() {
         val allApps = LockStore.mode(this) == LockRules.MODE_ALL_APPS
 
         val message = when (reason) {
-            "prayer" -> when {
+            // Device protection (docs/decisions/DEVICE-PROTECTION.md).
+            "settings" -> if (arabic) "الإعدادات لبابا وماما بس\nاطلب منهم يفتحوها من Zad X" else "Settings are for parents\nAsk your parent to open them in Zad X"
+            "uninstall" -> if (arabic) "مسح التطبيقات محتاج بابا أو ماما\nاطلب منهم من Zad X" else "Deleting apps needs a parent\nAsk your parent in Zad X"
+            // Free plan: the prayer lock ends by itself after a short window.
+            "prayer" -> if (LockStore.prayerAutoEndMinutes(this) > 0) {
+                if (arabic) "التطبيقات مقفولة وقت الصلاة، وهتفتح بعد شوية" else "Apps are locked for prayer time — they open again soon"
+            } else when {
                 allApps && arabic -> "وقت الصلاة\nالتطبيقات مقفولة لحد ما تصلي"
                 allApps -> "Prayer time\nApps are locked until you pray"
                 arabic -> "وقت الصلاة\nالألعاب مقفولة لحد ما تصلي"

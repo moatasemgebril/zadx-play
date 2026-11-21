@@ -79,6 +79,23 @@
 
         <receiver android:name=".PrayerLockReceiver" android:exported="false" />
 
+        <!-- Optional uninstall protection, enabled by the parent with the PIN + disclosure.
+             No device policies (see res/xml/zadx_device_admin.xml). Exported because Android
+             itself delivers DEVICE_ADMIN_ENABLED; only the system holds BIND_DEVICE_ADMIN. -->
+        <receiver
+            android:name=".ZadXDeviceAdminReceiver"
+            android:description="@string/zadx_device_admin_description"
+            android:exported="true"
+            android:label="Zad X"
+            android:permission="android.permission.BIND_DEVICE_ADMIN">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/zadx_device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
+        </receiver>
+
         <!-- flutter_local_notifications scheduled notifications survive reboot -->
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">

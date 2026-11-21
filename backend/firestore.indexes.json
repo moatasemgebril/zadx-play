@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "deviceHeartbeats",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "staleAlerted", "order": "ASCENDING" },
+        { "fieldPath": "lastSeenMs", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

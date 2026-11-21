@@ -87,4 +87,58 @@ enum SharedStore {
         store.shield.applicationCategories = nil
         store.shield.webDomainCategories = nil
     }
+
+    // MARK: - Device protection (docs/decisions/DEVICE-PROTECTION.md)
+    //
+    // What iOS allows (Screen Time API, needs FamilyControls authorization):
+    //  * `application.denyAppRemoval`  – no app can be deleted while on (iOS has no per-app variant).
+    //  * `account.lockAccounts`        – no adding/removing accounts (Apple ID, mail).
+    //  * `passcode.lockPasscode`       – the device passcode cannot be changed or removed.
+    //  * `dateAndTime.requireAutomaticDateAndTime` – the clock cannot be moved to skip a lock.
+    // What iOS does NOT allow: locking or shielding the Settings app itself, or stopping the child from
+    // revoking Screen Time access when Zad X was authorized with `.individual`. With `.child`
+    // (Family Sharing) removing the authorization needs the parent's Apple ID / Screen Time passcode.
+    // A separate named store keeps these settings when the app shield is cleared.
+
+    // MARK: - Free plan prayer auto-end (plans-lock-integration)
+
+    /// Free plan: the prayer lock ends by itself this many minutes after the adhan (0 = paid plans:
+    /// only a parent's approval ends it). The prayer DeviceActivity interval is scheduled this long,
+    /// and `intervalDidEnd` in ZadXMonitor lifts the prayer shield. iOS runs these schedules itself;
+    /// with device protection on, `requireAutomaticDateAndTime` stops the child moving the clock.
+    static var prayerAutoEndMinutes: Int {
+        get { defaults.integer(forKey: "zadx.prayerAutoEnd") }
+        set { defaults.set(max(0, min(newValue, 24 * 60)), forKey: "zadx.prayerAutoEnd") }
+    }
+
+    /// Minutes left the last time Zad X sent a policy (used to restart the budget after an auto-end).
+    static var lastRemainingMinutes: Int {
+        get { defaults.integer(forKey: "zadx.lastRemaining") }
+        set { defaults.set(max(0, newValue), forKey: "zadx.lastRemaining") }
+    }
+
+    /// Pure rule (mirrors Kotlin `LockRules.shouldBlock` for the prayer part): after a Free prayer lock
+    /// ends, apps stay shielded only if no minutes are left.
+    static func shieldAfterPrayerEnds(timeUp: Bool, remainingMinutes: Int) -> Bool {
+        timeUp || remainingMinutes <= 0
+    }
+
+    /// Prayer activity length: Apple's minimum is 15 minutes.
+    static func prayerIntervalMinutes(autoEnd: Int) -> Int { autoEnd > 0 ? max(15, autoEnd) : 15 }
+
+    static let protectionStore = ManagedSettingsStore(named: .init("zadx.protection"))
+    private static let authEverKey = "zadx.authEverApproved"
+
+    static func applyProtection(lockSettings: Bool, preventRemoval: Bool) {
+        protectionStore.application.denyAppRemoval = preventRemoval ? true : nil
+        protectionStore.account.lockAccounts = lockSettings ? true : nil
+        protectionStore.passcode.lockPasscode = lockSettings ? true : nil
+        protectionStore.dateAndTime.requireAutomaticDateAndTime = lockSettings ? true : nil
+    }
+
+    /// Set once Screen Time access was approved, so a later revocation is reported to the parent.
+    static var authorizationEverApproved: Bool {
+        get { defaults.bool(forKey: authEverKey) }
+        set { defaults.set(newValue, forKey: authEverKey) }
+    }
 }

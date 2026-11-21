@@ -8,7 +8,9 @@ It is safe to run more than once. It:
   1. sets namespace/applicationId to com.zadx.app and minSdk 26
   2. enables core library desugaring (needed by flutter_local_notifications)
   3. removes the template MainActivity generated under another package
-  4. merges AndroidManifest.additions.xml into AndroidManifest.xml
+  4. merges AndroidManifest.additions.xml into AndroidManifest.xml (and adds components that
+     were introduced after a first merge, e.g. the Device Admin receiver)
+  5. adds JUnit for the pure-Kotlin rule tests in android/app/src/test (LockRulesTest)
 """
 import re
 import shutil
@@ -33,6 +35,12 @@ def patch_gradle() -> None:
     if "CoreLibraryDesugaringEnabled" not in s:
         flag = "isCoreLibraryDesugaringEnabled = true" if is_kts else "coreLibraryDesugaringEnabled true"
         s = re.sub(r'compileOptions\s*\{', "compileOptions {\n        " + flag, s, count=1)
+    if "junit:junit" not in s:
+        dep = 'testImplementation("junit:junit:4.13.2")' if is_kts else "testImplementation 'junit:junit:4.13.2'"
+        if re.search(r'^dependencies\s*\{', s, re.M):
+            s = re.sub(r'^dependencies\s*\{', "dependencies {\n    " + dep, s, count=1, flags=re.M)
+        else:
+            s += "\ndependencies {\n    " + dep + "\n}\n"
     if "desugar_jdk_libs" not in s:
         dep = ('coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")' if is_kts
                else "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'")
@@ -55,10 +63,18 @@ def merge_manifest() -> None:
     manifest = APP / "src/main/AndroidManifest.xml"
     additions = APP / "src/main/AndroidManifest.additions.xml"
     m = manifest.read_text()
+    a = re.sub(r"<!--.*?-->", "", additions.read_text(), flags=re.S)
     if "AppBlockerService" in m:
+        # Already merged by an older version of this script: add receivers introduced later.
+        for name in ("ZadXDeviceAdminReceiver",):
+            if name not in m:
+                block = re.search(r"\s*<receiver\s+android:name=\"\.%s\".*?</receiver>" % name, a, re.S)
+                if block:
+                    m = m.replace("</application>", block.group(0).rstrip() + "\n    </application>", 1)
+                    print(f"added {name} to manifest")
+        manifest.write_text(m)
         print("manifest already merged")
         return
-    a = re.sub(r"<!--.*?-->", "", additions.read_text(), flags=re.S)
     top = re.search(r"<manifest[^>]*>(.*?)<application", a, re.S).group(1)
     inner = re.search(r"<application[^>]*>(.*)</application>", a, re.S).group(1)
     m = re.sub(r"(<application)", top.strip() + "\n    \\1", m, count=1)

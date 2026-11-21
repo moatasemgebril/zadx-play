@@ -25,6 +25,7 @@ import 'credits_card.dart';
 import 'device_lock_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
+import 'protection_card.dart';
 
 class ParentScreen extends ConsumerWidget {
   const ParentScreen({super.key});
@@ -49,6 +50,9 @@ class ParentScreen extends ConsumerWidget {
           const _ConsolesCard(),
           const SizedBox(height: 12),
           const DeviceLockCard(),
+          const SizedBox(height: 12),
+          // Settings for the parent only + prevent deleting Zad X (docs/decisions/DEVICE-PROTECTION.md).
+          const ProtectionCard(),
           const SizedBox(height: 12),
           const PaidFeatureGate(feature: AppFeature.games, child: _GamesPickerCard()),
           const SizedBox(height: 12),

@@ -81,6 +81,15 @@ class FirestoreFamilyRepository implements FamilyRepository {
     });
   }
 
+  @override
+  Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {
+    await _functions.httpsCallable('reportProtection').call({
+      'familyId': familyId,
+      'childId': childId,
+      'status': {'platform': platform, 'reasons': reasons},
+    });
+  }
+
   /// Signs in anonymously and creates a family for this device on first launch.
   /// Pairing a second device (parent ⇄ child) adds its uid to `members`
   /// via a short pairing code — see docs/ARCHITECTURE.md.

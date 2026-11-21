@@ -63,6 +63,14 @@ void main() {
       expect(controls('org.school.other', allowed: {'org.school.classroom'}), isTrue);
     });
 
+    test('safety core and device roles win over the legacy game list', () {
+      expect(controls('com.android.phone', mode: LockMode.selectedGames, games: {'com.android.phone'}), isFalse);
+      expect(
+          controls('com.google.android.dialer',
+              mode: LockMode.selectedGames, games: {'com.google.android.dialer'}, system: {'com.google.android.dialer'}),
+          isFalse);
+    });
+
     test('legacy selectedGames mode locks only the selected games', () {
       const games = {'com.roblox.client'};
       expect(controls('com.roblox.client', mode: LockMode.selectedGames, games: games), isTrue);
@@ -106,6 +114,7 @@ void main() {
         'allowedPackages': ['org.school.classroom'],
         'allowMessaging': false,
         'prayerAutoEndMinutes': 0,
+        'prayerLockSinceMs': null,
       });
     });
 
@@ -253,6 +262,11 @@ void main() {
       expect(lockPolicyFrom(locked: true, reason: 'prayer', remainingMinutes: 0, settings: s).prayerAutoEndMinutes, 0);
       final free = lockPolicyFrom(locked: true, reason: 'prayer', remainingMinutes: 0, settings: s, prayerAutoEndMinutes: 20);
       expect(free.toMap()['prayerAutoEndMinutes'], 20);
+      // The lock start identifies the lock for the native auto-end timer.
+      final since = lockPolicyFrom(
+          locked: true, reason: 'prayer', remainingMinutes: 0, settings: s, prayerAutoEndMinutes: 20, prayerLockSinceMs: 1234);
+      expect(since.toMap()['prayerLockSinceMs'], 1234);
+      expect(since == free, isFalse);
     });
 
     test('tasks are enabled by the plan: Free no, Basic/Plus/trial yes', () {
