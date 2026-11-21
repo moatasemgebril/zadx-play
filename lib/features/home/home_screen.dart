@@ -154,7 +154,8 @@ class _PrayerCard extends ConsumerWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(l10n.prayerToday, style: Theme.of(context).textTheme.titleMedium),
               Text(
-                '${city.name.of(lang)}، ${countryById(s.countryId).name.of(lang)} · ${methodById(s.methodId).name.of(lang)}',
+                // Arabic comma only in Arabic; English gets a normal comma.
+                '${city.name.of(lang)}${lang == 'ar' ? '،' : ','} ${countryById(s.countryId).name.of(lang)} · ${methodById(s.methodId).name.of(lang)}',
                 style: const TextStyle(fontSize: 14, color: AppColors.muted),
               ),
             ]),

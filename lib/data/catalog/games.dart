@@ -23,7 +23,7 @@ const controlledGames = <ControlledGame>[
   ControlledGame(id: 'freefire', name: 'Free Fire', tag: Localized('باتل رويال', 'Battle royale'), icon: Icons.gps_fixed_rounded, bg: Color(0xFFFFE9D6), fg: Color(0xFFC2410C), androidPackage: 'com.dts.freefireth', olderKids: true),
   ControlledGame(id: 'pubg', name: 'PUBG MOBILE', tag: Localized('باتل رويال', 'Battle royale'), icon: Icons.track_changes_rounded, bg: Color(0xFFEEF0F4), fg: Color(0xFF374151), androidPackage: 'com.tencent.ig', olderKids: true),
   ControlledGame(id: 'tocaboca', name: 'Toca Boca World', tag: Localized('تخيّل ولعب أدوار', 'Pretend play'), icon: Icons.house_rounded, bg: Color(0xFFFFE4F1), fg: Color(0xFFBE185D), androidPackage: 'com.tocaboca.tocalifeworld'),
-  ControlledGame(id: 'ludoking', name: 'Ludo King', tag: Localized('لودو مع العيلة', 'Ludo with family'), icon: Icons.casino_rounded, bg: Color(0xFFE6EEFF), fg: Color(0xFF1D4ED8), androidPackage: 'com.ludo.king'),
+  ControlledGame(id: 'ludoking', name: 'Ludo King', tag: Localized('لودو مع العيلة', 'Ludo with the family'), icon: Icons.casino_rounded, bg: Color(0xFFE6EEFF), fg: Color(0xFF1D4ED8), androidPackage: 'com.ludo.king'),
 ];
 
 /// Built-in learning games (always unlocked).

@@ -118,7 +118,7 @@ const prophetQuestions = <ProphetQuestion>[
   ProphetQuestion(
     id: 'ibrahim_fire',
     scene: ProphetScene.coolFire,
-    question: Localized('كيف جعل الله النار لإبراهيم عليه السلام؟', 'What did Allah make the fire for Ibrahim (peace be upon him)?'),
+    question: Localized('كيف جعل الله النار لإبراهيم عليه السلام؟', 'What did Allah make the fire become for Ibrahim (peace be upon him)?'),
     answer: Localized('بردًا وسلامًا', 'Cool and safe'),
     wrong: [Localized('أكبر وأعلى', 'Bigger and higher'), Localized('ملوّنة بألوان كثيرة', 'Full of many colours')],
     fact: Localized(

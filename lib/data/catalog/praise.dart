@@ -27,14 +27,14 @@ class PraisePhrase {
 // Reviewer note (2026-11-20): جزاك الله خيرًا is a thank-you for a favour; it fits
 // best after tasks that help others. Kept for now; sheikh to confirm.
 const praisePhrases = <PraisePhrase>[
-  PraisePhrase(masculine: 'ما شاء الله، أحسنتَ!', feminine: 'ما شاء الله، أحسنتِ!', en: "Masha'Allah, well done!"),
+  PraisePhrase(masculine: 'ما شاء الله، أحسنتَ!', feminine: 'ما شاء الله، أحسنتِ!', en: 'MashaAllah, well done!'),
   PraisePhrase(masculine: 'جزاك الله خيرًا!', feminine: 'جزاكِ الله خيرًا!', en: 'May Allah reward you with good!'),
   PraisePhrase(masculine: 'بارك الله فيك!', feminine: 'بارك الله فيكِ!', en: 'May Allah bless you!'),
   // تبارك is said of Allah only — never address it to the child (reviewer note).
   PraisePhrase(
     masculine: 'ما شاء الله تبارك الله! كمِّل كده',
     feminine: 'ما شاء الله تبارك الله! كمِّلي كده',
-    en: "Masha'Allah, blessed is Allah! Keep it up!",
+    en: 'MashaAllah, blessed is Allah! Keep it up!',
   ),
   PraisePhrase(
     masculine: 'جعله الله في ميزان حسناتك',
