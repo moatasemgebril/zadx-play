@@ -20,6 +20,7 @@ import '../settings/settings_controller.dart';
 import '../settings/sound_settings_card.dart';
 import '../tasks/wallet_controller.dart';
 import 'children_card.dart';
+import 'credits_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
 
@@ -50,6 +51,8 @@ class ParentScreen extends ConsumerWidget {
           const _SettingsCard(),
           const SizedBox(height: 12),
           const SoundSettingsCard(),
+          const SizedBox(height: 12),
+          const CreditsCard(),
         ]),
       ),
     );
