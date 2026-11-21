@@ -82,7 +82,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "17", cache: gradle }
+        with: { distribution: temurin, java-version: "17" }
+      # Gradle cache: setup-java's `cache: gradle` fails here because the Gradle files are only
+      # generated later by `flutter create`, so we cache ~/.gradle directly.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('pubspec.yaml', 'pubspec.lock', 'android/**/*.gradle*', 'android/scripts/integrate_native.py') }}
+          restore-keys: gradle-${{ runner.os }}-
       - uses: subosito/flutter-action@v2
         with: { channel: stable, cache: true }
       - name: Generate native shells (keeps our native files)
@@ -100,7 +109,8 @@ jobs:
         run: flutter test --coverage
       - name: Build Android APK (debug, installable for testing)
         run: flutter build apk --debug
-      - name: Build web (parent dashboard)
+      - name: Build web (parent dashboard) – not on PRs, to save minutes
+        if: github.event_name != 'pull_request'
         run: flutter build web --release
       - uses: actions/upload-artifact@v4
         with:

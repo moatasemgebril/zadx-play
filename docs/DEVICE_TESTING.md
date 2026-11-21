@@ -15,7 +15,7 @@ The ZADX Team's sandbox has no Flutter SDK and no phones, so real builds and dev
 ## When each check runs (owner decision 2026-11-20: save GitHub Actions minutes)
 | Event | What runs |
 |---|---|
-| Pull request | light checks only: analyze, unit tests, Android APK, web build, backend |
+| Pull request | light checks only: analyze, unit tests, Android debug APK, backend build + `npm audit` (web build runs on `main`/nightly only) |
 | Merge to `main` | light checks + the heavy job only for what changed (emulator if `lib/`/`android/`/`assets/`/`pubspec` changed, iOS if `ios/` changed, Windows if `windows_guard/` changed) |
 | Nightly Mon–Sat (~2–3 AM Pacific) | light checks + emulator + 300 taps — skipped if `main` had no commits in the last ~25 h |
 | Weekly, Sunday (~2–3 AM Pacific) | everything: emulator, iOS, Windows, real phones — skipped if `main` had no commits in 8 days |
