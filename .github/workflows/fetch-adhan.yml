@@ -1,7 +1,7 @@
-# One-off helper: fetch the CC0 adhan recording from Wikimedia Commons, convert it to MP3
-# (iPhone Safari can't play OGG), loudness-normalise it, and push it to a branch for review.
-# Source: https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg  (CC0 1.0, author Adam-synagda, "own work", 2022)
-name: Fetch CC0 adhan
+# Helper: fetch freely-licensed adhan recordings from Wikimedia Commons, trim the silence at the
+# start, loudness-normalise, convert to small MP3s (iPhone Safari can't play OGG/WebM), and push
+# them to the branch assets/adhans for review. Licences are recorded in assets/audio/ADHAN-CREDITS.txt.
+name: Fetch free adhans
 
 on:
   workflow_dispatch:
@@ -16,30 +16,54 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install ffmpeg
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
-      - name: Download and convert
+      - name: Download, trim and convert
         run: |
-          curl -fL -A "ZadXPlay/1.0 (https://github.com/moatasemgebril/zadx-play; zadxplay@gmail.com)" \
-            -o /tmp/adhan.ogg "https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg"
-          ffprobe -hide_banner /tmp/adhan.ogg
-          mkdir -p assets/audio android/app/src/main/res/raw
-          # Full adhan for the app player
-          ffmpeg -y -hide_banner -i /tmp/adhan.ogg -af "loudnorm=I=-16:TP=-1.5:LRA=11" -ac 1 -ar 44100 -b:a 128k assets/audio/adhan_zadx.mp3
-          # Short (< 30 s) version for prayer-time notifications, gentle fade-out
-          ffmpeg -y -hide_banner -i /tmp/adhan.ogg -t 28 -af "loudnorm=I=-16:TP=-1.5:LRA=11,afade=t=out:st=25:d=3" -ac 1 -ar 44100 -b:a 128k android/app/src/main/res/raw/adhan_short.mp3
-          ls -la assets/audio android/app/src/main/res/raw
-          cat > assets/audio/LICENSE-adhan_zadx.txt <<'TXT'
-          adhan_zadx.mp3 and android/app/src/main/res/raw/adhan_short.mp3
-          Source: "Beautiful adhan.ogg", Wikimedia Commons
-          https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
-          Author: Adam-synagda (own work), 29 April 2022
-          Licence: Creative Commons CC0 1.0 Universal (public domain dedication) - no attribution required.
-          Changes: converted to MP3, loudness-normalised; short version trimmed to 28 s with fade-out.
-          TXT
-      - name: Push to branch assets/adhan-cc0
+          set -e
+          UA="ZadXPlay/1.0 (https://github.com/moatasemgebril/zadx-play; zadxplay@gmail.com)"
+          mkdir -p assets/audio android/app/src/main/res/raw /tmp/adhan
+          cat > /tmp/list.txt <<'LIST'
+          zadx|https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg|Beautiful_adhan.ogg|CC0 1.0 (public domain)|Adam-synagda
+          aaqib|https://upload.wikimedia.org/wikipedia/commons/7/7d/The_Adhan_-_Muslim_Call_to_Prayer_-_Aaqib_Azeez.mp3|The_Adhan_-_Muslim_Call_to_Prayer_-_Aaqib_Azeez.mp3|CC BY-SA 4.0|Atcovi (recitation: Aaqib Azeez)
+          andrewler|https://upload.wikimedia.org/wikipedia/commons/8/86/Azan.ogg|Azan.ogg|CC BY-SA 4.0|Andrewler
+          madinah_rec|https://upload.wikimedia.org/wikipedia/commons/7/7c/33937_ejaz215_call-to-prayer-from-the-prophet-s-mo.ogg|33937_ejaz215_call-to-prayer-from-the-prophet-s-mo.ogg|CC BY 3.0|ejaz215 (Freesound 33937)
+          haram_maghrib|https://upload.wikimedia.org/wikipedia/commons/6/6d/Maghrib_Adhan_at_the_Masjid_al_Haram,_Mecca_-_25_Feb,_2012.webm|Maghrib_Adhan_at_the_Masjid_al_Haram,_Mecca_-_25_Feb,_2012.webm|CC BY 3.0|YouTube uploader (via Wikimedia Commons)
+          LIST
+          {
+            echo "Adhan recordings bundled in Zad X Play (assets/audio/adhan_<id>.mp3)."
+            echo "All from Wikimedia Commons; converted to MP3 (64 kbps mono), leading silence trimmed, loudness-normalised."
+            echo
+          } > assets/audio/ADHAN-CREDITS.txt
+          while IFS='|' read -r id url file lic author; do
+            id=$(echo "$id" | xargs)
+            [ -z "$id" ] && continue
+            echo "== $id"
+            if curl -fsSL -A "$UA" -o "/tmp/adhan/$id.src" "$url"; then
+              ffmpeg -y -hide_banner -loglevel error -i "/tmp/adhan/$id.src" -vn \
+                -af "silenceremove=start_periods=1:start_duration=0.2:start_threshold=-45dB,loudnorm=I=-16:TP=-1.5:LRA=11" \
+                -ac 1 -ar 44100 -b:a 64k "assets/audio/adhan_$id.mp3"
+              dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "assets/audio/adhan_$id.mp3")
+              size=$(stat -c %s "assets/audio/adhan_$id.mp3")
+              echo "RESULT $id duration=${dur}s size=${size}B"
+              {
+                echo "adhan_$id.mp3 — https://commons.wikimedia.org/wiki/File:$file"
+                echo "  Author: $author | Licence: $lic"
+                echo
+              } >> assets/audio/ADHAN-CREDITS.txt
+            else
+              echo "RESULT $id FAILED to download"
+            fi
+          done < <(sed 's/^ *//' /tmp/list.txt)
+          # Short (< 30 s) notification version from the default (CC0) adhan
+          ffmpeg -y -hide_banner -loglevel error -i assets/audio/adhan_zadx.mp3 -t 28 -af "afade=t=out:st=25:d=3" \
+            -ac 1 -ar 44100 -b:a 96k android/app/src/main/res/raw/adhan_short.mp3
+          git rm -q --cached assets/audio/LICENSE-adhan_zadx.txt 2>/dev/null || true
+          rm -f assets/audio/LICENSE-adhan_zadx.txt
+          ls -la assets/audio
+      - name: Push to branch assets/adhans
         run: |
           git config user.name "ZADX Team (Claude)"
           git config user.email "noreply@anthropic.com"
-          git checkout -b assets/adhan-cc0
-          git add assets/audio android/app/src/main/res/raw
-          git commit -m "Add CC0 adhan recording (Wikimedia Commons, Adam-synagda) as MP3 + 28 s notification version"
-          git push -f origin assets/adhan-cc0
+          git checkout -b assets/adhans
+          git add -A assets/audio android/app/src/main/res/raw
+          git commit -m "Adhans: 5 freely-licensed recordings (trimmed, normalised, 64 kbps) + credits"
+          git push -f origin assets/adhans
