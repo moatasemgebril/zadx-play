@@ -43,6 +43,24 @@ steps that truly need his accounts, signature or money.
   files. Add this reciter to the reciters-licence tracker (now 5 reciters).
 - Nice to have: per-ayah timing data for this reciter so ayah highlighting works.
 
+### 3. Owner decisions — 2026-11-20 (do not ask again)
+- **No music in the app at all.** Background/game music is removed (PR #10, feat/remove-music; get it green and merge). Keep sound effects, mute and the parent's sound-effects volume. Never add music back.
+- Reciters without a written licence are hidden from the child's screens in store/release builds (debug builds may show them to parents marked "licence pending"). Implement with a per-reciter licence flag + test. If no reciter is confirmed, log a pre-launch blocker.
+
+### 4. Islamic encouragement phrases after every completed task (prototype v3 done)
+- Random, non-repeating phrase on the reward screen, gender-aware Arabic: "ما شاء الله، أحسنت/أحسنتِ!"، "جزاك/جزاكِ الله خيرًا!"، "بارك الله فيك/فيكِ!"، "تبارك الله! كمّل/كمّلي كده"، "جعله الله في ميزان حسناتك"، "نفع الله بك/بكِ" + English equivalents.
+- Only common praise/dua phrases; never quote Quran or hadith unless the Islamic content reviewer verifies exact text + source. Add the phrase list to the sheikh review.
+- Optional child form-of-address field (masculine/feminine) in the child profile; tests.
+
+### 5. Original glossy cartoon illustrations for exercises and tasks (prototype v3 done)
+- Jump rope, squats, push-ups, sit-ups, toe touch; reading, tidying, prayer mat. Boys and girls; girls modestly dressed, may wear hijab. Rounded glossy tiles, "+N دقيقة" badge.
+- 100% original vector art (SVG via flutter_svg, or CustomPainter); record origin/licence in the assets registry. Never copy another company's characters or art (the owner's reference screenshots were inspiration only).
+
+### 6. "مكان الطفل / Where is my child" — parents only (prototype v3 done)
+- Child safety and privacy first: off by default, opt-in per child by the parent; the child's device always shows "موقعك ظاهر لأهلك" while sharing; one-shot "locate now"; safe places (home, school, mosque) with arrival/leave alerts via the parent push system (PR #8); history kept 24 h max then deleted by a scheduled function; readable only by that family's parents (firestore.rules + tests); no third parties, no ads, no analytics on location.
+- Before code: privacy & child-safety officer + CISO write docs/LOCATION_PRIVACY.md (COPPA verifiable parental consent, GDPR-K, Apple kids category + Family Controls impact, Google Play background-location + Families declarations, review notes) and list owner-only steps (store declarations, privacy policy update, maps API key with a spending cap). Record any map SDK's licence/cost; prefer no per-use cost.
+- Ship behind a feature flag that stays off until the owner approves the privacy review.
+
 ## Done
 
 ## Firebase status (2026-11-21, set up by Claude with the owner)
