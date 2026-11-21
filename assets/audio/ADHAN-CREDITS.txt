@@ -1,0 +1,18 @@
+Adhan recordings bundled in Zad X Play (assets/audio/adhan_<id>.mp3).
+All from Wikimedia Commons; converted to MP3 (64 kbps mono), leading silence trimmed, loudness-normalised.
+
+adhan_zadx.mp3 — https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
+  Author: Adam-synagda | Licence: CC0 1.0 (public domain)
+
+adhan_aaqib.mp3 — https://commons.wikimedia.org/wiki/File:The_Adhan_-_Muslim_Call_to_Prayer_-_Aaqib_Azeez.mp3
+  Author: Atcovi (recitation: Aaqib Azeez) | Licence: CC BY-SA 4.0
+
+adhan_andrewler.mp3 — https://commons.wikimedia.org/wiki/File:Azan.ogg
+  Author: Andrewler | Licence: CC BY-SA 4.0
+
+adhan_madinah_rec.mp3 — https://commons.wikimedia.org/wiki/File:33937_ejaz215_call-to-prayer-from-the-prophet-s-mo.ogg
+  Author: ejaz215 (Freesound 33937) | Licence: CC BY 3.0
+
+adhan_haram_maghrib.mp3 — https://commons.wikimedia.org/wiki/File:Maghrib_Adhan_at_the_Masjid_al_Haram,_Mecca_-_25_Feb,_2012.webm
+  Author: YouTube uploader (via Wikimedia Commons) | Licence: CC BY 3.0
+
