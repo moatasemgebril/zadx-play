@@ -62,3 +62,6 @@ steps that truly need his accounts, signature or money.
 - Attribution required: "Quran data provided by Quran Foundation" + credit each reciter. Adapt the children's section of QF's privacy packet.
 - Optional: Quran ID sign-in → listing in the Quran App Store (quran.com/apps).
 - Refs: https://api-docs.quran.foundation/legal/developer-terms/#31-acceptable-use · https://api-docs.quran.foundation/docs/tutorials/faq#what-attribution-or-copyright-information-should-i-show · https://api-docs.quran.foundation/legal/developer-privacy/
+
+## رسالة من صاحب المشروع (2026-11-21)
+معتصم بيشكر فريق ZADX كله على الشغل: الأصوات، والألعاب التعليمية، ودعم أكتر من طفل، ومراجعة الأمان، وموافقة Quran Foundation، وإعداد Firebase. جزاكم الله خيراً، كمّلوا بنفس الجودة.
