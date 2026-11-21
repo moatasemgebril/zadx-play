@@ -44,3 +44,11 @@ steps that truly need his accounts, signature or money.
 - Nice to have: per-ayah timing data for this reciter so ayah highlighting works.
 
 ## Done
+
+## Firebase status (2026-11-21, set up by Claude with the owner)
+- Project "Zad X Play" (id `zad-x-play`), free Spark plan, Analytics and Gemini OFF. Sole owner: moatasemgebril@gmail.com.
+- Firestore (default) created in **eur3 (Europe)**, Standard edition, production mode (deny-all until our backend/firestore.rules are deployed).
+- Authentication: **Anonymous** enabled (auto clean-up OFF, so parents' anonymous accounts are not deleted after 30 days).
+- Apps registered: Android `com.zadx.app`, iOS `com.zadx.app`, Web "Zad X Play Web" (no Hosting).
+- TODO (team): set the iOS bundle identifier to `com.zadx.app` in ios/scripts/add_native_files.rb (flutter create defaults to `com.zadx.zadx`); run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart; deploy backend/firestore.rules (free via `firebase deploy --only firestore:rules`).
+- Cloud Functions need the Blaze plan (card required). Owner wants zero cost: keep the app working without Functions where possible (Firestore rules + client logic), and list Blaze as an owner decision.
