@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,13 @@ import 'package:zadx/l10n/app_localizations.dart';
 
 /// Parent PIN session re-locks after 2 minutes idle and when the app leaves the screen
 /// (owner decision 2026-11-21).
+/// Sends a lifecycle change the way the engine does (platform channel `flutter/lifecycle`).
+Future<void> setLifecycle(AppLifecycleState state) async {
+  final message = const StringCodec().encodeMessage(state.toString());
+  await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .handlePlatformMessage('flutter/lifecycle', message, (_) {});
+}
+
 void main() {
   Future<void> pumpGate(WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({
@@ -70,28 +78,24 @@ void main() {
     testWidgets('re-locks immediately when the app goes to the background ($state)', (tester) async {
       await pumpGate(tester);
       await enterPin(tester);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      if (state == AppLifecycleState.paused) {
-        tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-      }
-      await tester.pumpAndSettle();
-      expect(find.text('PARENT AREA'), findsNothing);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await setLifecycle(state);
+      // No frames are drawn while the app is hidden, so check the session itself here.
+      final container = ProviderScope.containerOf(tester.element(find.byType(ParentGate)));
+      expect(container.read(parentUnlockedProvider), isFalse);
+      await setLifecycle(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       expect(find.text('PARENT AREA'), findsNothing); // PIN needed again
+      expect(find.byType(TextField), findsOneWidget);
     });
   }
 
   testWidgets('inactive alone (purchase sheet, permission dialog) keeps the session', (tester) async {
     await pumpGate(tester);
     await enterPin(tester);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await setLifecycle(AppLifecycleState.inactive);
     await tester.pump();
     expect(find.text('PARENT AREA'), findsOneWidget);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await setLifecycle(AppLifecycleState.resumed);
     await tester.pump();
     expect(find.text('PARENT AREA'), findsOneWidget);
   });

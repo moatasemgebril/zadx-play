@@ -11,20 +11,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 ///
 /// `inactive` alone does not lock: it also fires for the App Store / Google Play purchase
 /// sheet and system permission dialogs shown on top of the parent screens.
-class ParentSession extends Notifier<bool> {
+class ParentSession extends Notifier<bool> with WidgetsBindingObserver {
   static const idleTimeout = Duration(minutes: 2);
 
   Timer? _idle;
 
   @override
   bool build() {
-    final listener = AppLifecycleListener(onStateChange: onLifecycle);
+    final binding = WidgetsBinding.instance;
+    binding.addObserver(this);
     ref.onDispose(() {
       _idle?.cancel();
-      listener.dispose();
+      binding.removeObserver(this);
     });
     return false;
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) => onLifecycle(state);
 
   /// Called after the correct PIN.
   void unlock() {
