@@ -111,7 +111,7 @@ jobs:
         run: flutter build apk --debug
       - name: Build web (parent dashboard) – not on PRs, to save minutes
         if: github.event_name != 'pull_request'
-        run: flutter build web --release --base-href /zadx-play/
+        run: flutter build web --release --base-href /zadx-play/ --pwa-strategy=none   # no service worker: iPhones always load the newest version
       - name: Upload web build for the iPhone/browser test preview
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3
