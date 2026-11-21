@@ -147,7 +147,9 @@ class WalletController extends Notifier<WalletState> {
   /// Child taps "I prayed" during a prayer lock.
   void markPrayed() {
     final prayerTask = state.tasks.where((t) => t.kind == TaskKind.prayer).firstOrNull;
-    if (prayerTask != null) submit(prayerTask.id);
+    if (prayerTask == null) return;
+    // During the prayer lock this is a request to unlock games (separate parent push copy).
+    _setStatus(prayerTask.id, TaskStatus.pending, notifyType: state.prayerLock ? 'unlock_request' : 'task_submitted');
   }
 
   /// Called by the native layer when a game session starts (or for the demo button).

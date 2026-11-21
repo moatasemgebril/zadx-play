@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +14,7 @@ import 'services/billing/subscription_service.dart';
 import 'services/family/family_repository.dart';
 import 'services/family/firestore_family_repository.dart';
 import 'services/notifications/prayer_notification_service.dart';
+import 'services/notifications/push_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,4 +57,10 @@ Future<void> main() async {
   }
 
   runApp(UncontrolledProviderScope(container: container, child: const ZadXApp()));
+
+  // Parent push (opt-in, parent devices only). Never blocks start-up; no-op without Firebase.
+  if (firebaseReady && (AppPlatform.isAndroid || AppPlatform.isIOS)) {
+    container.read(pushControllerProvider);
+    unawaited(initPushTapHandling());
+  }
 }

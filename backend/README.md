@@ -16,7 +16,7 @@ In the Flutter app run `flutterfire configure` (adds google-services.json / Goog
 ```
 families/{familyId}
   members: [uid]            parents + paired child devices
-  parentTokens: [fcmToken]
+  parentDevices/{uid}       {token, platform, lang} parent push opt-in (owner-only; docs/PUSH_NOTIFICATIONS.md)
   language, settings{notifyOnTasks, notifyOnAdhan}
   plan, planExpiresAt, inTrial, store, purchaseToken      (functions only)
   referralCode, referredBy, referralPaid, referrals{year}  (functions only)

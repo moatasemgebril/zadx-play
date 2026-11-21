@@ -43,6 +43,8 @@ dependencies:
   firebase_auth: ^5.3.3
   cloud_firestore: ^5.5.0
   cloud_functions: ^5.2.0
+  # Parent-only server push (docs/PUSH_NOTIFICATIONS.md); same FlutterFire release as firebase_core 3.8
+  firebase_messaging: ^15.1.5
 
   # Quran text (Quran.com API) with local cache
   http: ^1.2.2

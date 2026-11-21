@@ -93,12 +93,3 @@ test("sanitiseHistory keeps alternating, bounded turns", () => {
   assert.ok(bounded.reduce((n, t) => n + t.content.length, 0) <= 6000);
   assert.equal(bounded[0].role, "user");
 });
-
-test("sanitiseNotifyData drops reserved and non-scalar values", () => {
-  const d = s.sanitiseNotifyData({ taskId: "fajr", type: "x", childId: "y", nested: { a: 1 }, n: 5 });
-  assert.deepEqual(d, { taskId: "fajr", n: "5" });
-  assert.deepEqual(s.sanitiseNotifyData({ from: "z", google_x: "1", gcmY: "2", "bad key": "v", ok: true }), { ok: "true" });
-  assert.deepEqual(s.sanitiseNotifyData(null), {});
-  assert.deepEqual(s.sanitiseNotifyData(["a"]), {});
-  assert.equal(s.sanitiseNotifyData({ prayer: "x".repeat(500) }).prayer.length, 100);
-});

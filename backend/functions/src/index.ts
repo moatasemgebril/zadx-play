@@ -2,7 +2,8 @@
  * Zad X backend (Firebase Cloud Functions v2).
  *
  *  askAssistant     – AI help for parents (Claude API; key stays on the server)
- *  notifyParent     – push notification to parent devices (task done, adhan)
+ *  notifyParent     – push notification to parent devices (task done, unlock request, adhan)
+ *  weeklySummary    – scheduled weekly "summary ready" push to opted-in parent devices
  *  verifyPurchase   – validates store receipts, stores the entitlement, records referrals
  *  referralStatus   – the caller's invite code + number of friends who paid
  *  playNotifications– Google Play RTDN webhook: credits referrers on a friend's first payment
@@ -14,12 +15,17 @@ import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
-  NOTIFY_TYPES, WindowState, hasActivePlan, hexDigestEquals, isPairingCode, isSafeId,
-  normaliseReferralCode, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
+  WindowState, hasActivePlan, hexDigestEquals, isPairingCode, isSafeId,
+  normaliseReferralCode, rateLimitDecision, rateLimitKey, sanitiseHistory, sha256Hex,
 } from "./security";
+import {
+  MAX_PARENT_DEVICES, PUSH_RATE_LIMITS, PushType, buildPushData, isClientPushType, isStaleTokenError,
+  pushAllowedBySettings, pushText, selectRecipients,
+} from "./push";
 
 initializeApp();
 const db = getFirestore();
@@ -49,14 +55,18 @@ async function familyOf(uid: string): Promise<FirebaseFirestore.DocumentSnapshot
  * Firestore TTL policy on `expiresAt`). Throws resource-exhausted when over the limit.
  */
 async function enforceRateLimit(bucket: string, subject: string, limit: number, windowMs: number): Promise<void> {
+  if (!(await tryRateLimit(bucket, subject, limit, windowMs))) throw new HttpsError("resource-exhausted", "rate_limited");
+}
+
+/** Same counter as enforceRateLimit, but returns false instead of throwing (silent drops). */
+async function tryRateLimit(bucket: string, subject: string, limit: number, windowMs: number): Promise<boolean> {
   const ref = db.collection("rateLimits").doc(rateLimitKey(bucket, subject));
-  const allowed = await db.runTransaction(async (tx) => {
+  return db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     const d = rateLimitDecision(snap.data() as Partial<WindowState> | undefined, Date.now(), limit, windowMs);
     tx.set(ref, { ...d.next, expiresAt: new Date(d.next.windowStart + windowMs) });
     return d.allowed;
   });
-  if (!allowed) throw new HttpsError("resource-exhausted", "rate_limited");
 }
 
 /** Client IP as seen by Google's front end (right-most X-Forwarded-For entry). */
@@ -159,38 +169,100 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
 // Parent notifications
 // ---------------------------------------------------------------------------
 
+/**
+ * Sends one push type to the family's opted-in PARENT devices
+ * (families/{id}/parentDevices/{uid}, written by the parent app; see firestore.rules).
+ * Generic text + ids only; per family+type rate limit; stale tokens are deleted.
+ * Returns the number of devices that accepted the message (0 when dropped).
+ */
+async function sendToParents(
+  family: FirebaseFirestore.DocumentSnapshot,
+  type: PushType,
+  childId: string | null,
+  rawData: unknown,
+  excludeUid: string | null,
+): Promise<number> {
+  // Legacy `parentTokens` lived on the family doc (readable by child devices): remove it.
+  if (family.get("parentTokens") !== undefined) {
+    await family.ref.update({ parentTokens: FieldValue.delete() });
+  }
+  if (!pushAllowedBySettings(type, family.get("settings"))) return 0;
+  const devicesRef = family.ref.collection("parentDevices");
+  const devices = await devicesRef.limit(MAX_PARENT_DEVICES * 2).get();
+  const recipients = selectRecipients(
+    devices.docs.map((d) => ({ id: d.id, token: d.get("token"), lang: d.get("lang") })),
+    family.get("members"),
+    family.get("childDevices"),
+    excludeUid,
+  );
+  if (recipients.length === 0) return 0;
+  const rl = PUSH_RATE_LIMITS[type];
+  if (!(await tryRateLimit(`push_${type}`, family.id, rl.limit, rl.windowMs))) return 0;
+
+  const data = buildPushData(type, childId, rawData);
+  let sent = 0;
+  for (const lang of ["ar", "en"] as const) {
+    const group = recipients.filter((r) => r.lang === lang);
+    if (group.length === 0) continue;
+    const res = await getMessaging().sendEachForMulticast({
+      tokens: group.map((r) => r.token),
+      notification: pushText(type, lang),
+      data,
+      android: { priority: "high", collapseKey: type },
+      apns: { headers: { "apns-collapse-id": type } },
+    });
+    sent += res.successCount;
+    const stale = res.responses.flatMap((r, i) => (!r.success && isStaleTokenError(r.error?.code) ? [group[i].uid] : []));
+    await Promise.all(stale.map((uid) => devicesRef.doc(uid).delete()));
+  }
+  return sent;
+}
+
+/** Called by family devices (usually the child's phone) when something needs a parent. */
 export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
   const uid = requireUid(req.auth);
   const { familyId, childId, type, data } = req.data ?? {};
-  if (!isSafeId(childId) || typeof type !== "string" || !NOTIFY_TYPES.includes(type)) {
+  if (!isSafeId(childId) || !isClientPushType(type)) {
     throw new HttpsError("invalid-argument", "Bad notification.");
   }
   const family = await requireFamilyMember(familyId, uid);
   assertChildAccess(family, uid, childId);
   await enforceRateLimit("notify", uid, 30, 60 * 60_000); // no push spam to parents
-  const settings = family.get("settings") ?? {};
-  if (type === "task_submitted" && settings.notifyOnTasks === false) return { sent: 0 };
-  if (type === "adhan" && settings.notifyOnAdhan === false) return { sent: 0 };
-
-  const tokens: string[] = family.get("parentTokens") ?? [];
-  if (tokens.length === 0) return { sent: 0 };
-
-  const ar = (family.get("language") ?? "ar") === "ar";
-  const title = "Zad X";
-  const body =
-    type === "adhan"
-      ? ar
-        ? "وقت الصلاة — لو ابنك بيلعب على البلايستيشن أو الإكس بوكس، اقفله من التطبيق الرسمي"
-        : "Prayer time — pause PlayStation or Xbox from the official app if your child is playing"
-      : ar ? "فيه مهمة مستنية موافقتك" : "A task is waiting for your approval";
-
-  const res = await getMessaging().sendEachForMulticast({
-    tokens,
-    notification: { title, body },
-    data: { ...sanitiseNotifyData(data), type, childId },
-  });
-  return { sent: res.successCount };
+  // The caller's own device is skipped: it already shows the action on screen.
+  const sent = await sendToParents(family, type, childId, data, uid);
+  return { sent };
 });
+
+/**
+ * Weekly "summary ready" push (Saturday 09:00 UTC, i.e. late morning in the Gulf / Egypt).
+ * The payload carries no numbers; the parent app computes the summary after opening.
+ */
+export const weeklySummary = onSchedule(
+  { schedule: "every saturday 09:00", timeZone: "UTC", region: "europe-west1" },
+  async () => {
+    const familyIds = new Set<string>();
+    let last: FirebaseFirestore.QueryDocumentSnapshot | undefined;
+    for (;;) {
+      let q = db.collectionGroup("parentDevices").select().limit(500);
+      if (last) q = q.startAfter(last);
+      const page = await q.get();
+      for (const d of page.docs) {
+        const fid = d.ref.parent.parent?.id;
+        if (fid && isSafeId(fid)) familyIds.add(fid);
+      }
+      if (page.size < 500) break;
+      last = page.docs[page.docs.length - 1];
+    }
+    for (const fid of familyIds) {
+      try {
+        const family = await db.doc(`families/${fid}`).get();
+        if (family.exists) await sendToParents(family, "weekly_summary", null, null, null);
+      } catch (e) {
+        console.error("weeklySummary failed for a family", e instanceof Error ? e.name : typeof e);
+      }
+    }
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Purchases + referrals
@@ -494,6 +566,7 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
       secretHash: hashSecret(deviceSecret),
       createdAt: FieldValue.serverTimestamp(),
     });
+    await notifyPaired(familyId, "windows", null);
     return { familyId, deviceId: device.id, deviceSecret };
   }
 
@@ -503,9 +576,22 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
     new FieldPath("members"), FieldValue.arrayUnion(uid),
     new FieldPath("childDevices", uid), childId,
   );
+  // A child device never receives parent push: drop any token it registered as a parent.
+  await familyRef.collection("parentDevices").doc(uid).delete();
+  await notifyPaired(familyId, "phone", uid);
   const child = await familyRef.collection("children").doc(childId).get();
   return { familyId, childId, nickname: child.get("nickname") ?? "", avatar: child.get("avatar") ?? "star" };
 });
+
+/** Security event: tell the parents a device joined. Never fails the pairing itself. */
+async function notifyPaired(familyId: string, target: "phone" | "windows", newDeviceUid: string | null): Promise<void> {
+  try {
+    const family = await db.doc(`families/${familyId}`).get();
+    if (family.exists) await sendToParents(family, "device_paired", null, { target }, newDeviceUid);
+  } catch (e) {
+    console.error("device_paired push failed", e instanceof Error ? e.name : typeof e);
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Windows guard API (HTTP, device-secret auth)
