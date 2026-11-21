@@ -2,7 +2,10 @@
 # Owner decision 2026-11-20: save Actions minutes.
 #   Pull requests  -> LIGHT checks only: analyze, tests, Android APK, backend.
 #   Push to main   -> light checks + heavy jobs ONLY for the platforms whose files changed.
-#   Nightly / manual ("Run workflow") -> everything (emulator, iOS, Windows, real phones).
+#   Nightly (Mon-Sat)  -> light checks + Android emulator, ONLY if main changed in the last ~25 h.
+#   Weekly (Sunday) / manual ("Run workflow") -> everything (emulator, iOS, Windows, real phones);
+#                         the weekly run is skipped if main did not change in the last 8 days.
+#   (iOS = macOS minutes x10: the owner keeps the free plan with a $0 spending limit, so iOS is weekly.)
 # Docs-only changes (*.md, docs/, reports/) do not run CI at all.
 name: ZADX CI – build & device tests
 
@@ -13,30 +16,49 @@ on:
   pull_request:
     paths-ignore: ["**/*.md", "docs/**", "reports/**"]
   schedule:
-    - cron: "17 10 * * *"   # nightly full run (~2-3 AM Pacific)
+    - cron: "17 10 * * 1-6"   # nightly light + emulator (~2-3 AM Pacific), Mon-Sat
+    - cron: "37 10 * * 0"     # weekly full run incl. iOS + Windows, Sunday
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: zadx-ci-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # 0) Which platforms changed? (used only on push to main, to skip heavy jobs)
+  # 0) What changed? push: which platforms; schedule: did main change recently at all?
   changes:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       app: ${{ steps.f.outputs.app }}
       ios: ${{ steps.f.outputs.ios }}
       windows: ${{ steps.f.outputs.windows }}
+      recent: ${{ steps.r.outputs.recent }}
+      weekly: ${{ steps.r.outputs.weekly }}
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 100 }
+      - name: Recent commits on main? (scheduled runs only)
+        id: r
+        if: github.event_name == 'schedule'
+        run: |
+          if [ "${{ github.event.schedule }}" = "37 10 * * 0" ]; then
+            echo "weekly=true" >> "$GITHUB_OUTPUT"; SINCE="8 days ago"
+          else
+            echo "weekly=false" >> "$GITHUB_OUTPUT"; SINCE="25 hours ago"
+          fi
+          if [ -n "$(git log --since="$SINCE" --oneline | head -1)" ]; then
+            echo "recent=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "recent=false" >> "$GITHUB_OUTPUT"; echo "No commits since $SINCE - skipping scheduled run."
+          fi
       - uses: dorny/paths-filter@v3
         id: f
+        if: github.event_name == 'push'
         with:
           filters: |
             app:
@@ -46,13 +68,15 @@ jobs:
               - 'pubspec.*'
             ios:
               - 'ios/**'
-              - 'lib/**'
-              - 'pubspec.*'
             windows:
               - 'windows_guard/**'
 
   # 1) Static checks + unit tests + Android APK
   flutter:
+    needs: changes
+    if: >-
+      always() && needs.changes.result != 'failure' &&
+      (github.event_name != 'schedule' || needs.changes.outputs.recent == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -95,7 +119,8 @@ jobs:
     needs: [flutter, changes]
     if: >-
       always() && needs.flutter.result == 'success' &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      ((github.event_name == 'schedule' && needs.changes.outputs.recent == 'true') ||
+       github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'push' && needs.changes.outputs.app == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -120,8 +145,11 @@ jobs:
   # 3) Real devices in Firebase Test Lab (runs only when the secret is set)
   #    Nightly/manual only.
   firebase-test-lab:
-    needs: flutter
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [flutter, changes]
+    if: >-
+      always() && needs.flutter.result == 'success' &&
+      ((github.event_name == 'schedule' && needs.changes.outputs.weekly == 'true') ||
+       github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     env:
       HAS_KEY: ${{ secrets.GCP_SA_KEY != '' }}
@@ -145,11 +173,13 @@ jobs:
 
   # 4) iOS compile check (no signing)
   ios:
-    # macOS minutes are the most expensive: nightly/manual, or on main when iOS/app code changed.
+    # macOS minutes cost x10: weekly (Sunday) / manual, or on main when ios/** changed.
     needs: changes
     if: >-
       always() &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      ((github.event_name == 'schedule' && needs.changes.outputs.weekly == 'true' &&
+        needs.changes.outputs.recent == 'true') ||
+       github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'push' && needs.changes.outputs.ios == 'true'))
     runs-on: macos-latest
     timeout-minutes: 45
@@ -170,6 +200,10 @@ jobs:
 
   # 5) Backend (Firebase Functions) compiles
   backend:
+    needs: changes
+    if: >-
+      always() && needs.changes.result != 'failure' &&
+      (github.event_name != 'schedule' || needs.changes.outputs.recent == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults: { run: { working-directory: backend/functions } }
@@ -188,12 +222,14 @@ jobs:
       - run: npm audit --audit-level=high
 
   # 6) Windows "Zad X Guard" builds
-  #    Windows minutes cost extra: nightly/manual, or on main when windows_guard/ changed.
+  #    Windows minutes cost x2: weekly (Sunday) / manual, or on main when windows_guard/** changed.
   windows-guard:
     needs: changes
     if: >-
       always() &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
+      ((github.event_name == 'schedule' && needs.changes.outputs.weekly == 'true' &&
+        needs.changes.outputs.recent == 'true') ||
+       github.event_name == 'workflow_dispatch' ||
        (github.event_name == 'push' && needs.changes.outputs.windows == 'true'))
     runs-on: windows-latest
     timeout-minutes: 20

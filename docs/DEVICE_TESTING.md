@@ -16,12 +16,15 @@ The ZADX Team's sandbox has no Flutter SDK and no phones, so real builds and dev
 | Event | What runs |
 |---|---|
 | Pull request | light checks only: analyze, unit tests, Android APK, web build, backend |
-| Merge to `main` | light checks + the heavy job only for what changed (emulator if `lib/`/`android/` changed, iOS if `ios/`/`lib/` changed, Windows if `windows_guard/` changed) |
-| Nightly (~2–3 AM Pacific) and "Run workflow" | everything: emulator + 300 taps, iOS, Windows, real phones |
+| Merge to `main` | light checks + the heavy job only for what changed (emulator if `lib/`/`android/`/`assets/`/`pubspec` changed, iOS if `ios/` changed, Windows if `windows_guard/` changed) |
+| Nightly Mon–Sat (~2–3 AM Pacific) | light checks + emulator + 300 taps — skipped if `main` had no commits in the last ~25 h |
+| Weekly, Sunday (~2–3 AM Pacific) | everything: emulator, iOS, Windows, real phones — skipped if `main` had no commits in 8 days |
+| "Run workflow" (manual) | everything |
 | Docs only (`*.md`, `docs/`, `reports/`) | nothing |
 
 Merge rule: a PR merges when its light checks are green and the Quality Gate approves. If the nightly or `main` heavy run fails, fixing it is P0 in the next morning cycle, and no new features merge until it is green again.
-Artifacts (APK, coverage) are kept 7 days.
+Artifacts (APK, coverage) are kept 7 days. Caches: Flutter/pub, Gradle, npm.
+Why iOS is weekly: the owner keeps GitHub's free plan with a $0 spending limit (≈2,000 min/month); macOS minutes count ×10 and Windows ×2.
 
 ## One-time setup by the owner
 1. Create a free GitHub account and a **private** repository `zadx-play`, and upload this project (or connect GitHub to Claude so the team can push it).
