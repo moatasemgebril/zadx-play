@@ -127,7 +127,7 @@ const cities = <City>[
   City(id: 'portsudan', countryId: 'sd', name: Localized('بورتسودان', 'Port Sudan'), lat: 19.6158, lng: 37.2164, timeZone: 'Africa/Khartoum'),
   City(id: 'benghazi', countryId: 'ly', name: Localized('بنغازي', 'Benghazi'), lat: 32.1167, lng: 20.0667, timeZone: 'Africa/Tripoli'),
   City(id: 'misrata', countryId: 'ly', name: Localized('مصراتة', 'Misrata'), lat: 32.3754, lng: 15.0925, timeZone: 'Africa/Tripoli'),
-  City(id: 'tripolilb', countryId: 'lb', name: Localized('طرابلس', 'Tripoli (LB)'), lat: 34.4367, lng: 35.8497, timeZone: 'Asia/Beirut'),
+  City(id: 'tripolilb', countryId: 'lb', name: Localized('طرابلس', 'Tripoli (Lebanon)'), lat: 34.4367, lng: 35.8497, timeZone: 'Asia/Beirut'),
   City(id: 'saida', countryId: 'lb', name: Localized('صيدا', 'Sidon'), lat: 33.5571, lng: 35.3729, timeZone: 'Asia/Beirut'),
   City(id: 'ankara', countryId: 'tr', name: Localized('أنقرة', 'Ankara'), lat: 39.9334, lng: 32.8597, timeZone: 'Europe/Istanbul'),
   City(id: 'izmir', countryId: 'tr', name: Localized('إزمير', 'Izmir'), lat: 38.4237, lng: 27.1428, timeZone: 'Europe/Istanbul'),

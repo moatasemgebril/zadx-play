@@ -88,14 +88,19 @@ class _DhikrCard extends StatelessWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(dhikr.text, textDirection: TextDirection.rtl, style: AppTheme.quran(21)),
         const SizedBox(height: 4),
-        Text(dhikr.source, textDirection: TextDirection.rtl, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+        Text(
+          dhikr.sourceOf(lang),
+          textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+          style: const TextStyle(fontSize: 13, color: AppColors.muted),
+        ),
         const SizedBox(height: 10),
         ProgressBar(value: count / dhikr.times, color: complete ? AppColors.mint : AppColors.yellow),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(
             child: Text(
-              '${Fmt.digits(count, lang)} / ${l10n.dhikrTimes(Fmt.digits(dhikr.times, lang))}',
+              // "0 / 1" rather than "0 / 1 times" (EN) or "٠ / ١ مرات" (AR): the plural word is wrong for 1.
+              '${Fmt.digits(count, lang)} / ${dhikr.times == 1 ? Fmt.digits(1, lang) : l10n.dhikrTimes(Fmt.digits(dhikr.times, lang))}',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.purpleDark),
             ),
           ),

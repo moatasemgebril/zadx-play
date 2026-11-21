@@ -7,7 +7,7 @@ import '../models/family_task.dart';
 const defaultTasks = <TaskDefinition>[
   TaskDefinition(id: 'prayer', title: Localized('الصلاة في وقتها', 'Pray on time'), subtitle: Localized('مع كل أذان', 'At every adhan'), kind: TaskKind.prayer, rewardMinutes: 10, color: Color(0xFF6C3BEB), required: true),
   TaskDefinition(id: 'homework', title: Localized('الواجب المدرسي', 'Homework'), subtitle: Localized('واجب النهارده كامل', "All of today's homework"), kind: TaskKind.homework, rewardMinutes: 20, color: Color(0xFF4CC9F0), required: true),
-  TaskDefinition(id: 'falaq', title: Localized('حفظ سورة الفلق', 'Memorize Surat Al-Falaq'), subtitle: Localized('تسميع لبابا أو ماما', 'Recite it to a parent'), kind: TaskKind.quran, rewardMinutes: 20, color: Color(0xFFFFC83D)),
+  TaskDefinition(id: 'falaq', title: Localized('حفظ سورة الفلق', 'Memorize Surah Al-Falaq'), subtitle: Localized('تسميع لبابا أو ماما', 'Recite it to a parent'), kind: TaskKind.quran, rewardMinutes: 20, color: Color(0xFFFFC83D)),
   TaskDefinition(id: 'adhkar_morning', title: Localized('أذكار الصباح', 'Morning adhkar'), subtitle: Localized('من صفحة القرآن ← الأذكار', 'Quran tab → Adhkar'), kind: TaskKind.adhkar, rewardMinutes: 10, color: Color(0xFF7ED9B8)),
   TaskDefinition(id: 'adhkar_evening', title: Localized('أذكار المساء', 'Evening adhkar'), subtitle: Localized('من صفحة القرآن ← الأذكار', 'Quran tab → Adhkar'), kind: TaskKind.adhkar, rewardMinutes: 10, color: Color(0xFFC4B5FD)),
   TaskDefinition(id: 'room', title: Localized('ترتيب الأوضة', 'Tidy your room'), subtitle: Localized('السرير والألعاب', 'Bed and toys'), kind: TaskKind.chore, rewardMinutes: 10, color: Color(0xFFFF6B6B)),
