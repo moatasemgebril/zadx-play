@@ -8,8 +8,15 @@ Paint fill(Color c, [double alpha = 1]) => Paint()
   ..isAntiAlias = true
   ..color = alpha >= 1 ? c : c.withValues(alpha: c.a * alpha);
 
+/// Vertical gradient. With more than two colours and no [stops], the colours
+/// are spread evenly (dart:ui requires stops for 3+ colours).
 Paint vGradient(Rect r, List<Color> colors, [List<double>? stops]) => Paint()
-  ..shader = Gradient.linear(r.topCenter, r.bottomCenter, colors, stops);
+  ..shader = Gradient.linear(
+    r.topCenter,
+    r.bottomCenter,
+    colors,
+    stops ?? (colors.length > 2 ? [for (var i = 0; i < colors.length; i++) i / (colors.length - 1)] : null),
+  );
 
 Paint glow(Offset c, double r, Color color, double alpha) => Paint()
   ..shader = Gradient.radial(c, r, [color.withValues(alpha: alpha), color.withValues(alpha: 0)]);
