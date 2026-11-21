@@ -5,11 +5,16 @@ import 'package:flutter/foundation.dart';
 /// Built-in avatars. Children never upload photos (COPPA / GDPR-K data minimisation).
 enum ChildAvatar { star, moon, sun, rocket, flower, kitten }
 
+/// How the app addresses the child in Arabic (أحسنتَ / أحسنتِ). Optional and set
+/// by the parent; null means "not set" and the masculine/neutral form is used.
+/// Stored on this device only (not synced to the cloud).
+enum FormOfAddress { masculine, feminine }
+
 /// A child in the family. Deliberately minimal: an opaque id, a nickname and a
 /// built-in avatar. No birthdate, photo, last name or any other personal data.
 @immutable
 class ChildProfile {
-  const ChildProfile({required this.id, required this.nickname, this.avatar = ChildAvatar.star});
+  const ChildProfile({required this.id, required this.nickname, this.avatar = ChildAvatar.star, this.address});
 
   /// Id of the first child. Existing single-child data (local and in Firestore
   /// under `children/child-1`) belongs to this child.
@@ -29,6 +34,9 @@ class ChildProfile {
   final String nickname;
   final ChildAvatar avatar;
 
+  /// Optional Arabic form of address; null = not set.
+  final FormOfAddress? address;
+
   static bool isValidId(String id) => _idPattern.hasMatch(id);
 
   /// Returns a cleaned nickname, or null when it is empty or looks like
@@ -45,6 +53,10 @@ class ChildProfile {
   static ChildAvatar avatarByName(String? name) =>
       ChildAvatar.values.where((a) => a.name == name).firstOrNull ?? ChildAvatar.star;
 
+  /// Unknown or missing values → null (not set), so older data stays valid.
+  static FormOfAddress? addressByName(Object? name) =>
+      FormOfAddress.values.where((a) => a.name == name).firstOrNull;
+
   /// Random, non-guessable id that carries no personal information.
   static String newId([Random? random]) {
     final r = random ?? Random.secure();
@@ -52,10 +64,22 @@ class ChildProfile {
     return 'c${List.generate(12, (_) => alphabet[r.nextInt(alphabet.length)]).join()}';
   }
 
-  ChildProfile copyWith({String? nickname, ChildAvatar? avatar}) =>
-      ChildProfile(id: id, nickname: nickname ?? this.nickname, avatar: avatar ?? this.avatar);
+  /// [clearAddress] resets the form of address to "not set".
+  ChildProfile copyWith({String? nickname, ChildAvatar? avatar, FormOfAddress? address, bool clearAddress = false}) =>
+      ChildProfile(
+        id: id,
+        nickname: nickname ?? this.nickname,
+        avatar: avatar ?? this.avatar,
+        address: clearAddress ? null : (address ?? this.address),
+      );
 
-  Map<String, dynamic> toJson() => {'id': id, 'nickname': nickname, 'avatar': avatar.name};
+  /// `address` is written only when set (data minimisation; older readers ignore it).
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'nickname': nickname,
+        'avatar': avatar.name,
+        if (address != null) 'address': address!.name,
+      };
 
   /// Returns null for malformed entries instead of throwing.
   static ChildProfile? tryFromJson(Object? j) {
@@ -64,15 +88,24 @@ class ChildProfile {
     if (id is! String || !isValidId(id)) return null;
     final rawName = j['nickname'];
     final nickname = rawName is String ? (cleanNickname(rawName) ?? '') : '';
-    return ChildProfile(id: id, nickname: nickname, avatar: avatarByName(j['avatar'] as String?));
+    return ChildProfile(
+      id: id,
+      nickname: nickname,
+      avatar: avatarByName(j['avatar'] as String?),
+      address: addressByName(j['address']),
+    );
   }
 
   @override
   bool operator ==(Object other) =>
-      other is ChildProfile && other.id == id && other.nickname == nickname && other.avatar == avatar;
+      other is ChildProfile &&
+      other.id == id &&
+      other.nickname == nickname &&
+      other.avatar == avatar &&
+      other.address == address;
 
   @override
-  int get hashCode => Object.hash(id, nickname, avatar);
+  int get hashCode => Object.hash(id, nickname, avatar, address);
 }
 
 /// Plan limit check (Basic = 2, Plus = 5 — see `PlanPricing.maxChildren`).

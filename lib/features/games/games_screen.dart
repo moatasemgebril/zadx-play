@@ -16,6 +16,7 @@ import '../../services/app_lock/app_lock_service.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../tasks/wallet_controller.dart';
+import '../tasks/widgets/praise_dialog.dart';
 
 class GamesScreen extends ConsumerWidget {
   const GamesScreen({super.key});
@@ -167,7 +168,10 @@ class _PrayerLockCard extends ConsumerWidget {
         if (!submitted)
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.yellow, foregroundColor: AppColors.ink),
-            onPressed: () => ref.read(walletProvider.notifier).markPrayed(),
+            onPressed: () {
+              ref.read(walletProvider.notifier).markPrayed();
+              showPraiseDialog(context, ref, note: l10n.waitParent);
+            },
             child: Text(l10n.iPrayed),
           )
         else

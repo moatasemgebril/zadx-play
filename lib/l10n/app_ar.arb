@@ -662,5 +662,21 @@
       }
     }
   },
-  "parentReviewNote": "لولي الأمر: المحتوى الديني في اللعبة دي لسه بيراجعه شيخ متخصص قبل النشر النهائي."
+  "parentReviewNote": "لولي الأمر: المحتوى الديني في اللعبة دي لسه بيراجعه شيخ متخصص قبل النشر النهائي.",
+  "recitationComingSoon": "التلاوة الصوتية جاية قريب إن شاء الله. تقدر تقرا الآيات دلوقتي.",
+  "licencePending": "الترخيص لسه مستني",
+  "readSurah": "اقرأ سورة {name}",
+  "@readSurah": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "hideSurahText": "إخفاء الآيات",
+  "praiseContinue": "يلّا نكمّل",
+  "formOfAddress": "نكلّمه إزاي في رسائل التشجيع؟ (اختياري)",
+  "addressNotSet": "مش محدد",
+  "addressBoy": "ولد (أحسنتَ)",
+  "addressGirl": "بنت (أحسنتِ)"
 }

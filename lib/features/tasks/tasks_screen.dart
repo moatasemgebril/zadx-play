@@ -9,6 +9,7 @@ import '../../data/models/family_task.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import 'wallet_controller.dart';
 import 'widgets/exercise_card.dart';
+import 'widgets/praise_dialog.dart';
 
 class TasksScreen extends ConsumerWidget {
   const TasksScreen({super.key});
@@ -99,7 +100,7 @@ class _TaskCard extends ConsumerWidget {
               ),
               onPressed: () {
                 ref.read(walletProvider.notifier).submit(task.id);
-                showToast(context, l10n.toastSent(task.title.of(lang)));
+                showPraiseDialog(context, ref, note: l10n.toastSent(task.title.of(lang)));
               },
               child: Text(l10n.doneBtn),
             ),
