@@ -38,7 +38,7 @@ jobs:
             [ -z "$id" ] && continue
             echo "== $id"
             if curl -fsSL -A "$UA" -o "/tmp/adhan/$id.src" "$url"; then
-              ffmpeg -y -hide_banner -loglevel error -i "/tmp/adhan/$id.src" -vn \
+              ffmpeg -nostdin -y -hide_banner -loglevel error -i "/tmp/adhan/$id.src" -vn \
                 -af "silenceremove=start_periods=1:start_duration=0.2:start_threshold=-45dB,loudnorm=I=-16:TP=-1.5:LRA=11" \
                 -ac 1 -ar 44100 -b:a 64k "assets/audio/adhan_$id.mp3"
               dur=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "assets/audio/adhan_$id.mp3")
@@ -54,7 +54,7 @@ jobs:
             fi
           done < <(sed 's/^ *//' /tmp/list.txt)
           # Short (< 30 s) notification version from the default (CC0) adhan
-          ffmpeg -y -hide_banner -loglevel error -i assets/audio/adhan_zadx.mp3 -t 28 -af "afade=t=out:st=25:d=3" \
+          ffmpeg -nostdin -y -hide_banner -loglevel error -i assets/audio/adhan_zadx.mp3 -t 28 -af "afade=t=out:st=25:d=3" \
             -ac 1 -ar 44100 -b:a 96k android/app/src/main/res/raw/adhan_short.mp3
           git rm -q --cached assets/audio/LICENSE-adhan_zadx.txt 2>/dev/null || true
           rm -f assets/audio/LICENSE-adhan_zadx.txt
