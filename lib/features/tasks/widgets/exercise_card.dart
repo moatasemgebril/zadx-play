@@ -9,6 +9,7 @@ import '../../../data/models/family_task.dart';
 import '../../../services/audio/sfx_service.dart';
 import '../../../shared/widgets/zad_widgets.dart';
 import '../wallet_controller.dart';
+import 'praise_dialog.dart';
 
 /// Rep counter for light exercises (push-ups, sit-ups, jumping jacks...).
 /// Reaching the target sends the exercise to the parent for approval.
@@ -65,6 +66,10 @@ class ExerciseCard extends ConsumerWidget {
                   HapticFeedback.lightImpact();
                   ref.read(sfxProvider).play(Sfx.tap);
                   ref.read(walletProvider.notifier).addRep(task.id);
+                  // The last rep completes the exercise (sent for approval).
+                  if (task.reps != null && count + 1 >= target) {
+                    showPraiseDialog(context, ref, note: l10n.toastSent(title));
+                  }
                 },
                 child: Text(Fmt.digits('+1', lang)),
               ),

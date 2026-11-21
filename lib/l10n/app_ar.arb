@@ -676,5 +676,10 @@
       }
     }
   },
-  "hideSurahText": "إخفاء الآيات"
+  "hideSurahText": "إخفاء الآيات",
+  "praiseContinue": "يلّا نكمّل",
+  "formOfAddress": "نكلّمه إزاي في رسائل التشجيع؟ (اختياري)",
+  "addressNotSet": "مش محدد",
+  "addressBoy": "ولد (أحسنتَ)",
+  "addressGirl": "بنت (أحسنتِ)"
 }

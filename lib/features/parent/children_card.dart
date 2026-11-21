@@ -120,7 +120,9 @@ class ChildrenCard extends ConsumerWidget {
     }
     final result = await showDialog<_ChildDraft>(context: context, builder: (_) => const _ChildEditorDialog());
     if (result == null || !context.mounted) return;
-    final outcome = ref.read(childrenProvider.notifier).add(result.nickname, result.avatar, maxChildren: maxChildren);
+    final outcome = ref
+        .read(childrenProvider.notifier)
+        .add(result.nickname, result.avatar, maxChildren: maxChildren, address: result.address);
     switch (outcome) {
       case AddChildResult.added:
         showToast(context, l10n.childAdded(ChildProfile.cleanNickname(result.nickname) ?? result.nickname));
@@ -247,7 +249,13 @@ class _ChildRow extends ConsumerWidget {
       builder: (_) => _ChildEditorDialog(initial: child),
     );
     if (result == null || !context.mounted) return;
-    final ok = ref.read(childrenProvider.notifier).edit(child.id, nickname: result.nickname, avatar: result.avatar);
+    final ok = ref.read(childrenProvider.notifier).edit(
+          child.id,
+          nickname: result.nickname,
+          avatar: result.avatar,
+          address: result.address,
+          clearAddress: result.address == null,
+        );
     if (!ok) showToast(context, l10n.childNicknameInvalid);
   }
 
@@ -274,9 +282,10 @@ class _ChildRow extends ConsumerWidget {
 }
 
 class _ChildDraft {
-  const _ChildDraft(this.nickname, this.avatar);
+  const _ChildDraft(this.nickname, this.avatar, this.address);
   final String nickname;
   final ChildAvatar avatar;
+  final FormOfAddress? address;
 }
 
 class _ChildEditorDialog extends StatefulWidget {
@@ -290,6 +299,7 @@ class _ChildEditorDialog extends StatefulWidget {
 class _ChildEditorDialogState extends State<_ChildEditorDialog> {
   late final TextEditingController _ctrl = TextEditingController(text: widget.initial?.nickname ?? '');
   late ChildAvatar _avatar = widget.initial?.avatar ?? ChildAvatar.star;
+  late FormOfAddress? _address = widget.initial?.address;
   bool _error = false;
 
   @override
@@ -300,7 +310,7 @@ class _ChildEditorDialogState extends State<_ChildEditorDialog> {
 
   void _submit() {
     if (ChildProfile.cleanNickname(_ctrl.text) == null) return setState(() => _error = true);
-    Navigator.of(context).pop(_ChildDraft(_ctrl.text, _avatar));
+    Navigator.of(context).pop(_ChildDraft(_ctrl.text, _avatar, _address));
   }
 
   @override
@@ -349,6 +359,22 @@ class _ChildEditorDialogState extends State<_ChildEditorDialog> {
                     child: ChildAvatarBadge(avatar: a, size: 48),
                   ),
                 ),
+              ),
+          ]),
+          const SizedBox(height: 12),
+          // Optional: only used to choose أحسنتَ / أحسنتِ in praise messages.
+          Text(l10n.formOfAddress, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final (value, label) in <(FormOfAddress?, String)>[
+              (null, l10n.addressNotSet),
+              (FormOfAddress.masculine, l10n.addressBoy),
+              (FormOfAddress.feminine, l10n.addressGirl),
+            ])
+              ChoiceChip(
+                label: Text(label),
+                selected: _address == value,
+                onSelected: (_) => setState(() => _address = value),
               ),
           ]),
         ]),

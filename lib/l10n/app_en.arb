@@ -300,5 +300,10 @@
   "recitationComingSoon": "Recitation audio is coming soon, in sha Allah. You can read the verses now.",
   "licencePending": "Licence pending",
   "readSurah": "Read {name}",
-  "hideSurahText": "Hide verses"
+  "hideSurahText": "Hide verses",
+  "praiseContinue": "Continue",
+  "formOfAddress": "How should Arabic praise address your child? (optional)",
+  "addressNotSet": "Not set",
+  "addressBoy": "Boy (أحسنتَ)",
+  "addressGirl": "Girl (أحسنتِ)"
 }
