@@ -56,6 +56,8 @@ steps that truly need his accounts, signature or money.
 - Jump rope, squats, push-ups, sit-ups, toe touch; reading, tidying, prayer mat. Boys and girls; girls modestly dressed, may wear hijab. Rounded glossy tiles, "+N دقيقة" badge.
 - 100% original vector art (SVG via flutter_svg, or CustomPainter); record origin/licence in the assets registry. Never copy another company's characters or art (the owner's reference screenshots were inspiration only).
 
+- [x] Exercise figures (branch feat/exercise-figures): original faceless kid figure per exercise (push-up, sit-up, jumping jack, squat, toe touch + generic fallback), animated on the exercise card, still with reduce-motion; tests in `test/exercise_figures_test.dart`. Next: hijab variant chosen per child, jump rope, task illustrations; device check by the Quality Gate.
+
 ### 6. "مكان الطفل / Where is my child" — parents only (prototype v3 done)
 - Child safety and privacy first: off by default, opt-in per child by the parent; the child's device always shows "موقعك ظاهر لأهلك" while sharing; one-shot "locate now"; safe places (home, school, mosque) with arrival/leave alerts via the parent push system (PR #8); history kept 24 h max then deleted by a scheduled function; readable only by that family's parents (firestore.rules + tests); no third parties, no ads, no analytics on location.
 - Before code: privacy & child-safety officer + CISO write docs/LOCATION_PRIVACY.md (COPPA verifiable parental consent, GDPR-K, Apple kids category + Family Controls impact, Google Play background-location + Families declarations, review notes) and list owner-only steps (store declarations, privacy policy update, maps API key with a spending cap). Record any map SDK's licence/cost; prefer no per-use cost.

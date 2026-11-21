@@ -43,6 +43,7 @@ Every screen used `PatternBackground`: a flat tint, 36 random confetti stars/dot
 | **Edu games** (letters, prophets, mosque) | B- / B / B / C → **B-** | Confetti behind quiz questions; celebration scale ignored reduce-motion | Games scene as a **still frame** (no motion while the child reads a question). Celebration: original star/confetti burst (1.2 s); star pop-in respects reduce-motion; star chip uses the new star icon. Prophets scenes already draw scenery only (no figures): kept | A- / A / A / A → **A-** |
 | **Bottom navigation / rail** | C / A / B / A → **C** | Stock icons | Original two-tone icons: muted when idle (outline ≥ 3:1 on white), brand colours + gentle 0.42 s pop when selected (skipped with reduce-motion). Parent badge kept | A / A / A / A → **A** |
 | **Header** | B / A / A / B → **B** | Globe/help stock icons | White + gold `ZadIcon` settings/help on navy; logo untouched | **A-** |
+| **Exercise cards** (Tasks; added 2026-11-21, branch feat/exercise-figures) | C / C / B / A → **C** | One generic stock dumbbell for all five exercises: nothing showed the child *what* to do | `lib/shared/art/exercise_figures.dart`: an original, code-drawn faceless kid per exercise (push-up, sit-up, jumping jack, squat, toe touch; a gentle stretch for unknown ids). Long sleeves, long trousers, neutral cap, outfit in the exercise colour, soft outline, floor shadow (mat for floor moves). Eased 1.2 s loop between two key poses; small hop + gold sparkles on "+1"; still pose with reduce-motion or once handed in; mirrored in RTL to face the text; `RepaintBoundary`, no rebuilds per frame. Tests: `test/exercise_figures_test.dart` | A- / A / A / A → **A-** (needs device check at 64 dp) |
 
 ## 3. How each standard is met
 
@@ -76,4 +77,6 @@ Every screen used `PatternBackground`: a flat tint, 36 random confetti stars/dot
 4. **Old `PatternBackground`** is now unused by screens; remove it once the web prototype stops
    referencing the old look.
 5. **Celebrations for adhkar sections** (section done) could reuse `ZadCelebrationBurst`.
-6. **Illustrations for exercise tiles** (BACKLOG owner request 5) can reuse `ArtShapes` and the palette.
+6. **Illustrations for exercise tiles** (BACKLOG owner request 5): exercise figures done (see table). Still open: a
+   girl variant with a modest head scarf (hijab) to choose per child, a jump-rope figure, and the non-exercise
+   task illustrations (reading, tidying, prayer mat).

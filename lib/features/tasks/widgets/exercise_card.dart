@@ -7,6 +7,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../data/models/family_task.dart';
 import '../../../services/audio/sfx_service.dart';
+import '../../../shared/art/exercise_figures.dart';
 import '../../../shared/widgets/zad_widgets.dart';
 import '../wallet_controller.dart';
 import 'praise_dialog.dart';
@@ -30,10 +31,16 @@ class ExerciseCard extends ConsumerWidget {
       padding: const EdgeInsets.all(12),
       child: Row(children: [
         Container(
-          width: 56,
-          height: 56,
+          width: 64,
+          height: 64,
           decoration: BoxDecoration(color: task.color.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(16)),
-          child: Icon(Icons.fitness_center_rounded, color: task.color, size: 30),
+          child: AnimatedExerciseFigure(
+            taskId: task.id,
+            color: task.color,
+            size: 64,
+            reps: count,
+            animate: progress.status == TaskStatus.todo,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
