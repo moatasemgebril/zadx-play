@@ -16,15 +16,35 @@
 - [ ] Show "Quran data provided by Quran Foundation" + credit each reciter in the app.
 - [ ] Game icons are our own; never ship publishers' logos or screenshots.
 
+## Device-wide lock (docs/decisions/DEVICE-WIDE-LOCK.md)
+- [ ] Store listings + privacy policy say plainly: "Zad X can lock all apps on the child's device except the
+      apps the parent allows. Phone and emergency calls are never locked."
+- [ ] Data safety (Play) / App Privacy (Apple): which app is open is processed **on the device only** and is not
+      collected or shared; the installed-app list used by the parent's allow-list never leaves the device.
+- [ ] Real-device tests before release: Pixel + Samsung (Android 10 and 14), iPhone with `.child` authorization:
+      emergency call while locked, incoming call while locked, keyboard, home/recents, Play purchase sheet from
+      Zad X, TalkBack on, Zad X opens while shielded (iOS: Zad X in the allowed selection).
+
 ## Apple
 - [ ] Family Controls **Distribution** entitlement approved.
+- [ ] App Review notes: "all apps except allowed" shielding (`.all(except:)`) is turned on by the parent behind a
+      PIN; Screen Time tokens stay in the App Group and are never uploaded.
 - [ ] App Group + extensions signed; test on a real device with a child Apple ID in Family Sharing.
 - [ ] Subscriptions created: zadx_basic_monthly / yearly, zadx_plus_monthly / yearly, 14-day intro offer.
 - [ ] App Store Server Notifications v2 endpoint.
 
 ## Google
-- [ ] Permissions Declaration Form for the Accessibility API (parental control use case).
-- [ ] Prominent disclosure screen before opening Accessibility settings (explain we only detect which game opens).
+- [ ] Permissions Declaration Form for the Accessibility API (parental control use case). Describe the device-wide
+      lock: only the package name of the foreground app is read (`canRetrieveWindowContent=false`), to lock every app
+      except phone/emergency, Zad X, launcher, keyboard, settings, messaging (parent choice) and parent-allowed apps.
+- [ ] Prominent disclosure screen before opening Accessibility settings. Text (AR/EN, reviewed by legal): "Zad X sees
+      which app is open on this phone (only the app's name, never what is on the screen) so it can lock apps until
+      tasks and prayers are done. Phone and emergency calls are never locked. Nothing about the apps used leaves
+      this phone."
+- [ ] Package visibility: intent `<queries>` only (LAUNCHER, HOME, APP_MESSAGING, APP_CONTACTS, SETTINGS); **no**
+      `QUERY_ALL_PACKAGES`. Be ready to justify LAUNCHER visibility as the parent's allow-list editor.
+- [ ] Device Admin / uninstall protection is **not** used. If added later: separate prominent disclosure and an
+      easy parent-only way to remove it (Play Device and Network Abuse / Unwanted Software policies).
 - [ ] Exact alarm usage justification (prayer locks).
 - [ ] Verify every game package name in `lib/data/catalog/games.dart` and the manifest `<queries>`.
 - [ ] Subscriptions + base plans + 14-day free trial offer tagged `trial`; RTDN Pub/Sub → `playNotifications`.
@@ -32,7 +52,9 @@
 ## Windows (Zad X Guard)
 - [ ] Code-sign the executable (Authenticode certificate) and ship an MSI/MSIX installer.
 - [ ] Host the installer at `AppConfig.windowsGuardDownload`.
-- [ ] Verify game process names in `windows_guard/GameCatalog.cs`.
+- [ ] Verify game, browser and social process names in `windows_guard/GameCatalog.cs` (never add `msedgewebview2`).
+- [ ] Tell parents: in "lock all apps" mode the PC closes games, launchers, social apps and (unless allowed)
+      browsers; it does not lock every program.
 - [ ] Explain to parents that the child must use a Standard (non-admin) Windows account.
 
 ## Consoles

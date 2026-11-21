@@ -563,6 +563,10 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
       reason: prayerLock ? "prayer" : !requiredDone ? "requiredTasks" : remaining <= 0 ? "noTime" : "none",
       remainingMinutes: remaining,
       games: settings.games ?? [],
+      // Device-wide lock (docs/decisions/DEVICE-WIDE-LOCK.md). Windows locks games + launchers +
+      // social apps (+ browsers unless allowed); it never blocks every process.
+      mode: settings.lockMode === "selectedGames" ? "selectedGames" : "allApps",
+      allowBrowsers: settings.pcAllowBrowsers === true,
       planActive: plan === "plus" || family.get("inTrial") === true,
       language: settings.language ?? "ar",
       prayer: {

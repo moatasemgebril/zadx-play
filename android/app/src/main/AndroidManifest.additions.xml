@@ -30,6 +30,28 @@
         <package android:name="com.ludo.king" />
         <package android:name="com.playstation.ohana.android" />
         <package android:name="com.microsoft.familysafety" />
+        <!-- Device-wide lock (docs/decisions/DEVICE-WIDE-LOCK.md): intent queries only, no
+             QUERY_ALL_PACKAGES. LAUNCHER = parent's allow-list editor; the rest resolve the
+             always-allowed launcher / settings / SMS / contacts on this device. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.HOME" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_MESSAGING" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_CONTACTS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.SETTINGS" />
+        </intent>
     </queries>
 
     <application android:label="Zad X Play">

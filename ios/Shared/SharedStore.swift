@@ -12,6 +12,8 @@ enum SharedStore {
     private static let prayerLockKey = "zadx.prayerLock"
     private static let timeUpKey = "zadx.timeUp"
     private static let reasonKey = "zadx.reason"
+    private static let allowedKey = "zadx.allowedSelection"
+    private static let modeKey = "zadx.lockMode"
 
     /// Games the parent picked in FamilyActivityPicker (opaque tokens).
     static var selection: FamilyActivitySelection {
@@ -24,6 +26,26 @@ enum SharedStore {
         set {
             defaults.set(try? JSONEncoder().encode(newValue), forKey: selectionKey)
         }
+    }
+
+    /// Apps / websites the parent always allows in "allApps" mode (opaque tokens, never uploaded).
+    static var allowedSelection: FamilyActivitySelection {
+        get {
+            guard let data = defaults.data(forKey: allowedKey),
+                  let value = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data)
+            else { return FamilyActivitySelection() }
+            return value
+        }
+        set {
+            defaults.set(try? JSONEncoder().encode(newValue), forKey: allowedKey)
+        }
+    }
+
+    /// "allApps" (shield everything except allowedSelection) or "selectedGames" (legacy: shield selection).
+    /// See docs/decisions/DEVICE-WIDE-LOCK.md.
+    static var mode: String {
+        get { defaults.string(forKey: modeKey) ?? "selectedGames" }
+        set { defaults.set(newValue, forKey: modeKey) }
     }
 
     static var prayerLock: Bool {
@@ -45,13 +67,24 @@ enum SharedStore {
     static let store = ManagedSettingsStore(named: .init("zadx"))
 
     static func shieldGames() {
+        if mode == "allApps" {
+            // Everything except the parent's allowed apps/sites. Phone and emergency SOS are never
+            // shielded by Screen Time. Zad X should be in the allowed selection (the parent UI says so).
+            let allowed = allowedSelection
+            store.shield.applications = nil
+            store.shield.applicationCategories = .all(except: allowed.applicationTokens)
+            store.shield.webDomainCategories = .all(except: allowed.webDomainTokens)
+            return
+        }
         let s = selection
         store.shield.applications = s.applicationTokens.isEmpty ? nil : s.applicationTokens
         store.shield.applicationCategories = s.categoryTokens.isEmpty ? nil : .specific(s.categoryTokens)
+        store.shield.webDomainCategories = nil
     }
 
     static func unshieldGames() {
         store.shield.applications = nil
         store.shield.applicationCategories = nil
+        store.shield.webDomainCategories = nil
     }
 }

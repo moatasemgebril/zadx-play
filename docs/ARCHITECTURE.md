@@ -3,8 +3,10 @@
 ## Principles
 - **One source of truth for play time:** `WalletController` (`lib/features/tasks/wallet_controller.dart`).
   UI and native code only read `WalletState`; every change goes through the controller.
-- **Native code enforces, Dart decides:** Dart computes a `LockPolicy` (locked?, reason, games,
-  minutes) and pushes it over `com.zadx.app/app_lock`. Native blockers keep enforcing it when the
+- **Native code enforces, Dart decides:** Dart computes a `LockPolicy` (locked?, reason, mode, games,
+  allow-list, minutes) and pushes it over `com.zadx.app/app_lock`. Default mode `allApps` locks every app
+  except an always-allowed core + the parent's allow-list (docs/decisions/DEVICE-WIDE-LOCK.md);
+  `selectedGames` is the legacy block-list. Native blockers keep enforcing it when the
   app is closed (Android `LockStore` + AccessibilityService; iOS ManagedSettings + DeviceActivity).
 - **No secrets in the app:** AI and store verification run in Cloud Functions.
 - **No hand-typed Quran:** surah metadata only; text comes from Quran.com and is cached.
