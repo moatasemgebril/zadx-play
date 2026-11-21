@@ -23,9 +23,14 @@ const adhanPhrases = <String>[
 /// offered (see [availableMuezzins]); the others stay hidden until a licensed
 /// recording is added to assets/audio/.
 const muezzins = <Voice>[
-  // CC0 (public domain) recording, Wikimedia Commons "Beautiful adhan.ogg" by
-  // Adam-synagda — see assets/audio/LICENSE-adhan_zadx.txt.
-  Voice(id: 'zadx', name: Localized('أذان زاد', 'Zad X adhan'), source: 'assets/audio/adhan_zadx.mp3', licenceConfirmed: true),
+  // Freely-licensed recordings from Wikimedia Commons (see assets/audio/ADHAN-CREDITS.txt).
+  Voice(id: 'zadx', name: Localized('أذان زاد ١', 'Zad X adhan 1'), source: 'assets/audio/adhan_zadx.mp3', licenceConfirmed: true),
+  Voice(id: 'aaqib', name: Localized('عاقب عزيز', 'Aaqib Azeez'), source: 'assets/audio/adhan_aaqib.mp3', licenceConfirmed: true,
+      credit: 'Atcovi · CC BY-SA 4.0 · Wikimedia Commons'),
+  Voice(id: 'andrewler', name: Localized('أذان زاد ٢', 'Zad X adhan 2'), source: 'assets/audio/adhan_andrewler.mp3', licenceConfirmed: true,
+      credit: 'Andrewler · CC BY-SA 4.0 · Wikimedia Commons'),
+  Voice(id: 'madinah_rec', name: Localized('من المسجد النبوي', 'From the Prophet\'s Mosque'), source: 'assets/audio/adhan_madinah_rec.mp3', licenceConfirmed: true,
+      credit: 'ejaz215 · CC BY 3.0 · Freesound / Wikimedia Commons'),
   Voice(id: 'makkah', name: Localized('أذان مكة', 'Makkah adhan'), source: 'assets/audio/adhan_makkah.mp3'),
   Voice(id: 'madinah', name: Localized('أذان المدينة', 'Madinah adhan'), source: 'assets/audio/adhan_madinah.mp3'),
   Voice(id: 'refaat', name: Localized('محمد رفعت', 'Muhammad Refaat'), source: 'assets/audio/adhan_refaat.mp3'),

@@ -15,6 +15,13 @@ void main() {
     }
   });
 
+  test('several adhan choices, and every CC BY / BY-SA voice carries a credit', () {
+    expect(availableMuezzins().length, greaterThanOrEqualTo(4));
+    for (final m in availableMuezzins().where((m) => m.id != 'zadx')) {
+      expect(m.credit, isNotNull, reason: '${m.id} needs attribution');
+    }
+  });
+
   test('unknown or unlicensed saved voice falls back to the first available', () {
     expect(resolveMuezzin('makkah').id, availableMuezzins().first.id);
     expect(resolveMuezzin(null).id, availableMuezzins().first.id);
