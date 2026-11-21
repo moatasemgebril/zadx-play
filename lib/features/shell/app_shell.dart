@@ -6,6 +6,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../router.dart';
+import '../../shared/art/zad_art.dart';
 import '../tasks/wallet_controller.dart';
 
 /// Header (logo, globe, help, minutes) + bottom navigation shared by the 5 tabs.
@@ -19,17 +20,20 @@ class AppShell extends ConsumerWidget {
     final wallet = ref.watch(walletProvider);
     final pending = wallet.pending.length;
 
-    final parentIcon = Badge(
-      isLabelVisible: pending > 0,
-      label: Text(Fmt.digits(pending, context.lang)),
-      child: const Icon(Icons.shield_rounded),
-    );
-    final items = <(Widget, String)>[
-      (const Icon(Icons.home_rounded), l10n.tabHome),
-      (const Icon(Icons.sports_esports_rounded), l10n.tabGames),
-      (const Icon(Icons.menu_book_rounded), l10n.tabQuran),
-      (const Icon(Icons.task_alt_rounded), l10n.tabTasks),
-      (parentIcon, l10n.tabParent),
+    // Original Zad X icons: quiet two-tone when idle, full colour with a
+    // gentle pop (skipped with reduce-motion) when selected.
+    Widget navIcon(ZadIconKind kind, {required bool selected}) {
+      final icon = ZadIcon(kind, size: 28, tone: selected ? ZadIconTone.brand : ZadIconTone.muted, bounce: selected);
+      if (kind != ZadIconKind.parent) return icon;
+      return Badge(isLabelVisible: pending > 0, label: Text(Fmt.digits(pending, context.lang)), child: icon);
+    }
+
+    final tabs = <(ZadIconKind, String)>[
+      (ZadIconKind.home, l10n.tabHome),
+      (ZadIconKind.games, l10n.tabGames),
+      (ZadIconKind.quran, l10n.tabQuran),
+      (ZadIconKind.tasks, l10n.tabTasks),
+      (ZadIconKind.parent, l10n.tabParent),
     ];
     void go(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
     final header = _Header(remaining: l10n.minutesLeft(Fmt.digits(wallet.remainingMinutes, context.lang)));
@@ -47,7 +51,14 @@ class AppShell extends ConsumerWidget {
               indicatorColor: AppColors.purpleSoft,
               selectedLabelTextStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.purpleDark),
               unselectedLabelTextStyle: const TextStyle(fontSize: 15, color: AppColors.muted),
-              destinations: [for (final (icon, label) in items) NavigationRailDestination(icon: icon, label: Text(label))],
+              destinations: [
+                for (final (kind, label) in tabs)
+                  NavigationRailDestination(
+                    icon: navIcon(kind, selected: false),
+                    selectedIcon: navIcon(kind, selected: true),
+                    label: Text(label),
+                  ),
+              ],
             ),
             Expanded(
               child: Column(children: [
@@ -67,7 +78,14 @@ class AppShell extends ConsumerWidget {
         bottomNavigationBar: NavigationBar(
           selectedIndex: shell.currentIndex,
           onDestinationSelected: go,
-          destinations: [for (final (icon, label) in items) NavigationDestination(icon: icon, label: label)],
+          destinations: [
+            for (final (kind, label) in tabs)
+              NavigationDestination(
+                icon: navIcon(kind, selected: false),
+                selectedIcon: navIcon(kind, selected: true),
+                label: label,
+              ),
+          ],
         ),
       );
     });
@@ -96,9 +114,9 @@ class _Header extends StatelessWidget {
           const Spacer(),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Row(children: [
-              _RoundIcon(icon: Icons.public_rounded, label: l10n.settingsTitle, onTap: () => context.push(Routes.settings)),
+              _RoundIcon(kind: ZadIconKind.settings, label: l10n.settingsTitle, onTap: () => context.push(Routes.settings)),
               const SizedBox(width: 8),
-              _RoundIcon(icon: Icons.help_outline_rounded, label: l10n.helpTitle, onTap: () => context.push(Routes.help)),
+              _RoundIcon(kind: ZadIconKind.help, label: l10n.helpTitle, onTap: () => context.push(Routes.help)),
             ]),
             const SizedBox(height: 10),
             Container(
@@ -116,8 +134,8 @@ class _Header extends StatelessWidget {
 }
 
 class _RoundIcon extends StatelessWidget {
-  const _RoundIcon({required this.icon, required this.label, required this.onTap});
-  final IconData icon;
+  const _RoundIcon({required this.kind, required this.label, required this.onTap});
+  final ZadIconKind kind;
   final String label;
   final VoidCallback onTap;
 
@@ -126,6 +144,6 @@ class _RoundIcon extends StatelessWidget {
         tooltip: label,
         onPressed: onTap,
         style: IconButton.styleFrom(backgroundColor: Colors.white.withValues(alpha: 0.16), minimumSize: const Size(48, 48)),
-        icon: Icon(icon, color: Colors.white),
+        icon: ZadIcon(kind, tone: ZadIconTone.onDark),
       );
 }

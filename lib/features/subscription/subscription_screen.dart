@@ -12,6 +12,7 @@ import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/billing/subscription_service.dart';
 import '../../services/referral/referral_service.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 
 final _billingProvider = StateProvider<BillingPeriod>((_) => BillingPeriod.yearly);
@@ -26,9 +27,8 @@ class SubscriptionScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.subTitle), backgroundColor: AppColors.navy, foregroundColor: Colors.white),
-      body: PatternBackground(
-        tint: AppColors.cream,
-        seed: 9,
+      body: ZadSceneBackground(
+        scene: ZadScene.parent,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           Text(l10n.subIntro, style: const TextStyle(fontSize: 17, color: AppColors.muted)),
           const SizedBox(height: 12),

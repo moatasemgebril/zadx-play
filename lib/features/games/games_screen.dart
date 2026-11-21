@@ -13,6 +13,7 @@ import '../../data/models/game.dart';
 import '../../l10n/app_localizations.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../tasks/wallet_controller.dart';
@@ -28,9 +29,8 @@ class GamesScreen extends ConsumerWidget {
     final enabledIds = ref.watch(settingsProvider.select((s) => s.controlledGameIds));
     final games = controlledGames.where((g) => enabledIds.contains(g.id)).toList();
 
-    return PatternBackground(
-      tint: AppColors.pageTints['games']!,
-      seed: 2,
+    return ZadSceneBackground(
+      scene: ZadScene.games,
       child: ListView(padding: const EdgeInsets.all(16), children: [
         _GamesHero(title: l10n.gamesHeroTitle, sub: l10n.gamesHeroSub),
         const SizedBox(height: 16),
@@ -89,7 +89,7 @@ class _GamesHero extends StatelessWidget {
             bottom: -18,
             child: RotationTransition(
               turns: AlwaysStoppedAnimation(-0.03),
-              child: Icon(Icons.sports_esports_rounded, size: 130, color: AppColors.yellow),
+              child: ZadIcon(ZadIconKind.games, size: 124),
             ),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [

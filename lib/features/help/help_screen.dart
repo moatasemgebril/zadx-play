@@ -5,6 +5,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../services/assistant/assistant_service.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 
 class HelpScreen extends StatelessWidget {
@@ -31,9 +32,8 @@ class HelpScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.helpTitle), backgroundColor: AppColors.navy, foregroundColor: Colors.white),
-      body: PatternBackground(
-        tint: AppColors.pageTints['games']!,
-        seed: 8,
+      body: ZadSceneBackground(
+        scene: ZadScene.parent,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           const _AssistantCard(),
           const SizedBox(height: 14),

@@ -12,6 +12,7 @@ import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
 import '../../services/billing/subscription_service.dart';
 import '../../services/family/children_controller.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
@@ -28,9 +29,8 @@ class ParentScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    return PatternBackground(
-      tint: AppColors.pageTints['parent']!,
-      seed: 5,
+    return ZadSceneBackground(
+      scene: ZadScene.parent,
       child: ParentGate(
         child: ListView(padding: const EdgeInsets.all(16), children: [
           PageTitle(l10n.parentTitle),
