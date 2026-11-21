@@ -9,10 +9,9 @@ Future<ProviderContainer> containerWith(SharedPreferences prefs) async =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('sound defaults: effects on, music OFF, volume 0.6', () {
+  test('sound defaults: effects on, volume 0.6', () {
     const s = AppSettings();
     expect(s.soundEffectsOn, isTrue);
-    expect(s.musicOn, isFalse);
     expect(s.sfxVolume, 0.6);
   });
 
@@ -23,8 +22,21 @@ void main() {
     addTearDown(c.dispose);
     final s = c.read(settingsProvider);
     expect(s.soundEffectsOn, isTrue);
-    expect(s.musicOn, isFalse);
     expect(s.sfxVolume, 0.6);
+  });
+
+  test('an old stored music value is ignored safely', () async {
+    SharedPreferences.setMockInitialValues({
+      'settings.musicOn': true,
+      'settings.sfxOn': false,
+      'settings.sfxVolume': 0.4,
+    });
+    final prefs = await SharedPreferences.getInstance();
+    final c = await containerWith(prefs);
+    addTearDown(c.dispose);
+    final s = c.read(settingsProvider);
+    expect(s.soundEffectsOn, isFalse);
+    expect(s.sfxVolume, 0.4);
   });
 
   test('sound settings persist across restarts', () async {
@@ -33,7 +45,6 @@ void main() {
     final first = await containerWith(prefs);
     first.read(settingsProvider.notifier)
       ..setSoundEffectsOn(false)
-      ..setMusicOn(true)
       ..setSfxVolume(0.3);
     first.dispose();
 
@@ -41,7 +52,6 @@ void main() {
     addTearDown(second.dispose);
     final s = second.read(settingsProvider);
     expect(s.soundEffectsOn, isFalse);
-    expect(s.musicOn, isTrue);
     expect(s.sfxVolume, 0.3);
   });
 
@@ -59,11 +69,10 @@ void main() {
 
   test('other settings survive copyWith of sound fields', () {
     const s = AppSettings(muezzinId: 'madinah', lockAtAdhan: false);
-    final t = s.copyWith(musicOn: true, sfxVolume: 0.2);
+    final t = s.copyWith(soundEffectsOn: false, sfxVolume: 0.2);
     expect(t.muezzinId, 'madinah');
     expect(t.lockAtAdhan, isFalse);
-    expect(t.soundEffectsOn, isTrue);
-    expect(t.musicOn, isTrue);
+    expect(t.soundEffectsOn, isFalse);
     expect(t.sfxVolume, 0.2);
   });
 }

@@ -15,8 +15,6 @@ WalletState wallet(Map<String, TaskStatus> statuses, {bool prayerLock = false, S
     );
 
 void main() {
-  const on = AppSettings(musicOn: true);
-
   group('no sound over the adhan or Quran', () {
     test('effects play only when nothing sacred is playing', () {
       expect(shouldPlaySfx(PlayerKind.none, const AppSettings()), isTrue);
@@ -24,33 +22,28 @@ void main() {
       expect(shouldPlaySfx(PlayerKind.quran, const AppSettings()), isFalse);
     });
 
-    test('music never plays during adhan or Quran, even when enabled', () {
-      expect(shouldPlayMusic(PlayerKind.none, on), isTrue);
-      expect(shouldPlayMusic(PlayerKind.adhan, on), isFalse);
-      expect(shouldPlayMusic(PlayerKind.quran, on), isFalse);
-    });
-
-    test('music pauses during the prayer lock and in the background', () {
-      expect(shouldPlayMusic(PlayerKind.none, on, prayerLock: true), isFalse);
-      expect(shouldPlayMusic(PlayerKind.none, on, inForeground: false), isFalse);
+    test('muted effects stay silent during adhan or Quran too', () {
+      const muted = AppSettings(soundEffectsOn: false);
+      expect(shouldPlaySfx(PlayerKind.adhan, muted), isFalse);
+      expect(shouldPlaySfx(PlayerKind.quran, muted), isFalse);
     });
   });
 
   group('parent settings', () {
-    test('music is off by default', () {
-      expect(shouldPlayMusic(PlayerKind.none, const AppSettings()), isFalse);
+    test('effects are on by default', () {
+      expect(shouldPlaySfx(PlayerKind.none, const AppSettings()), isTrue);
     });
 
     test('effects switch and zero volume silence effects', () {
       expect(shouldPlaySfx(PlayerKind.none, const AppSettings(soundEffectsOn: false)), isFalse);
       expect(shouldPlaySfx(PlayerKind.none, const AppSettings(sfxVolume: 0)), isFalse);
-      expect(shouldPlayMusic(PlayerKind.none, const AppSettings(musicOn: true, sfxVolume: 0)), isFalse);
     });
 
-    test('music is quieter than effects', () {
-      const s = AppSettings(sfxVolume: 1);
-      expect(musicVolumeFor(s), lessThan(sfxVolumeFor(s)));
-      expect(musicVolumeFor(s), lessThanOrEqualTo(0.35));
+    test('effect volume follows the parent setting, clamped to 0..1', () {
+      expect(sfxVolumeFor(const AppSettings(sfxVolume: 0.3)), 0.3);
+      expect(sfxVolumeFor(const AppSettings(sfxVolume: 1)), 1.0);
+      expect(sfxVolumeFor(const AppSettings(sfxVolume: 2)), 1.0);
+      expect(sfxVolumeFor(const AppSettings(sfxVolume: -1)), 0.0);
     });
   });
 
