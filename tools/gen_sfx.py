@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate Zad X Play's original sound effects and calm background pad.
+"""Generate Zad X Play's original sound effects (the app has no music).
 
 Everything here is synthesised from scratch (sine tones, soft envelopes and a
 little filtered noise) using only the Python standard library, so the output
@@ -11,9 +11,7 @@ Usage:
 Format: mono, 22050 Hz, 16-bit PCM WAV.
 Design goals (children's app):
   * soft attacks, no harsh square/saw waves, nothing loud or scary;
-  * short effects (< 60 KB each) so they load instantly;
-  * music_calm.wav is a gentle pad that loops seamlessly (every partial and
-    every modulation completes a whole number of cycles over the loop).
+  * short effects (< 60 KB each) so they load instantly.
 """
 
 import math
@@ -169,61 +167,6 @@ def sfx_transition():
     return soft_noise(0.22, 500, 1600, seed=7)
 
 
-# --------------------------------------------------------------------------- music
-
-LOOP_S = 24.0  # loop length in seconds
-
-
-def q(freq):
-    """Quantise a frequency so it completes a whole number of cycles per loop."""
-    return round(freq * LOOP_S) / LOOP_S
-
-
-def music_calm():
-    """Gentle 4-chord pad (C - Am - F - G), slow cross-fades, soft bell notes.
-    Periodic in LOOP_S, so the end joins the start without a click."""
-    n = int(LOOP_S * RATE)
-    chords = [
-        ["C3", "G3", "C4", "E4"],
-        ["A2", "E3", "A3", "C4"],
-        ["F2", "C3", "F3", "A3"],
-        ["G2", "D3", "G3", "B3"],
-    ]
-    # each note: base + slightly detuned twin (slow chorus) + soft octave
-    voices = []
-    for ci, chord in enumerate(chords):
-        for name in chord:
-            f = note(name)
-            for mult, amp, detune in ((1, 1.0, 0.0), (1, 0.6, 3 / LOOP_S), (2, 0.12, 0.0)):
-                voices.append((ci, TAU * q(f * mult + detune), amp))
-    # cyclic chord weights: smooth bumps centred on each quarter of the loop
-    bumps = 4
-
-    # soft pentatonic bell notes, wrapped around the loop
-    bells = [(1.0, "E5"), (4.0, "G5"), (7.0, "C6"), (10.0, "A5"), (13.0, "C6"), (16.0, "D6"), (19.0, "G5"), (22.0, "E5")]
-    bell_len = int(2.5 * RATE)
-    bell_buf = [0.0] * n
-    for start, name in bells:
-        tone = bell(note(name), 2.5, attack=0.03, decay=1.8, partials=((1, 1.0), (2.0, 0.15)))
-        s0 = int(start * RATE)
-        for i in range(bell_len):
-            bell_buf[(s0 + i) % n] += tone[i]
-
-    out = []
-    for i in range(n):
-        t = i / RATE
-        ph = t / LOOP_S
-        w = [(1 + math.cos(TAU * (ph - (c + 0.5) / bumps))) ** 6 for c in range(bumps)]
-        total = sum(w)
-        w = [x / total for x in w]
-        swell = 0.85 + 0.15 * math.sin(TAU * 2 * ph)  # slow breathing, 2 cycles per loop
-        v = 0.0
-        for ci, omega, amp in voices:
-            v += w[ci] * amp * math.sin(omega * t)
-        out.append(0.18 * v * swell + 0.12 * bell_buf[i])
-    return out
-
-
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
     write("tap.wav", sfx_tap(), peak=0.4)
@@ -234,7 +177,6 @@ def main():
     write("task_complete.wav", sfx_task_complete())
     write("unlock.wav", sfx_unlock())
     write("transition.wav", sfx_transition(), peak=0.22)
-    write("music_calm.wav", music_calm(), peak=0.4)
 
 
 if __name__ == "__main__":

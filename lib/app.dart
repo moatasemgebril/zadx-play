@@ -30,8 +30,6 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
   void initState() {
     super.initState();
     _routeSound = RouteChangeSound(appRouter, () => ref.read(sfxProvider).play(Sfx.transition))..attach();
-    // Only actually plays if the parent turned music on (off by default).
-    ref.read(sfxProvider).startMusic();
     // Reschedule adhan notifications whenever location/method changes,
     // and once at start-up (fireImmediately is only available on listenManual).
     ref.listenManual<AppSettings>(
@@ -62,7 +60,7 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
 
     // Keeps native lock policy in sync with the wallet for the app's lifetime.
     ref.watch(lockCoordinatorProvider);
-    // Star / task / unlock sounds, and no music during the prayer lock.
+    // Star / task / unlock sounds.
     ref.watch(soundCoordinatorProvider);
 
     return MaterialApp.router(
