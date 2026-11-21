@@ -109,6 +109,20 @@ Status legend: **Fixed** (this branch) · **Open** (see risk register id) · **A
 | Child is a Windows administrator | Accepted / documented (must be Standard) |
 | Unsigned installer / binary tampering | **Open** (code-signing in checklist) |
 
+### 3.8 Child location map (planned, behind `FeatureFlags.locationMap`, off in release)
+Design: `docs/LOCATION_PRIVACY.md` (added 2026-11-21). Asset: **A8 child location** (current
+position of a minor; COPPA "personal information", GDPR-K special care).
+
+| STRIDE | Threat | Planned mitigation | Status |
+|---|---|---|---|
+| S/I | **Stalking or abuse by a non-custodial adult** who has, keeps or obtains a parent device (separated parent, relative, someone who borrowed the phone) | Off by default; PIN + logged consent per child; persistent "موقعك ظاهر لأهلك" notice on the child device; all parent devices notified when sharing turns on; parent can list and revoke devices; one-shot locate, no history | **Open R-31** |
+| S | **Leaked or brute-forced pairing code** adds an attacker device that rules treat as a parent | Fix R-28 (unbound devices = parent today) and R-02 (parent confirms each new device) before enabling; pairing rate limits already in place | **Open R-31** (depends on R-02, R-28) |
+| I | **Data retention**: location kept longer than promised / movement history built up | Single overwritten doc, Firestore TTL on `expireAt` (24 h) + scheduled delete Function; no history collection; deleted when sharing is turned off | **Open R-31** |
+| I/E | **Rules misconfiguration** exposes location to child devices, other families or strangers | Rules sketch in LOCATION_PRIVACY.md §5 + 9 mandatory emulator rules tests in CI; security review of every rules change | **Open R-31** |
+| I | Tile server learns where the child is (parent views the area) | Self-hosted tiles or a provider with a DPA and no request logging; owner decision | **Open R-31** |
+| I | Location reaches third parties (analytics, ads, crash reports) | No ad/analytics SDKs; location never logged; no Google Maps SDK | Design rule |
+| R | Parent denies having enabled sharing | Create-only consent log with uid + server time | Planned |
+
 ## 4. Out of scope for this pass (recorded, not edited)
 Games, edu-games, audio, wallet, children and parent screens belong to other teams; their issues
 are in `RISK-REGISTER.md` (R-03, R-11, R-16).

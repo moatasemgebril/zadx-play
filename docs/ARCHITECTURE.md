@@ -8,6 +8,7 @@
   app is closed (Android `LockStore` + AccessibilityService; iOS ManagedSettings + DeviceActivity).
 - **No secrets in the app:** AI and store verification run in Cloud Functions.
 - **No hand-typed Quran:** surah metadata only; text comes from Quran.com and is cached.
+- **Offline-first:** the child side works without internet; Firebase syncs, it is never required (see "Offline-first" below).
 
 ## Flow of a day
 ```
@@ -101,3 +102,52 @@ Sound/haptic hooks: override `eduGameHooksProvider` (`onCorrect`, `onWrong`, `on
 ## Localization
 ARB files in `lib/l10n` (Arabic is the template). Add `fr`, `tr`, `ur`, `id` by creating
 `app_<code>.arb` and moving the code from `upcomingLanguages` to `supportedLanguages`.
+
+## Offline-first (owner decision 2026-11-21)
+Rule: **the child side works fully without internet.** Firebase is for sync, never a
+precondition. A missing connection is never a blocking error on a child screen; parents see a
+small offline indicator only.
+
+### What runs on the device
+| Area | Target | Today (audit 2026-11-21) |
+|---|---|---|
+| Prayer times | Computed on-device from saved coordinates | **Already offline.** `PrayerCalculator` (pure Dart, PrayTimes.org formulas) uses the lat/lng of the city picked from `lib/data/catalog/locations.dart`; time zones come from the bundled `timezone` database (`latest_all`, initialised in `main.dart`). No network call. `geolocator` is in `pubspec.yaml` but not used anywhere in `lib/`. |
+| Adhan audio + notifications | Bundled licensed recordings; local notifications | Code plays `AudioSource.asset(...)` and schedules local notifications (no network). **Gap:** the four `assets/audio/adhan_*.mp3` files are not in the repo yet (only `README.txt`), pending a recordings licence (see `security/APPROVALS-TRACKER.md`). |
+| Quran text | Bundled verified Uthmani text | **Needs network on first open of each surah.** `QuranRepository` fetches `api.quran.com/api/v4/quran/verses/uthmani` and then caches in `shared_preferences`. Plan: bundle a verified Uthmani text asset with its required attribution (source and licence to be chosen with the Islamic Content Reviewer; never typed by hand), keep the API as the update path. To verify: whether `api.quran.com/api/v4` is covered by the Quran Foundation approval or we must switch to the QF API with production credentials. |
+| Adhkar | Bundled | Already bundled in `lib/data/catalog/adhkar.dart` (scholar review still pending). |
+| Quran recitation audio | May stream; optional "download for offline" | Streams per ayah from `everyayah.com`. Quran Foundation approved its **recitations API** for Alafasy, Abdul Basit (murattal), Al-Husary and Al-Minshawi (murattal), with **no rehosting on our servers** and downloads allowed **to the user's own device** (BACKLOG.md). Plan: switch the source to the QF API, add "download for offline" for licensed reciters only, stored in app storage on the device. Unlicensed reciters are never downloadable. |
+| Games, tasks, unlock timer, lock state | Local DB, enforced locally | Today in `shared_preferences` (`WalletController`) + native stores (`LockStore`, iOS `SharedStore`). Enforcement is already local. |
+| Entitlement | Last verified plan with offline grace | `EntitlementCache` (`lib/services/billing/entitlement_cache.dart`): last server-verified tier kept 7 days, then free; clock-rollback guarded. Not wired yet. |
+
+### Local database
+Recommendation: **drift** (SQLite; typed queries, migrations, transactions, easy unit tests with an
+in-memory database). Licence: drift is MIT, SQLite is public domain (to verify at adoption).
+Alternative: Hive — Apache-2.0, simpler key/value boxes, but no relational queries and the original
+`hive` 2.x package is lightly maintained (community fork `hive_ce`, to verify). Use drift for
+tasks / progress / unlock timer / lock state / command queue; keep `shared_preferences` for small
+settings. Lock state stays mirrored to the native stores so it is enforced when the app is closed.
+
+### Sync (Firebase)
+- **Firestore offline persistence** on (default on Android/iOS; must be enabled explicitly on web
+  — to verify for the current `cloud_firestore` version). Child writes are queued while offline.
+- **Queued parent commands** (`families/{id}/children/{childId}/commands/{id}`: lock, unlock, add
+  minutes, change limits, approve task) carry `issuedAt` (server timestamp) and a parent device id.
+  The child device applies them in order when it sees them and records `appliedAt` locally.
+- **Child progress** (task status, used minutes) is written locally first, then synced.
+- **Conflict rule:** for locks and limits, **the parent's latest command wins** (ordered by server
+  `issuedAt`). A child-side change never overrides a newer parent command. Progress counters merge
+  by taking the max per field for the same day; approvals stay parent-only (risk R-03).
+- Until a command reaches the child device, the last known rules keep being enforced locally.
+
+### UX rules
+- Child screens: no spinner-forever, no "no internet" error dialogs. Content that truly needs the
+  network (streaming a non-downloaded recitation) shows a gentle, non-blocking message and the
+  rest of the screen keeps working.
+- Parent dashboard: a small "offline — changes will sync" indicator; queued commands shown as
+  pending.
+
+### Tests
+- Unit tests stay pure (no network): prayer calculator, entitlement cache, wallet, lock policy.
+- Add an "offline" test suite that runs with networking disabled (e.g. `HttpOverrides` that throw
+  on any connection, plus a fake `FamilyRepository`) and asserts every child screen renders and
+  the lock is still enforced.
