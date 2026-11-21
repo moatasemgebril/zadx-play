@@ -79,9 +79,15 @@ object AppLockChannel {
                         mode = call.argument<String>("mode") ?: LockRules.MODE_SELECTED_GAMES,
                         allowedPackages = call.argument<List<String>>("allowedPackages") ?: emptyList(),
                         allowMessaging = call.argument<Boolean>("allowMessaging") ?: true,
+                        prayerAutoEndMinutes = call.argument<Int>("prayerAutoEndMinutes") ?: 0,
                     )
-                    // Flutter is the source of truth for the prayer lock once it is running.
-                    LockStore.setPrayerLock(context, reason == "prayer")
+                    // Flutter is the source of truth for the prayer lock once it is running; the native
+                    // auto-end timer (Free) stays anchored to when this lock started (elapsed time).
+                    LockStore.setPrayerLock(
+                        context,
+                        reason == "prayer",
+                        sinceMs = call.argument<Number>("prayerLockSinceMs")?.toLong(),
+                    )
                     result.success(null)
                 }
 

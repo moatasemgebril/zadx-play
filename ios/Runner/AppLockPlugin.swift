@@ -66,6 +66,8 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
             SharedStore.reason = reason
             SharedStore.prayerLock = reason == "prayer"
             SharedStore.mode = args["mode"] as? String ?? "selectedGames"
+            SharedStore.prayerAutoEndMinutes = args["prayerAutoEndMinutes"] as? Int ?? 0
+            SharedStore.lastRemainingMinutes = remaining
             if locked {
                 SharedStore.shieldGames()
                 center.stopMonitoring([.playBudget])
@@ -172,7 +174,9 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
         center.stopMonitoring(names)
         let cal = Calendar.current
         for (i, start) in times.prefix(names.count).enumerated() {
-            let end = start.addingTimeInterval(15 * 60) // Apple's minimum interval
+            // Free plan: the interval is the auto-end window; its end lifts the prayer shield (ZadXMonitor).
+            let minutes = SharedStore.prayerIntervalMinutes(autoEnd: SharedStore.prayerAutoEndMinutes)
+            let end = start.addingTimeInterval(TimeInterval(minutes * 60))
             let schedule = DeviceActivitySchedule(
                 intervalStart: cal.dateComponents([.year, .month, .day, .hour, .minute], from: start),
                 intervalEnd: cal.dateComponents([.year, .month, .day, .hour, .minute], from: end),

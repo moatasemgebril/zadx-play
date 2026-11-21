@@ -11,7 +11,7 @@ import android.os.Build
 class PrayerLockReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        LockStore.setPrayerLock(context, true)
+        LockStore.setPrayerLock(context, true, fresh = true)
         AppLockChannel.emit(mapOf("type" to "prayer_lock"))
     }
 

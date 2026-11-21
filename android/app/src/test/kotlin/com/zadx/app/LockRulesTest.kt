@@ -101,3 +101,70 @@ class LockRulesTest {
         assertFalse(LockRules.isControlled("com.android.settings", own, LockRules.MODE_ALL_APPS, emptySet(), emptySet(), emptySet()))
     }
 }
+
+/** Free plan: the prayer lock ends by itself, on a clock the child cannot change. */
+class PrayerAutoEndTest {
+    private val window = 20 * 60_000L
+    private val min = 60_000L
+
+    private fun remaining(nowElapsed: Long, nowWall: Long, boot: Int = 1, lastRemaining: Long = 0) =
+        LockRules.prayerRemainingMs(
+            windowMs = window, startElapsed = 1_000_000L, anchorBoot = 1, startWallMs = 5_000_000_000L,
+            lastRemainingMs = lastRemaining, nowElapsed = nowElapsed, nowWallMs = nowWall, boot = boot,
+        )
+
+    @Test
+    fun endsAfterTheWindowOnElapsedTime() {
+        assertEquals(window - 5 * min, remaining(1_000_000L + 5 * min, 5_000_000_000L + 5 * min))
+        assertEquals(0L, remaining(1_000_000L + 21 * min, 5_000_000_000L))
+    }
+
+    @Test
+    fun movingTheWallClockDoesNotChangeItOnTheSameBoot() {
+        // Child moves the clock 3 hours forward after 2 minutes: 18 minutes still left.
+        assertEquals(window - 2 * min, remaining(1_000_000L + 2 * min, 5_000_000_000L + 180 * min))
+    }
+
+    @Test
+    fun afterRebootFallsBackToWallClockButNeverShortens() {
+        // Rebooted with 15 minutes left, then the clock moved 3 hours forward: still 15 minutes.
+        assertEquals(15 * min, remaining(10_000L, 5_000_000_000L + 180 * min, boot = 2, lastRemaining = 15 * min))
+        // Honest clock after reboot: wall time says 12 minutes left (more than the last seen 10).
+        assertEquals(12 * min, remaining(10_000L, 5_000_000_000L + 8 * min, boot = 2, lastRemaining = 10 * min))
+        // Clock moved back a day: capped at one window.
+        assertEquals(window, remaining(10_000L, 5_000_000_000L - 24 * 60 * min, boot = 2, lastRemaining = 10 * min))
+        val start = LockRules.reanchorStart(window, 15 * min, 10_000L)
+        assertEquals(15 * min, window - (10_000L - start))
+    }
+
+    @Test
+    fun paidPlansNeverAutoEnd() {
+        assertEquals(
+            Long.MAX_VALUE,
+            LockRules.prayerRemainingMs(0, 0, 1, 0, 0, Long.MAX_VALUE / 2, Long.MAX_VALUE / 2, 1),
+        )
+    }
+
+    @Test
+    fun anchorActions() {
+        assertEquals(LockRules.PrayerAnchor.ANCHOR, LockRules.prayerAnchorAction(false, null, 100L, null))
+        assertEquals(LockRules.PrayerAnchor.KEEP, LockRules.prayerAnchorAction(true, null, 100L, null))
+        assertEquals(LockRules.PrayerAnchor.KEEP, LockRules.prayerAnchorAction(true, 100L, 100L, null))
+        assertEquals(LockRules.PrayerAnchor.ANCHOR, LockRules.prayerAnchorAction(true, 100L, 900L, null))
+        assertEquals(LockRules.PrayerAnchor.IGNORE, LockRules.prayerAnchorAction(false, null, 100L, 100L))
+    }
+
+    @Test
+    fun blockingAfterAutoEnd() {
+        // Locked only for prayer and it auto-ended: open (minutes left).
+        assertFalse(LockRules.shouldBlock(true, "prayer", true, 30, prayerOver = true))
+        assertTrue(LockRules.shouldBlock(true, "prayer", true, 30, prayerOver = false))
+        // Auto-ended but no minutes left: still blocked.
+        assertTrue(LockRules.shouldBlock(true, "prayer", false, 0, prayerOver = true))
+        // Other reasons are unaffected.
+        assertTrue(LockRules.shouldBlock(true, "requiredTasks", false, 30, prayerOver = true))
+        assertFalse(LockRules.shouldBlock(false, "none", false, 30, prayerOver = false))
+        // Native alarm fired while Flutter said unlocked.
+        assertTrue(LockRules.shouldBlock(false, "none", true, 30, prayerOver = false))
+    }
+}

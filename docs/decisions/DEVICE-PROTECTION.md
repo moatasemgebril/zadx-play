@@ -66,3 +66,15 @@ Builds on docs/decisions/DEVICE-WIDE-LOCK.md. Risks: R-04, R-39, R-42..R-45 in s
 - Alert when the default launcher or enabled accessibility services change (R-37).
 - Parent onboarding step for Google Family Link / Apple Family Sharing (strongest OS-level protection).
 - Real-device matrix (STORE_CHECKLIST) incl. OEM Settings package names.
+
+## Free plan: prayer lock ends on its own natively (coordinator task, 2026-11-21)
+- Flutter sends `prayerAutoEndMinutes` (Free = the free prayer window, paid = 0) and `prayerLockSinceMs` in the policy.
+- **Android** (`LockRules.prayerRemainingMs`, `prayerAnchorAction`, `shouldBlock`; JUnit `PrayerAutoEndTest`):
+  the timer is anchored to `SystemClock.elapsedRealtime()` when the lock starts (adhan alarm, or the first policy
+  for a new lock; `prayerLockSinceMs` only identifies the lock, it is never used for timing). After a reboot it
+  falls back to the wall clock but never below the remaining time last seen before the reboot, and never above one
+  window. A late policy for a lock that already ended natively is ignored.
+- **iOS**: the prayer DeviceActivity interval is scheduled `max(15, prayerAutoEndMinutes)` long; `intervalDidEnd`
+  in ZadXMonitor lifts the prayer shield (keeps it if no minutes are left) and restarts the daily budget monitor.
+  iOS runs the schedule; with device protection on, `requireAutomaticDateAndTime` stops the child moving the clock.
+  Without protection, a clock change could shift the schedule (documented residual).

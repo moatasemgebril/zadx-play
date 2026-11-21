@@ -24,6 +24,7 @@ object LockStore {
         mode: String = LockRules.MODE_SELECTED_GAMES,
         allowedPackages: List<String> = emptyList(),
         allowMessaging: Boolean = true,
+        prayerAutoEndMinutes: Int = 0,
     ) {
         prefs(ctx).edit()
             .putBoolean("locked", locked)
@@ -33,6 +34,7 @@ object LockStore {
             .putString("mode", mode)
             .putStringSet("allowed", allowedPackages.toSet())
             .putBoolean("allowMessaging", allowMessaging)
+            .putInt("prayerAutoEnd", prayerAutoEndMinutes.coerceIn(0, 24 * 60))
             .apply()
         AllowedApps.invalidate()
     }
@@ -64,17 +66,99 @@ object LockStore {
     /** True when a controlled app must be blocked right now. */
     fun shouldBlock(ctx: Context): Boolean {
         val p = prefs(ctx)
-        return p.getBoolean("locked", true) || p.getBoolean("prayerLock", false) || p.getInt("remaining", 0) <= 0
+        return LockRules.shouldBlock(
+            locked = p.getBoolean("locked", true),
+            reason = p.getString("reason", "requiredTasks")!!,
+            prayerLock = p.getBoolean("prayerLock", false),
+            remainingMinutes = p.getInt("remaining", 0),
+            prayerOver = prayerOver(ctx),
+        )
     }
 
     fun reason(ctx: Context): String {
         val p = prefs(ctx)
-        return if (p.getBoolean("prayerLock", false)) "prayer" else p.getString("reason", "requiredTasks")!!
+        val stored = p.getString("reason", "requiredTasks")!!
+        val prayerActive = (p.getBoolean("prayerLock", false) || stored == "prayer") && !prayerOver(ctx)
+        return when {
+            prayerActive -> "prayer"
+            stored == "prayer" -> "noTime" // prayer auto-ended; still blocked only because no minutes are left
+            else -> stored
+        }
     }
 
-    /** Set by PrayerLockReceiver at adhan time; cleared when Flutter sends a new policy. */
-    fun setPrayerLock(ctx: Context, on: Boolean) {
-        prefs(ctx).edit().putBoolean("prayerLock", on).apply()
+    /**
+     * Prayer lock on/off. [fresh] = a new adhan (PrayerLockReceiver): always re-anchor the auto-end
+     * timer. From Flutter ([sinceMs] = the lock start it recorded) see [LockRules.prayerAnchorAction].
+     */
+    fun setPrayerLock(ctx: Context, on: Boolean, fresh: Boolean = false, sinceMs: Long? = null) {
+        val p = prefs(ctx)
+        val e = p.edit()
+        if (!on) {
+            e.putBoolean("prayerLock", false).remove("pStartElapsed").remove("pBoot").remove("pStartWall")
+                .remove("pLastRemaining").remove("pSince")
+            e.apply()
+            return
+        }
+        val action = if (fresh) LockRules.PrayerAnchor.ANCHOR else LockRules.prayerAnchorAction(
+            hasAnchor = p.contains("pStartElapsed"),
+            anchorSinceMs = if (p.contains("pSince")) p.getLong("pSince", 0) else null,
+            policySinceMs = sinceMs,
+            endedSinceMs = if (p.contains("pEndedSince")) p.getLong("pEndedSince", 0) else null,
+        )
+        when (action) {
+            LockRules.PrayerAnchor.IGNORE -> return // this lock already ended on its own
+            LockRules.PrayerAnchor.ANCHOR -> {
+                e.putLong("pStartElapsed", SystemClock.elapsedRealtime())
+                    .putInt("pBoot", bootCount(ctx))
+                    .putLong("pStartWall", System.currentTimeMillis())
+                    .remove("pLastRemaining")
+                    .remove("pEnded")
+                if (sinceMs != null) e.putLong("pSince", sinceMs) else e.remove("pSince")
+            }
+            LockRules.PrayerAnchor.KEEP -> if (sinceMs != null && !p.contains("pSince")) e.putLong("pSince", sinceMs)
+        }
+        e.putBoolean("prayerLock", true).apply()
+    }
+
+    /**
+     * Free plan: true once the prayer lock has run for `prayerAutoEnd` minutes (elapsed time; see
+     * [LockRules.prayerRemainingMs]). Clears the native prayer lock when it ends.
+     */
+    @Synchronized
+    fun prayerOver(ctx: Context): Boolean {
+        val p = prefs(ctx)
+        val windowMs = p.getInt("prayerAutoEnd", 0) * 60_000L
+        if (windowMs <= 0) return false
+        // Ended on its own earlier; a late Flutter policy for the same lock must not re-block.
+        if (!p.contains("pStartElapsed")) return p.getBoolean("pEnded", false)
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val boot = bootCount(ctx)
+        val remaining = LockRules.prayerRemainingMs(
+            windowMs = windowMs,
+            startElapsed = p.getLong("pStartElapsed", nowElapsed),
+            anchorBoot = p.getInt("pBoot", boot),
+            startWallMs = p.getLong("pStartWall", System.currentTimeMillis()),
+            lastRemainingMs = p.getLong("pLastRemaining", 0L),
+            nowElapsed = nowElapsed,
+            nowWallMs = System.currentTimeMillis(),
+            boot = boot,
+        )
+        if (remaining <= 0) {
+            val since = if (p.contains("pSince")) p.getLong("pSince", 0) else null
+            setPrayerLock(ctx, false)
+            val done = p.edit().putBoolean("pEnded", true)
+            if (since != null) done.putLong("pEndedSince", since)
+            done.apply()
+            return true
+        }
+        val e = p.edit()
+        if (p.getInt("pBoot", boot) != boot) {
+            // Rebooted: continue on the new boot's elapsed clock from what is left.
+            e.putLong("pStartElapsed", LockRules.reanchorStart(windowMs, remaining, nowElapsed)).putInt("pBoot", boot)
+        }
+        if (kotlin.math.abs(p.getLong("pLastRemaining", -1L) - remaining) >= 30_000L) e.putLong("pLastRemaining", remaining)
+        e.apply()
+        return false
     }
 
     fun isPrayerLocked(ctx: Context): Boolean = prefs(ctx).getBoolean("prayerLock", false)

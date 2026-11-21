@@ -41,6 +41,7 @@ class LockPolicy {
     this.allowedPackages = const [],
     this.allowMessaging = true,
     this.prayerAutoEndMinutes = 0,
+    this.prayerLockSinceMs,
   });
 
   final bool locked;
@@ -64,6 +65,10 @@ class LockPolicy {
   /// started. 0 = it ends only when a parent approves "I prayed" (paid plans).
   final int prayerAutoEndMinutes;
 
+  /// When the current prayer lock started (UTC ms), only while [reason] is `prayer`. Native code uses
+  /// it to recognise the same lock; the auto-end timer itself runs on elapsed time since boot.
+  final int? prayerLockSinceMs;
+
   Map<String, Object?> toMap() => {
         'locked': locked,
         'reason': reason,
@@ -73,6 +78,7 @@ class LockPolicy {
         'allowedPackages': allowedPackages,
         'allowMessaging': allowMessaging,
         'prayerAutoEndMinutes': prayerAutoEndMinutes,
+        'prayerLockSinceMs': prayerLockSinceMs,
       };
 
   @override
@@ -84,11 +90,12 @@ class LockPolicy {
       other.mode == mode &&
       other.allowMessaging == allowMessaging &&
       other.prayerAutoEndMinutes == prayerAutoEndMinutes &&
+      other.prayerLockSinceMs == prayerLockSinceMs &&
       listEquals(other.androidPackages, androidPackages) &&
       listEquals(other.allowedPackages, allowedPackages);
 
   @override
-  int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes,
+  int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes, prayerLockSinceMs,
       Object.hashAll(androidPackages), Object.hashAll(allowedPackages));
 }
 
@@ -275,6 +282,7 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
     remainingMinutes: state.remainingMinutes,
     settings: settings,
     prayerAutoEndMinutes: tasksEnabled ? 0 : freePrayerLockWindow.inMinutes,
+    prayerLockSinceMs: state.reason == 'prayer' ? wallet.prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
   );
 });
 
@@ -285,6 +293,7 @@ LockPolicy lockPolicyFrom({
   required int remainingMinutes,
   required AppSettings settings,
   int prayerAutoEndMinutes = 0,
+  int? prayerLockSinceMs,
 }) {
   final packages = controlledGames
       .where((g) => settings.controlledGameIds.contains(g.id))
@@ -300,6 +309,7 @@ LockPolicy lockPolicyFrom({
     allowedPackages: settings.allowedApps.toList()..sort(),
     allowMessaging: settings.allowMessaging,
     prayerAutoEndMinutes: prayerAutoEndMinutes,
+    prayerLockSinceMs: prayerLockSinceMs,
   );
 }
 

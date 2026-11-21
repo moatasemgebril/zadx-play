@@ -148,4 +148,62 @@ object LockRules {
         if (pkg in ALWAYS_ALLOWED || pkg in systemAllowed) return false
         return pkg !in parentAllowed
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Free plan: the prayer lock ends by itself `prayerAutoEndMinutes` after it started
+    // (plans-lock-integration). Measured with elapsed time since boot, which the child cannot change.
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Milliseconds left in an auto-ending prayer lock.
+     *
+     * Same boot: `window - (nowElapsed - startElapsed)`. After a reboot elapsed time restarts, so we
+     * fall back to the wall clock but never below [lastRemainingMs] (the remaining time last seen
+     * before the reboot): moving the clock forward cannot shorten the lock, moving it back can only
+     * lengthen it up to one window. Result is always within `0..windowMs`.
+     */
+    fun prayerRemainingMs(
+        windowMs: Long,
+        startElapsed: Long,
+        anchorBoot: Int,
+        startWallMs: Long,
+        lastRemainingMs: Long,
+        nowElapsed: Long,
+        nowWallMs: Long,
+        boot: Int,
+    ): Long {
+        if (windowMs <= 0) return Long.MAX_VALUE // paid plans: ends only when a parent approves
+        if (boot == anchorBoot && nowElapsed >= startElapsed) {
+            return (windowMs - (nowElapsed - startElapsed)).coerceIn(0, windowMs)
+        }
+        val byWall = (startWallMs + windowMs - nowWallMs).coerceIn(0, windowMs)
+        return maxOf(byWall, lastRemainingMs.coerceIn(0, windowMs))
+    }
+
+    /** Elapsed-time start that leaves [remainingMs] of [windowMs] (used to re-anchor after a reboot). */
+    fun reanchorStart(windowMs: Long, remainingMs: Long, nowElapsed: Long): Long =
+        nowElapsed - (windowMs - remainingMs.coerceIn(0, windowMs))
+
+    enum class PrayerAnchor { KEEP, ANCHOR, IGNORE }
+
+    /**
+     * What a policy with reason "prayer" from Flutter does to the native anchor.
+     * [policySinceMs]: the lock start Flutter recorded (identifies the lock, never used for timing).
+     */
+    fun prayerAnchorAction(hasAnchor: Boolean, anchorSinceMs: Long?, policySinceMs: Long?, endedSinceMs: Long?): PrayerAnchor = when {
+        policySinceMs != null && policySinceMs == endedSinceMs -> PrayerAnchor.IGNORE // already ended natively
+        !hasAnchor -> PrayerAnchor.ANCHOR
+        anchorSinceMs != null && policySinceMs != null && anchorSinceMs != policySinceMs -> PrayerAnchor.ANCHOR // a new prayer
+        else -> PrayerAnchor.KEEP
+    }
+
+    /**
+     * Whether controlled apps are blocked. A Flutter policy that is locked only *because of* prayer
+     * stops blocking once the prayer lock auto-ended natively ([prayerOver]); other reasons still block.
+     */
+    fun shouldBlock(locked: Boolean, reason: String, prayerLock: Boolean, remainingMinutes: Int, prayerOver: Boolean): Boolean {
+        val prayerActive = (prayerLock || reason == "prayer") && !prayerOver
+        val lockedOther = locked && reason != "prayer"
+        return lockedOther || prayerActive || remainingMinutes <= 0
+    }
 }

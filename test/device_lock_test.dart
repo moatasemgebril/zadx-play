@@ -106,6 +106,7 @@ void main() {
         'allowedPackages': ['org.school.classroom'],
         'allowMessaging': false,
         'prayerAutoEndMinutes': 0,
+        'prayerLockSinceMs': null,
       });
     });
 
@@ -253,6 +254,11 @@ void main() {
       expect(lockPolicyFrom(locked: true, reason: 'prayer', remainingMinutes: 0, settings: s).prayerAutoEndMinutes, 0);
       final free = lockPolicyFrom(locked: true, reason: 'prayer', remainingMinutes: 0, settings: s, prayerAutoEndMinutes: 20);
       expect(free.toMap()['prayerAutoEndMinutes'], 20);
+      // The lock start identifies the lock for the native auto-end timer.
+      final since = lockPolicyFrom(
+          locked: true, reason: 'prayer', remainingMinutes: 0, settings: s, prayerAutoEndMinutes: 20, prayerLockSinceMs: 1234);
+      expect(since.toMap()['prayerLockSinceMs'], 1234);
+      expect(since == free, isFalse);
     });
 
     test('tasks are enabled by the plan: Free no, Basic/Plus/trial yes', () {
