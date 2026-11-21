@@ -118,3 +118,7 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - [x] Audio plays on iPhone Safari (PR #17) — owner confirmed it works.
 - [ ] On web, switching reciter restarts the surah from ayah 1 instead of the current ayah (initialIndex / currentIndex on just_audio web). Fix and add a test (P2).
 - [ ] Adhan audio files still missing (assets/audio/adhan_*.mp3) — blocked on recordings licence.
+
+## Owner request 2026-11-21: adhkar read aloud by a sheikh (P1, Approvals & Licensing)
+- No freely-licensed adhkar audio found yet. Contact the official Hisn al-Muslim site (binwahaf.com, the late Sheikh Saeed bin Wahf al-Qahtani) for permission to use its audio in a paid kids app; find the official contact on the site itself. Alternatives: a recognised Islamic institution with recordings, or a local imam/sheikh recording the adhkar for us with written permission (owner then owns the recordings).
+- When licensed: per-dhikr audio in adhkar_view with a play button, attribution, offline bundling.
