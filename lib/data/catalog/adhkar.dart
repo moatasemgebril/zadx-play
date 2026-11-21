@@ -9,8 +9,21 @@ class Dhikr {
   final String id;
   final String text; // Arabic text, recited in Arabic in every language
   final int times;
-  final String source;
+  final String source; // Arabic name of the hadith collection
+
+  /// The source in the reader's language (English names for non-Arabic UIs).
+  String sourceOf(String lang) => lang == 'ar' ? source : (dhikrSourcesEn[source] ?? source);
 }
+
+/// English names of the hadith collections used in [Dhikr.source].
+const dhikrSourcesEn = <String, String>{
+  'مسلم': 'Muslim',
+  'البخاري': 'Al-Bukhari',
+  'الترمذي': 'At-Tirmidhi',
+  'أبو داود': 'Abu Dawud',
+  'أبو داود والترمذي': 'Abu Dawud and At-Tirmidhi',
+  'الطبراني': 'At-Tabarani',
+};
 
 /// Morning/evening adhkar and salawat, from Hisn al-Muslim (Sa'id al-Qahtani).
 ///
