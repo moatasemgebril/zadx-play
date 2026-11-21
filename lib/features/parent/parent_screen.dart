@@ -81,6 +81,15 @@ class _PlanCard extends ConsumerWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(l10n.yourPlan, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
             Text(l10n.currentPlan(planName), style: const TextStyle(color: Colors.white, fontSize: 15)),
+            // Remaining trial days are shown here, in the PIN-protected parent area only.
+            if (ent.inTrial && ent.trialDaysLeft != null) ...[
+              Text(
+                l10n.trialDaysLeft(ent.trialDaysLeft!, Fmt.digits(ent.trialDaysLeft!, context.lang)),
+                key: const Key('trialDaysLeft'),
+                style: const TextStyle(color: AppColors.yellow, fontSize: 15, fontWeight: FontWeight.w800),
+              ),
+              Text(l10n.trialEndsNote, style: const TextStyle(color: Colors.white, fontSize: 14)),
+            ],
           ]),
         ),
         FilledButton(

@@ -125,9 +125,19 @@ Blocking every process except an allow-list on a PC is **too risky**: Windows ru
 ### Plans without tasks (Free)
 Free families have no tasks/earned minutes, so the task rule would keep a Free child locked all day.
 `lockStateFor(tasksEnabled: false, …)` uses only the **prayer lock + a parent-set daily limit**
-(`dailyLimitMinutes`, default 60; chips 30–180 on the parent screen). `lockTasksEnabledProvider`
-defaults to `true`; the plans PR (#22) wires it to the entitlement without this branch touching `plan.dart`.
-Open point for that PR: how the prayer lock ends on Free (there is no "I prayed" task to approve).
+(`dailyLimitMinutes`, default 60; chips 30–180 on the parent screen).
+`lockTasksEnabledProvider` = `hasFeature(plan, tasksRewards)` (Basic, Plus and the 7-day trial: true; Free: false).
+
+How the prayer lock ends on Free (owner decision 2026-11-21): there is no "I prayed" task to approve, so the
+lock **ends by itself 20 minutes after it started** (`freePrayerLockWindow` =
+`AppConfig.playWindowAfterPrayerMinutes`). The start time is kept in the wallet (`prayerLockSince`, synced as
+`prayerLockSinceMs`); a lock saved without a start time counts from when the app reads it, so it always ends
+after at most one window. Paid plans keep the current rule (parent approves "I prayed").
+`LockPolicy.prayerAutoEndMinutes` (20 on Free, 0 on paid) is sent to native code so the Android/iOS blockers
+can end the lock without Zad X running (native follow-up, other branch). Until then, the lock ends when Zad X
+next runs (the child can always open Zad X).
+Residual: on Free a child who moves the device clock forward ends the 20-minute lock early (Dart has no
+monotonic clock across restarts; native can use `elapsedRealtime`).
 
 ## 8. Islamic-content priority
 Device-wide locking supports the product's core value (prayer before play) more faithfully: at adhan time every distraction is locked, not only known games. Zad X's Quran, adhkar and prayer sections remain open because Zad X is always allowed; parents can also allow a trusted Quran app. No religious text is added or changed by this work.

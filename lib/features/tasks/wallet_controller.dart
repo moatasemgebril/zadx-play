@@ -25,6 +25,7 @@ class WalletState {
     this.usedMinutes = 0,
     this.prayerLock = false,
     this.lockedPrayer,
+    this.prayerLockSince,
   });
 
   final String day;
@@ -33,6 +34,14 @@ class WalletState {
   final int usedMinutes;
   final bool prayerLock;
   final Prayer? lockedPrayer;
+
+  /// When the current prayer lock started (UTC). Plans without tasks (Free) end the lock
+  /// automatically after the prayer window (see `lockStateFor`).
+  final DateTime? prayerLockSince;
+
+  /// True when a Free-plan prayer lock that started at [prayerLockSince] is over at [now].
+  bool prayerWindowOver(DateTime now, Duration window) =>
+      prayerLock && prayerLockSince != null && !now.toUtc().isBefore(prayerLockSince!.toUtc().add(window));
 
   TaskProgress progressOf(String id) => progress[id] ?? const TaskProgress();
 
@@ -68,6 +77,7 @@ class WalletState {
     bool? prayerLock,
     Prayer? lockedPrayer,
     bool clearLockedPrayer = false,
+    DateTime? prayerLockSince,
   }) =>
       WalletState(
         day: day ?? this.day,
@@ -76,6 +86,7 @@ class WalletState {
         usedMinutes: usedMinutes ?? this.usedMinutes,
         prayerLock: prayerLock ?? this.prayerLock,
         lockedPrayer: clearLockedPrayer ? null : (lockedPrayer ?? this.lockedPrayer),
+        prayerLockSince: clearLockedPrayer ? null : (prayerLockSince ?? this.prayerLockSince),
       );
 
   FamilyDay toFamilyDay() => FamilyDay(
@@ -85,6 +96,7 @@ class WalletState {
         prayerLock: prayerLock,
         earnedMinutes: earnedMinutes,
         requiredDone: requiredDone,
+        prayerLockSinceMs: prayerLock ? prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
       );
 }
 
@@ -201,8 +213,22 @@ class WalletController extends Notifier<WalletState> {
     final prayerTask = state.tasks.where((t) => t.kind == TaskKind.prayer).firstOrNull;
     final progress = {...state.progress};
     if (prayerTask != null) progress[prayerTask.id] = const TaskProgress();
-    _update(state.copyWith(prayerLock: true, lockedPrayer: prayer, progress: progress));
+    _update(state.copyWith(
+      prayerLock: true,
+      lockedPrayer: prayer,
+      progress: progress,
+      prayerLockSince: DateTime.now().toUtc(),
+    ));
     _repo.notifyParent(_childId, 'adhan', data: {'prayer': prayer.name});
+  }
+
+  /// Plans without tasks (Free): there is no "I prayed" approval, so the prayer lock ends by
+  /// itself once the prayer window ([window], measured from the lock start) is over.
+  /// Returns true when the lock was ended.
+  bool endPrayerLockIfOver(DateTime now, Duration window) {
+    if (!state.prayerWindowOver(now, window)) return false;
+    _update(state.copyWith(prayerLock: false, clearLockedPrayer: true));
+    return true;
   }
 
   // ---- internals ------------------------------------------------------------
@@ -225,6 +251,8 @@ class WalletController extends Notifier<WalletState> {
       progress: remote.progress.map((k, v) => MapEntry(k, TaskProgress.fromJson(v))),
       usedMinutes: remote.usedMinutes,
       prayerLock: remote.prayerLock,
+      clearLockedPrayer: !remote.prayerLock,
+      prayerLockSince: remote.prayerLock ? _sinceOrNow(remote.prayerLockSinceMs, state.prayerLockSince) : null,
     );
     _persist(state);
   }
@@ -247,12 +275,18 @@ class WalletController extends Notifier<WalletState> {
           progress: day.progress.map((k, v) => MapEntry(k, TaskProgress.fromJson(v))),
           usedMinutes: day.usedMinutes,
           prayerLock: day.prayerLock,
+          prayerLockSince: day.prayerLock ? _sinceOrNow(day.prayerLockSinceMs, null) : null,
         );
       }
     }
     // New day: everything resets, task definitions stay.
     return WalletState(day: today, tasks: tasks, progress: const {});
   }
+
+  /// A prayer lock saved without a start time (older version or another device) counts from
+  /// now, so a Free lock always ends after at most one prayer window.
+  static DateTime _sinceOrNow(int? ms, DateTime? fallback) =>
+      ms != null ? DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true) : (fallback ?? DateTime.now().toUtc());
 
   void _persist(WalletState s) {
     final prefs = ref.read(sharedPrefsProvider);

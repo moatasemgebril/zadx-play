@@ -5,8 +5,18 @@ import 'package:zadx/data/models/plan.dart';
 
 void main() {
   group('Feature matrix', () {
-    test('Free has exactly app lock, prayer times, adhan and Quran', () {
-      expect(featuresOf(null), {AppFeature.appLock, AppFeature.prayerTimes, AppFeature.adhan, AppFeature.quran});
+    test('Free has exactly app lock, prayer times, adhan, Quran and adhkar', () {
+      expect(featuresOf(null), {
+        AppFeature.appLock,
+        AppFeature.prayerTimes,
+        AppFeature.adhan,
+        AppFeature.quran,
+        AppFeature.adhkar,
+      });
+    });
+
+    test('adhkar is free (owner decision 2026-11-21)', () {
+      expect(hasFeature(const Entitlement(), AppFeature.adhkar), isTrue);
     });
 
     test('Free ⊂ Basic ⊂ Plus, and Plus has every feature', () {
@@ -22,7 +32,6 @@ void main() {
         AppFeature.games,
         AppFeature.eduGames,
         AppFeature.exercises,
-        AppFeature.adhkar,
         AppFeature.customUnlockTasks,
         AppFeature.multipleChildren,
         AppFeature.assistant,

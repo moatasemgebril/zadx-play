@@ -110,9 +110,8 @@ class EntitlementCache {
   }
 }
 
-/// Not wired into `entitlementProvider` yet (see BACKLOG.md "Offline-first"):
-/// the provider still defaults to a Plus trial (risk R-16), which is a product
-/// decision to settle first.
+/// Wired into `planEntitlementProvider` (subscription_service.dart). The never-ending client
+/// trial (R-16) is replaced by the 7-day on-device trial in trial_clock.dart.
 final entitlementCacheProvider = Provider<EntitlementCache>(
   (ref) => EntitlementCache(ref.watch(sharedPrefsProvider)),
 );

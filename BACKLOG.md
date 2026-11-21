@@ -95,11 +95,14 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 ### 9. Free plan: lock + Quran + adhan free forever (owner request 2026-11-21) — PR feat/free-plan
 - [x] Feature matrix in one place (`AppFeature` / `hasFeature`, server mirror `PLAN_FEATURES`), Free card "مجاني للأبد"
   on the plans screen, paid screens gated with a kid-safe "ask a parent" card behind the parent PIN.
-- [ ] feat/device-wide-lock: for Free, `lockPolicyProvider` must lock on prayer times + a daily time limit only
-  (Free has no tasks, so "required tasks" / earned minutes must not keep the device locked all day). Add the
-  daily-limit setting for 1 child.
-- [ ] Owner decision: should adhkar be free too? (today: paid, Basic+.)
-- [ ] Decide what replaces the client default "Plus trial" (R-16) so Free is reachable after the trial.
+- [x] Free locks on prayer times + a daily time limit only (`lockTasksEnabledProvider` = `hasFeature(tasksRewards)`);
+  on Free the prayer lock ends by itself 20 min after it started (feat/plans-lock-integration).
+- [x] Owner decision 2026-11-21: adhkar is free (app + backend `PLAN_FEATURES`).
+- [x] R-16 replaced: 7-day Plus trial from first launch, stored on device with a high-water clock
+  (`TrialClock`), then Free; remaining days shown in the parent area only.
+- [x] Parent PIN session re-locks after 2 min idle and when the app goes to the background / screen off.
+- [ ] Native (other branch): honour `LockPolicy.prayerAutoEndMinutes` so a Free prayer lock ends without Zad X running.
+- [ ] Server-side trial per family (a reinstall / clear-data restarts the on-device trial).
 
 ## Done
 

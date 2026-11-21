@@ -8,10 +8,10 @@ import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../settings/settings_controller.dart';
+import 'parent_session.dart';
 import 'pin_security.dart';
 
-/// True after the parent entered the PIN in this app session.
-final parentUnlockedProvider = StateProvider<bool>((_) => false);
+export 'parent_session.dart' show parentUnlockedProvider;
 
 /// Salted PBKDF2 hash for storing a new parent PIN (see [PinSecurity]).
 String hashPin(String pin) => PinSecurity.hashPin(pin);
@@ -95,12 +95,21 @@ class _ParentGateState extends ConsumerState<ParentGate> {
     final prefs = ref.read(sharedPrefsProvider);
     prefs.remove(_failuresKey);
     prefs.remove(_lockedUntilKey);
-    ref.read(parentUnlockedProvider.notifier).state = true;
+    _ctrl.clear();
+    ref.read(parentUnlockedProvider.notifier).unlock();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (ref.watch(parentUnlockedProvider)) return widget.child;
+    if (ref.watch(parentUnlockedProvider)) {
+      // Every touch in the parent area restarts the 2-minute idle timer.
+      return Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => ref.read(parentUnlockedProvider.notifier).touch(),
+        onPointerSignal: (_) => ref.read(parentUnlockedProvider.notifier).touch(),
+        child: widget.child,
+      );
+    }
     final l10n = context.l10n;
     final lockedFor = _lockSecondsLeft();
 

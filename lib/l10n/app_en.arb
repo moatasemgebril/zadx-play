@@ -9,7 +9,7 @@
   "minutesLeft": "{n} min left",
   "greet": "Assalamu alaikum, champ!",
   "homeHeroSub": "Let's start the day with prayer and tasks",
-  "promoBanner": "Launch offer: try Zad X Plus free for 14 days",
+  "promoBanner": "For parents: see the Zad X plans",
   "prayerToday": "Today's prayer times",
   "change": "Change",
   "nextPrayer": "Next prayer: {name} at {time}",
@@ -53,7 +53,7 @@
   "ayatCount": "{n} verses",
   "playSurah": "Play {name}",
   "tasks": "Tasks",
-  "tasksNote": "Must-do tasks unlock games; bonus tasks add time.",
+  "tasksNote": "Must-do tasks unlock your screen time; bonus tasks add more.",
   "mustDo": "Must-do",
   "bonus": "Bonus",
   "doneBtn": "Done",
@@ -61,7 +61,7 @@
   "completed": "Completed",
   "minsPlus": "+{n} min",
   "exTitle": "Exercise",
-  "exNote": "Each exercise earns play time. Go slowly and rest if you get tired.",
+  "exNote": "Each exercise earns screen time. Go slowly and rest if you get tired.",
   "exReps": "{n} reps",
   "exCount": "{a} of {b}",
   "exPending": "Awaiting approval",
@@ -145,17 +145,17 @@
   "how1T": "Set country & language",
   "how1B": "Tap the globe icon at the top and pick your country and city.",
   "how2T": "Set the tasks",
-  "how2B": "Must-do tasks unlock games; bonus tasks add time.",
+  "how2B": "Must-do tasks unlock screen time; bonus tasks add more minutes.",
   "how3T": "Your child finishes a task",
   "how3B": "They tap \"Done\" and you get it right away.",
   "how4T": "Approve from your phone",
-  "how4B": "Once you approve, minutes are added and games unlock.",
+  "how4B": "Once you approve, the minutes are added and locked apps open for that time.",
   "how5T": "The adhan locks play",
-  "how5B": "At every adhan, games lock until your child prays and you approve.",
-  "faq1Q": "How do games unlock?",
-  "faq1A": "Your child finishes the must-do tasks and a parent approves; games then open for the minutes earned.",
+  "how5B": "At every adhan, apps lock until your child prays and you approve. On the free plan they open again by themselves after the prayer time.",
+  "faq1Q": "How do games and apps unlock?",
+  "faq1A": "Your child finishes the must-do tasks and a parent approves; then locked apps open for the minutes earned. On the free plan, apps stay open up to the daily screen time you set.",
   "faq2Q": "What happens at the adhan?",
-  "faq2A": "The adhan plays and games lock until your child taps \"I prayed\" and a parent approves.",
+  "faq2A": "The adhan plays and apps lock until your child taps \"I prayed\" and a parent approves. On the free plan they open again by themselves after the prayer time.",
   "faq3Q": "How do I change my country or prayer times?",
   "faq3A": "Tap the globe icon at the top and pick your country and city; the method is set automatically.",
   "faq4Q": "Does Zad X control PlayStation?",
@@ -173,9 +173,8 @@
   "perMonth": "/ month",
   "perYear": "/ year",
   "yearEq": "Just {price} a month",
-  "startTrial": "Start 14-day free trial",
   "launchOffers": "Launch offers",
-  "offer1": "14-day free trial on both plans",
+  "offer1": "Zad X Plus is free for 7 days from the first launch",
   "offer2": "Discounted first year of Plus",
   "offer3": "Ramadan: a free month with any yearly plan",
   "inviteTitle": "Invite friends, earn free months",
@@ -195,14 +194,13 @@
   "featTasks": "Tasks & rewards wallet",
   "featPrayer": "Prayer times & adhan (all voices)",
   "featQuran": "Quran (approved reciters)",
-  "featGames": "Controlled games",
+  "featGames": "Screen time unlocked by tasks",
   "featPs": "PlayStation & Microsoft family links",
   "featAi": "AI assistant",
   "featKids": "Children",
   "featReport": "Weekly parent report",
   "limited": "Limited",
   "unlimited": "Unlimited",
-  "gamesN": "{n} games",
   "toastSent": "Sent for approval: {x}",
   "toastApproved": "Approved: {x}",
   "toastRejected": "Rejected: {x}",
@@ -307,7 +305,7 @@
   "featEduGames": "Zad X learning games",
   "featExercises": "Exercises",
   "featAdhkar": "Adhkar",
-  "featCustomTasks": "Custom tasks that unlock games",
+  "featCustomTasks": "Custom tasks that unlock screen time",
   "freeName": "Free",
   "freeForever": "Free forever",
   "freeNote": "No sign-in or payment needed",
@@ -335,8 +333,8 @@
       }
     }
   },
-  "deviceLockIosNote": "On iPhone: add Zad X and school apps to the allowed apps. Play time is counted on the apps you chose under \"games\".",
-  "deviceLockMinutesNote": "Earned play minutes are used in any app that is not allowed.",
+  "deviceLockIosNote": "On iPhone: add Zad X and school apps to the allowed apps. Screen time is counted on the apps you chose under \"games\".",
+  "deviceLockMinutesNote": "Earned minutes are screen time: they count down in any app that is not allowed.",
   "deviceLockPcBrowsers": "On the PC: allow browsers (homework)",
   "deviceLockNoApps": "No apps to show here.",
   "deviceLockDone": "Done",
@@ -347,6 +345,28 @@
   "deviceLockDailyLimit": "Daily screen time (free plan)",
   "deviceLockMinutes": "{n} min",
   "@deviceLockMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "subscribeNow": "Subscribe",
+  "trialDaysLeft": "{count, plural, =1{Plus free trial: 1 day left} other{Plus free trial: {days} days left}}",
+  "@trialDaysLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "trialEndsNote": "After the trial you keep the free plan unless you subscribe.",
+  "deviceLockDescFree": "All games and apps (like Facebook, YouTube and the browser) lock at every prayer time and when the daily screen time runs out, except the allowed apps.",
+  "deviceLockFreePrayerNote": "At every adhan the device locks for {n} minutes for prayer, then opens again by itself.",
+  "@deviceLockFreePrayerNote": {
     "placeholders": {
       "n": {
         "type": "String"
