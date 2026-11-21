@@ -225,6 +225,11 @@ class _AdhanCard extends ConsumerWidget {
             ref.read(playerProvider.notifier).onMuezzinChanged();
           },
         ),
+        if (resolveMuezzin(s.muezzinId).credit case final credit?)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('🎙 $credit', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+          ),
         const SizedBox(height: 12),
         if (!playing)
           FilledButton.icon(

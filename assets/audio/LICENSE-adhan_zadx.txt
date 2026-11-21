@@ -1,7 +1,0 @@
-adhan_zadx.mp3 and android/app/src/main/res/raw/adhan_short.mp3
-Source: "Beautiful adhan.ogg", Wikimedia Commons
-https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
-Author: Adam-synagda (own work), 29 April 2022
-Licence: Creative Commons CC0 1.0 Universal (public domain dedication) - no attribution required.
-Changes: converted to MP3, loudness-normalised; short version trimmed to 28 s with fade-out.
-Before store release: the Approvals & Licensing Officer double-checks the uploader's "own work" claim.
