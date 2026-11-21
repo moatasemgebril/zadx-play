@@ -111,7 +111,13 @@ jobs:
         run: flutter build apk --debug
       - name: Build web (parent dashboard) – not on PRs, to save minutes
         if: github.event_name != 'pull_request'
-        run: flutter build web --release
+        run: flutter build web --release --base-href /zadx-play/
+      - name: Upload web build for the iPhone/browser test preview
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: zadx-android-apk
@@ -277,3 +283,21 @@ jobs:
             For the owner and testers only. Debug build: not signed for the Play Store.
             Install on Android: open the link on the phone, download, then allow "Install unknown apps" for your browser.
           files: zadx-play-test.apk
+
+  # Owner test preview for iPhone / any browser (GitHub Pages, free on public repos):
+  # https://moatasemgebril.github.io/zadx-play/
+  deploy-web-preview:
+    needs: [flutter]
+    if: >-
+      always() && needs.flutter.result == 'success' &&
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
