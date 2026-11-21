@@ -215,10 +215,10 @@ class _AdhanCard extends ConsumerWidget {
         ]),
         const SizedBox(height: 12),
         ChoiceGrid(
-          items: muezzins.map((m) => m.id).toList(),
-          selected: s.muezzinId,
+          items: availableMuezzins().map((m) => m.id).toList(),
+          selected: resolveMuezzin(s.muezzinId).id,
           columns: 2,
-          label: (id) => muezzins.firstWhere((m) => m.id == id).name.of(lang),
+          label: (id) => availableMuezzins().firstWhere((m) => m.id == id).name.of(lang),
           onSelected: (id) {
             ref.read(settingsProvider.notifier).setMuezzin(id);
             // If the adhan is playing, restart it right away with the new voice.

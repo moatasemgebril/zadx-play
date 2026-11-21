@@ -19,12 +19,28 @@ const adhanPhrases = <String>[
   'لا إله إلا الله',
 ];
 
+/// Adhan voices. Only voices with `licenceConfirmed: true` AND a bundled file are
+/// offered (see [availableMuezzins]); the others stay hidden until a licensed
+/// recording is added to assets/audio/.
 const muezzins = <Voice>[
+  // CC0 (public domain) recording, Wikimedia Commons "Beautiful adhan.ogg" by
+  // Adam-synagda — see assets/audio/LICENSE-adhan_zadx.txt.
+  Voice(id: 'zadx', name: Localized('أذان زاد', 'Zad X adhan'), source: 'assets/audio/adhan_zadx.mp3', licenceConfirmed: true),
   Voice(id: 'makkah', name: Localized('أذان مكة', 'Makkah adhan'), source: 'assets/audio/adhan_makkah.mp3'),
   Voice(id: 'madinah', name: Localized('أذان المدينة', 'Madinah adhan'), source: 'assets/audio/adhan_madinah.mp3'),
   Voice(id: 'refaat', name: Localized('محمد رفعت', 'Muhammad Refaat'), source: 'assets/audio/adhan_refaat.mp3'),
   Voice(id: 'afasy', name: Localized('مشاري العفاسي', 'Mishary Alafasy'), source: 'assets/audio/adhan_afasy.mp3'),
 ];
+
+/// The adhan voices a screen may offer: licensed ones with a bundled file.
+List<Voice> availableMuezzins({List<Voice> all = muezzins}) =>
+    all.where((m) => m.licenceConfirmed).toList();
+
+/// The adhan voice to play for the saved [id]: that voice if available, else the first.
+Voice resolveMuezzin(String? id, {List<Voice>? available}) {
+  final list = available ?? availableMuezzins();
+  return list.where((m) => m.id == id).firstOrNull ?? list.first;
+}
 
 /// Reciters. [source] is the EveryAyah folder name.
 ///
