@@ -85,7 +85,12 @@ class _SurahList extends ConsumerWidget {
               label: (id) => voices.firstWhere((r) => r.id == id).name.of(lang),
               // Debug builds only: unconfirmed reciters are visible to testers, clearly marked.
               note: (id) => voices.firstWhere((r) => r.id == id).licenceConfirmed ? null : l10n.licencePending,
-              onSelected: ref.read(settingsProvider.notifier).setReciter,
+              onSelected: (id) {
+                if (id == selected.id) return;
+                ref.read(settingsProvider.notifier).setReciter(id);
+                // Switch the recitation right away (no need to press pause first).
+                ref.read(playerProvider.notifier).onReciterChanged();
+              },
             ),
           ]),
         ),
