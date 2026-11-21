@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
@@ -63,9 +65,12 @@ class PlayerController extends Notifier<ZadPlayerState> {
     final voice = muezzins.firstWhere((v) => v.id == id, orElse: () => muezzins.first);
     state = const ZadPlayerState(kind: PlayerKind.adhan, loading: true);
     try {
-      await _player.setAudioSource(AudioSource.asset(voice.source));
+      // iPhone Safari only allows audio that starts inside the tap itself: start
+      // play() right away (it waits for the source) instead of after `await load`.
+      final load = _player.setAudioSource(AudioSource.asset(voice.source));
+      unawaited(_player.play());
+      await load;
       state = const ZadPlayerState(kind: PlayerKind.adhan);
-      await _player.play();
     } catch (e) {
       debugPrint('adhan audio failed: $e');
       state = const ZadPlayerState();
@@ -80,7 +85,7 @@ class PlayerController extends Notifier<ZadPlayerState> {
     if (target == null) return;
     final surah = surahIndex.where((s) => s.number == target.surahNumber).firstOrNull;
     if (surah == null) return;
-    await _player.stop();
+    // No `await stop()` first: on iPhone Safari any await before play() loses the tap.
     await playSurah(surah, startAyahIndex: target.ayahIndex);
   }
 
@@ -88,7 +93,6 @@ class PlayerController extends Notifier<ZadPlayerState> {
   /// restart it immediately with the new voice.
   Future<void> onMuezzinChanged() async {
     if (state.kind != PlayerKind.adhan) return;
-    await _player.stop();
     await playAdhan();
   }
 
@@ -111,9 +115,11 @@ class PlayerController extends Notifier<ZadPlayerState> {
     ]);
     try {
       final start = startAyahIndex.clamp(0, surah.ayahCount - 1);
-      await _player.setAudioSource(playlist, initialIndex: start);
+      // iPhone Safari: call play() in the same tap, before the playlist finishes loading.
+      final load = _player.setAudioSource(playlist, initialIndex: start);
+      unawaited(_player.play());
+      await load;
       state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: surah.number, index: start);
-      await _player.play();
     } catch (e) {
       debugPrint('quran audio failed: $e');
       state = const ZadPlayerState();
