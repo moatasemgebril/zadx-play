@@ -24,17 +24,24 @@ class PraisePhrase {
 /// PENDING SHEIKH REVIEW: this list must be approved by the Islamic Content
 /// Reviewer before release. Duas and praise only — deliberately NO Quran
 /// verses and NO hadith here. Do not add any without a verified source.
+// Reviewer note (2026-11-20): جزاك الله خيرًا is a thank-you for a favour; it fits
+// best after tasks that help others. Kept for now; sheikh to confirm.
 const praisePhrases = <PraisePhrase>[
-  PraisePhrase(masculine: 'ما شاء الله، أحسنت!', feminine: 'ما شاء الله، أحسنتِ!', en: "Masha'Allah, well done!"),
+  PraisePhrase(masculine: 'ما شاء الله، أحسنتَ!', feminine: 'ما شاء الله، أحسنتِ!', en: "Masha'Allah, well done!"),
   PraisePhrase(masculine: 'جزاك الله خيرًا!', feminine: 'جزاكِ الله خيرًا!', en: 'May Allah reward you with good!'),
   PraisePhrase(masculine: 'بارك الله فيك!', feminine: 'بارك الله فيكِ!', en: 'May Allah bless you!'),
-  PraisePhrase(masculine: 'تبارك الله! كمّل كده', feminine: 'تبارك الله! كمّلي كده', en: 'Tabarak Allah! Keep it up!'),
+  // تبارك is said of Allah only — never address it to the child (reviewer note).
+  PraisePhrase(
+    masculine: 'ما شاء الله تبارك الله! كمِّل كده',
+    feminine: 'ما شاء الله تبارك الله! كمِّلي كده',
+    en: "Masha'Allah, blessed is Allah! Keep it up!",
+  ),
   PraisePhrase(
     masculine: 'جعله الله في ميزان حسناتك',
-    feminine: 'جعله الله في ميزان حسناتك',
+    feminine: 'جعله الله في ميزان حسناتكِ',
     en: 'May Allah place it in your scale of good deeds',
   ),
-  PraisePhrase(masculine: 'نفع الله بك!', feminine: 'نفع الله بكِ!', en: 'May Allah make you a benefit to others!'),
+  PraisePhrase(masculine: 'نفع الله بك!', feminine: 'نفع الله بكِ!', en: 'May Allah benefit others through you!'),
 ];
 
 /// Picks a random praise phrase, never the same one twice in a row.
