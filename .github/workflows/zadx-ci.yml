@@ -109,7 +109,7 @@ jobs:
         run: flutter test --coverage
       - name: Build Android APK (debug, installable for testing)
         run: flutter build apk --debug
-      - name: Kotlin rule tests (LockRules: device lock + protection)
+      - name: Kotlin rule tests (LockRules - device lock + protection)
         run: cd android && ./gradlew :app:testDebugUnitTest --console=plain
       - name: Build web (parent dashboard) – not on PRs, to save minutes
         if: github.event_name != 'pull_request'
