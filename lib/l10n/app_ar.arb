@@ -702,5 +702,14 @@
   "lockDisclosureTitle": "قبل ما نفعّل القفل",
   "lockDisclosureBody": "Zad X هيعرف أنهي تطبيق مفتوح على التليفون ده (اسم التطبيق بس، عمره ما بيقرا اللي على الشاشة) عشان يقفل التطبيقات لحد ما المهام والصلاة تخلص. التليفون ومكالمات الطوارئ عمرهم ما بيتقفلوا. ومفيش أي معلومة عن التطبيقات بتخرج من التليفون.\n\nفي الصفحة الجاية، فعّل \"Zad X\" في إعدادات تسهيل الاستخدام.",
   "lockDisclosureAgree": "موافق، كمّل",
-  "lockDisclosureCancel": "مش دلوقتي"
+  "lockDisclosureCancel": "مش دلوقتي",
+  "deviceLockDailyLimit": "وقت الشاشة في اليوم (الخطة المجانية)",
+  "deviceLockMinutes": "{n} دقيقة",
+  "@deviceLockMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  }
 }

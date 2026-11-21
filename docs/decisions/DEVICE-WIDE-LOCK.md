@@ -122,6 +122,13 @@ Blocking every process except an allow-list on a PC is **too risky**: Windows ru
 - Parent: one switch "Lock all apps (recommended)" on the parent screen, a read-only "always allowed" list so they trust it, and an editor to add apps. The game chips stay (they choose which games appear in Zad X's Games screen and are the lock list in legacy mode).
 - Time semantics change: earned minutes become **screen minutes** for all non-allowed apps. Copy must say this plainly.
 
+### Plans without tasks (Free)
+Free families have no tasks/earned minutes, so the task rule would keep a Free child locked all day.
+`lockStateFor(tasksEnabled: false, …)` uses only the **prayer lock + a parent-set daily limit**
+(`dailyLimitMinutes`, default 60; chips 30–180 on the parent screen). `lockTasksEnabledProvider`
+defaults to `true`; the plans PR (#22) wires it to the entitlement without this branch touching `plan.dart`.
+Open point for that PR: how the prayer lock ends on Free (there is no "I prayed" task to approve).
+
 ## 8. Islamic-content priority
 Device-wide locking supports the product's core value (prayer before play) more faithfully: at adhan time every distraction is locked, not only known games. Zad X's Quran, adhkar and prayer sections remain open because Zad X is always allowed; parents can also allow a trusted Quran app. No religious text is added or changed by this work.
 

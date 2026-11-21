@@ -57,6 +57,20 @@ class DeviceLockCard extends ConsumerWidget {
           onChanged: (v) => ctrl.setLockMode(v ? LockMode.allApps : LockMode.selectedGames),
         ),
         Text(l10n.deviceLockDesc, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+        // Plans without tasks (Free): a daily screen-time limit instead of earned minutes.
+        if (!ref.watch(lockTasksEnabledProvider)) ...[
+          const SizedBox(height: 8),
+          Text(l10n.deviceLockDailyLimit, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final m in const [30, 60, 90, 120, 180])
+              ChoiceChip(
+                label: Text(l10n.deviceLockMinutes(Fmt.digits(m, lang)), style: const TextStyle(fontSize: 15)),
+                selected: s.dailyLimitMinutes == m,
+                onSelected: (_) => ctrl.setDailyLimitMinutes(m),
+              ),
+          ]),
+        ],
         if (allApps) ...[
           const SizedBox(height: 8),
           Banner2(text: l10n.deviceLockAlwaysOpen, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.phone_rounded),

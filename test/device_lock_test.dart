@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:zadx/data/catalog/default_tasks.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
+import 'package:zadx/features/tasks/wallet_controller.dart';
 import 'package:zadx/services/app_lock/app_lock_service.dart';
 
 /// Device-wide lock: docs/decisions/DEVICE-WIDE-LOCK.md
@@ -173,6 +175,56 @@ void main() {
       expect(s.allowedApps, {'org.school.classroom'});
       expect(s.allowMessaging, isFalse);
       expect(s.pcAllowBrowsers, isTrue);
+    });
+  });
+
+  group('plans without tasks (Free): prayer lock + daily limit', () {
+    WalletState wallet({int used = 0, bool prayerLock = false}) => WalletState(
+          day: '2026-11-21',
+          tasks: defaultTasks,
+          progress: const {},
+          usedMinutes: used,
+          prayerLock: prayerLock,
+        );
+
+    test('Free child is NOT locked all day just because there are no tasks', () {
+      final s = lockStateFor(tasksEnabled: false, wallet: wallet(), dailyLimitMinutes: 60);
+      expect(s.locked, isFalse);
+      expect(s.reason, 'none');
+      expect(s.remainingMinutes, 60);
+    });
+
+    test('Free: locks when the daily limit is used up', () {
+      final s = lockStateFor(tasksEnabled: false, wallet: wallet(used: 60), dailyLimitMinutes: 60);
+      expect(s.locked, isTrue);
+      expect(s.reason, 'noTime');
+      expect(s.remainingMinutes, 0);
+    });
+
+    test('Free: prayer time still locks', () {
+      final s = lockStateFor(tasksEnabled: false, wallet: wallet(prayerLock: true), dailyLimitMinutes: 60);
+      expect(s.locked, isTrue);
+      expect(s.reason, 'prayer');
+    });
+
+    test('with tasks the old rule applies (no approved tasks -> locked)', () {
+      final s = lockStateFor(tasksEnabled: true, wallet: wallet(), dailyLimitMinutes: 60);
+      expect(s.locked, isTrue);
+      expect(s.reason, 'requiredTasks');
+    });
+
+    test('daily limit setting persists and is clamped', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final c = ProviderContainer(overrides: [sharedPrefsProvider.overrideWithValue(prefs)]);
+      expect(c.read(settingsProvider).dailyLimitMinutes, 60);
+      c.read(settingsProvider.notifier).setDailyLimitMinutes(90);
+      c.dispose();
+      final c2 = ProviderContainer(overrides: [sharedPrefsProvider.overrideWithValue(prefs)]);
+      addTearDown(c2.dispose);
+      expect(c2.read(settingsProvider).dailyLimitMinutes, 90);
+      c2.read(settingsProvider.notifier).setDailyLimitMinutes(99999);
+      expect(c2.read(settingsProvider).dailyLimitMinutes, 24 * 60);
     });
   });
 }

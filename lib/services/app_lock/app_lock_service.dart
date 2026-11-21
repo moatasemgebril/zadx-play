@@ -176,14 +176,43 @@ class AppLockService {
 
 final appLockServiceProvider = Provider<AppLockService>((_) => AppLockService());
 
+/// Whether the family's plan has tasks + earned minutes. Plans without tasks (Free) lock on
+/// prayer time + a parent-set daily limit only, so a Free child is never locked all day.
+/// TODO(plans PR #22): override/wire this to the entitlement (do not import plan.dart here).
+final lockTasksEnabledProvider = Provider<bool>((_) => true);
+
+/// Lock state before it becomes a [LockPolicy] (pure, unit-tested).
+typedef LockState = ({bool locked, String reason, int remainingMinutes});
+
+/// * tasks enabled: unlocked = required tasks approved && !prayer lock && earned minutes left
+/// * tasks disabled (Free): unlocked = !prayer lock && used < [dailyLimitMinutes]
+LockState lockStateFor({required bool tasksEnabled, required WalletState wallet, required int dailyLimitMinutes}) {
+  if (tasksEnabled) {
+    return (
+      locked: !wallet.gamesUnlocked,
+      reason: wallet.lockReason?.name ?? 'none',
+      remainingMinutes: wallet.remainingMinutes,
+    );
+  }
+  final remaining = (dailyLimitMinutes - wallet.usedMinutes).clamp(0, 24 * 60);
+  if (wallet.prayerLock) return (locked: true, reason: 'prayer', remainingMinutes: remaining);
+  if (remaining <= 0) return (locked: true, reason: 'noTime', remainingMinutes: 0);
+  return (locked: false, reason: 'none', remainingMinutes: remaining);
+}
+
 /// Derives the [LockPolicy] from the wallet + settings.
 final lockPolicyProvider = Provider<LockPolicy>((ref) {
   final wallet = ref.watch(walletProvider);
   final settings = ref.watch(settingsProvider);
+  final state = lockStateFor(
+    tasksEnabled: ref.watch(lockTasksEnabledProvider),
+    wallet: wallet,
+    dailyLimitMinutes: settings.dailyLimitMinutes,
+  );
   return lockPolicyFrom(
-    locked: !wallet.gamesUnlocked,
-    reason: wallet.lockReason?.name ?? 'none',
-    remainingMinutes: wallet.remainingMinutes,
+    locked: state.locked,
+    reason: state.reason,
+    remainingMinutes: state.remainingMinutes,
     settings: settings,
   );
 });
@@ -232,10 +261,19 @@ final lockCoordinatorProvider = Provider<void>((ref) {
     switch (event['type']) {
       case 'session_minute':
         // Native side reports each minute of real foreground play.
-        wallet.consumeMinutes(1);
+        if (ref.read(lockTasksEnabledProvider)) {
+          wallet.consumeMinutes(1);
+        } else {
+          wallet.addUsedMinutes(1, cap: ref.read(settingsProvider).dailyLimitMinutes);
+        }
       case 'time_up':
         // iOS: the DeviceActivity budget was used up while Zad X was in the background.
-        wallet.consumeMinutes(ref.read(walletProvider).remainingMinutes);
+        if (ref.read(lockTasksEnabledProvider)) {
+          wallet.consumeMinutes(ref.read(walletProvider).remainingMinutes);
+        } else {
+          final cap = ref.read(settingsProvider).dailyLimitMinutes;
+          wallet.addUsedMinutes(cap, cap: cap);
+        }
       case 'prayer_lock':
         // A native prayer alarm fired (possibly while Flutter was closed).
         if (!ref.read(walletProvider).prayerLock) wallet.startPrayerLock(_currentPrayer(ref));

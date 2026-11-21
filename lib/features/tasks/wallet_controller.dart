@@ -159,6 +159,14 @@ class WalletController extends Notifier<WalletState> {
     return granted;
   }
 
+  /// Plans without tasks (Free): records screen minutes against the parent's daily limit
+  /// instead of earned minutes. See `lockStateFor` in app_lock_service.dart.
+  void addUsedMinutes(int minutes, {required int cap}) {
+    final next = (state.usedMinutes + minutes.clamp(0, 60)).clamp(0, cap < 0 ? 0 : cap);
+    if (next == state.usedMinutes) return;
+    _update(state.copyWith(usedMinutes: next));
+  }
+
   // ---- parent actions (guarded by the parent PIN in the UI) -----------------
 
   void approve(String taskId) {

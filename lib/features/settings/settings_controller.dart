@@ -36,6 +36,7 @@ class AppSettings {
     this.allowedApps = const {},
     this.allowMessaging = true,
     this.pcAllowBrowsers = false,
+    this.dailyLimitMinutes = 60,
   });
 
   final String language;
@@ -69,6 +70,9 @@ class AppSettings {
   /// Windows Guard: keep browsers open (homework) in [LockMode.allApps].
   final bool pcAllowBrowsers;
 
+  /// Plans without tasks (Free): screen minutes per day before the lock closes (prayer lock still applies).
+  final int dailyLimitMinutes;
+
   Locale get locale => Locale(language);
   bool get isRtl => language == 'ar' || language == 'ur';
 
@@ -91,6 +95,7 @@ class AppSettings {
     Set<String>? allowedApps,
     bool? allowMessaging,
     bool? pcAllowBrowsers,
+    int? dailyLimitMinutes,
   }) =>
       AppSettings(
         language: language ?? this.language,
@@ -111,6 +116,7 @@ class AppSettings {
         allowedApps: allowedApps ?? this.allowedApps,
         allowMessaging: allowMessaging ?? this.allowMessaging,
         pcAllowBrowsers: pcAllowBrowsers ?? this.pcAllowBrowsers,
+        dailyLimitMinutes: dailyLimitMinutes ?? this.dailyLimitMinutes,
       );
 }
 
@@ -142,6 +148,7 @@ class SettingsController extends Notifier<AppSettings> {
       allowedApps: p.getStringList('${_k}allowedApps')?.toSet() ?? d.allowedApps,
       allowMessaging: p.getBool('${_k}allowMessaging') ?? d.allowMessaging,
       pcAllowBrowsers: p.getBool('${_k}pcAllowBrowsers') ?? d.pcAllowBrowsers,
+      dailyLimitMinutes: (p.getInt('${_k}dailyLimit') ?? d.dailyLimitMinutes).clamp(0, 24 * 60),
     );
   }
 
@@ -239,6 +246,12 @@ class SettingsController extends Notifier<AppSettings> {
   void setPcAllowBrowsers(bool v) {
     state = state.copyWith(pcAllowBrowsers: v);
     _prefs.setBool('${_k}pcAllowBrowsers', v);
+  }
+
+  void setDailyLimitMinutes(int minutes) {
+    final v = minutes.clamp(0, 24 * 60);
+    state = state.copyWith(dailyLimitMinutes: v);
+    _prefs.setInt('${_k}dailyLimit', v);
   }
 
   void setLockAtAdhan(bool v) {
