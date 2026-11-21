@@ -66,39 +66,59 @@ class _SurahList extends ConsumerWidget {
       if (includeFatiha) surahIndex.first,
       ...surahsOfJuz(juz),
     ];
+    // Release builds list only reciters with a written licence (may be none).
+    final voices = visibleReciters();
+    final selected = resolveReciter(s.reciterId, voices);
 
     return ListView(padding: const EdgeInsets.all(16), children: [
-      ZadCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Text(l10n.chooseReciter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.muted)),
-          const SizedBox(height: 8),
-          ChoiceGrid(
-            items: reciters.map((r) => r.id).toList(),
-            selected: s.reciterId,
-            columns: 2,
-            label: (id) => reciters.firstWhere((r) => r.id == id).name.of(lang),
-            onSelected: ref.read(settingsProvider.notifier).setReciter,
-          ),
-        ]),
-      ),
+      if (selected == null)
+        Banner2(text: l10n.recitationComingSoon, bg: AppColors.pendingBg, fg: AppColors.pendingText, icon: Icons.menu_book_rounded)
+      else
+        ZadCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(l10n.chooseReciter, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.muted)),
+            const SizedBox(height: 8),
+            ChoiceGrid(
+              items: voices.map((r) => r.id).toList(),
+              selected: selected.id,
+              columns: 2,
+              label: (id) => voices.firstWhere((r) => r.id == id).name.of(lang),
+              // Debug builds only: unconfirmed reciters are visible to testers, clearly marked.
+              note: (id) => voices.firstWhere((r) => r.id == id).licenceConfirmed ? null : l10n.licencePending,
+              onSelected: ref.read(settingsProvider.notifier).setReciter,
+            ),
+          ]),
+        ),
       const SizedBox(height: 12),
       for (var i = 0; i < list.length; i++) ...[
-        _SurahCard(surah: list[i], color: _badgeColors[i % _badgeColors.length]),
+        _SurahCard(surah: list[i], color: _badgeColors[i % _badgeColors.length], canPlay: selected != null),
         const SizedBox(height: 10),
       ],
     ]);
   }
 }
 
-class _SurahCard extends ConsumerWidget {
-  const _SurahCard({required this.surah, required this.color});
+class _SurahCard extends ConsumerStatefulWidget {
+  const _SurahCard({required this.surah, required this.color, required this.canPlay});
   final SurahInfo surah;
   final Color color;
 
+  /// False when no licensed recitation is available: the card then opens the text only.
+  final bool canPlay;
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_SurahCard> createState() => _SurahCardState();
+}
+
+class _SurahCardState extends ConsumerState<_SurahCard> {
+  bool _reading = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = context.l10n;
     final lang = context.lang;
+    final surah = widget.surah;
+    final color = widget.color;
     final player = ref.watch(playerProvider);
     final playing = player.kind == PlayerKind.quran && player.surahNumber == surah.number;
     final name = surah.name.of(lang);
@@ -121,24 +141,39 @@ class _SurahCard extends ConsumerWidget {
               Text(l10n.ayatCount(Fmt.digits(surah.ayahCount, lang)), style: const TextStyle(fontSize: 15, color: AppColors.muted)),
             ]),
           ),
-          IconButton.filled(
-            tooltip: playing ? l10n.stop : l10n.playSurah(name),
-            style: IconButton.styleFrom(
-              backgroundColor: playing ? AppColors.coral : AppColors.purple,
-              foregroundColor: playing ? AppColors.ink : Colors.white,
-              minimumSize: const Size(52, 52),
+          if (!widget.canPlay)
+            IconButton.filled(
+              tooltip: _reading ? l10n.hideSurahText : l10n.readSurah(name),
+              style: IconButton.styleFrom(
+                backgroundColor: AppColors.purple,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(52, 52),
+              ),
+              onPressed: () => setState(() => _reading = !_reading),
+              icon: Icon(_reading ? Icons.expand_less_rounded : Icons.menu_book_rounded),
+            )
+          else
+            IconButton.filled(
+              tooltip: playing ? l10n.stop : l10n.playSurah(name),
+              style: IconButton.styleFrom(
+                backgroundColor: playing ? AppColors.coral : AppColors.purple,
+                foregroundColor: playing ? AppColors.ink : Colors.white,
+                minimumSize: const Size(52, 52),
+              ),
+              onPressed: () => playing
+                  ? ref.read(playerProvider.notifier).stop()
+                  : ref.read(playerProvider.notifier).playSurah(surah),
+              icon: Icon(playing ? Icons.stop_rounded : Icons.play_arrow_rounded),
             ),
-            onPressed: () => playing
-                ? ref.read(playerProvider.notifier).stop()
-                : ref.read(playerProvider.notifier).playSurah(surah),
-            icon: Icon(playing ? Icons.stop_rounded : Icons.play_arrow_rounded),
-          ),
         ]),
         if (playing) ...[
           const SizedBox(height: 10),
           ProgressBar(value: (player.index + 1) / surah.ayahCount, color: AppColors.purple, height: 6),
           const SizedBox(height: 8),
           _AyatText(surah: surah, currentIndex: player.index),
+        ] else if (_reading) ...[
+          const SizedBox(height: 10),
+          _AyatText(surah: surah, currentIndex: -1),
         ],
       ]),
     );

@@ -11,6 +11,9 @@
 - [ ] Quran text source attribution (Quran.com / Tanzil) as their terms require.
 - [ ] Licensed adhan recordings (written permission or royalty-free licence) for each muezzin.
 - [ ] Confirm the reciters' audio may be streamed in a paid app (or host your own licensed files).
+- [x] Reciter licences: Quran Foundation approved Alafasy, Abdul Basit (murattal), Al-Husary, Al-Minshawi (murattal) in writing on 2026-11-21 (flag licenceConfirmed in lib/data/catalog/quran.dart). Abdur-Rashid Sufi is NOT approved.
+- [ ] Pre-launch blocker: switch recitation audio from EveryAyah URLs to the Quran Foundation recitations API (approval covers QF APIs only; no rehosting, max 1-week server cache; device download for offline is allowed).
+- [ ] Show "Quran data provided by Quran Foundation" + credit each reciter in the app.
 - [ ] Game icons are our own; never ship publishers' logos or screenshots.
 
 ## Apple

@@ -43,7 +43,7 @@ class ChildrenController extends Notifier<ChildrenState> {
   }
 
   /// Adds a child if the plan allows it ([maxChildren] from `Entitlement.limits`).
-  AddChildResult add(String nickname, ChildAvatar avatar, {required int maxChildren}) {
+  AddChildResult add(String nickname, ChildAvatar avatar, {required int maxChildren, FormOfAddress? address}) {
     if (state.isBound) return AddChildResult.notAllowed;
     if (!canAddChild(currentCount: state.children.length, maxChildren: maxChildren)) {
       return AddChildResult.limitReached;
@@ -54,19 +54,26 @@ class ChildrenController extends Notifier<ChildrenState> {
     while (state.children.any((c) => c.id == id)) {
       id = ChildProfile.newId();
     }
-    final child = ChildProfile(id: id, nickname: name, avatar: avatar);
+    final child = ChildProfile(id: id, nickname: name, avatar: avatar, address: address);
     _save(ChildrenState(children: [...state.children, child], activeId: state.activeId, boundChildId: state.boundChildId));
     _sync(child);
     return AddChildResult.added;
   }
 
   /// Returns false when the nickname is invalid or the child is unknown.
-  bool edit(String childId, {required String nickname, required ChildAvatar avatar}) {
+  /// [address] null keeps the current form of address unless [clearAddress] is true.
+  bool edit(
+    String childId, {
+    required String nickname,
+    required ChildAvatar avatar,
+    FormOfAddress? address,
+    bool clearAddress = false,
+  }) {
     if (state.isBound) return false;
     final name = ChildProfile.cleanNickname(nickname);
     final current = state.byId(childId);
     if (name == null || current == null) return false;
-    final updated = current.copyWith(nickname: name, avatar: avatar);
+    final updated = current.copyWith(nickname: name, avatar: avatar, address: address, clearAddress: clearAddress);
     _save(ChildrenState(
       children: [for (final c in state.children) c.id == childId ? updated : c],
       activeId: state.activeId,
