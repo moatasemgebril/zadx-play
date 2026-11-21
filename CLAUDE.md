@@ -10,6 +10,12 @@ Current design: https://claude.ai/artifact/4BzBKtLrSH4JJvdQx6U6Yv · Project not
 4. zadx-quality-gate grades everything A–F. Only Grade A ships.
 5. zadx-daily-reporter writes reports/daily/<date>.md in Arabic, then it is emailed to the owner.
 
+## Saving usage (owner decision 2026-11-20)
+- Two work cycles a day (morning: security + engineering + QA; afternoon: design/games/content on even days, approvals/marketing/add-ons on odd days). Max 3–4 subagents and 2 PRs per cycle.
+- CI: light checks on PRs, heavy jobs on `main` only when their files change, the emulator nightly (if main changed), iOS/Windows/real phones weekly on Sunday or by hand. See docs/DEVICE_TESTING.md.
+- Merge rule: a PR merges when its light PR checks are green and the Quality Gate approves. If a nightly/weekly/`main` heavy run fails, fixing it is P0 in the next morning cycle and no new features merge until it is green again.
+- Prototype republished at most once a day; Gmail source backup weekly (Fridays).
+
 ## Order of priority
 Child safety & privacy > Islamic accuracy > security > working features > design polish > marketing.
 

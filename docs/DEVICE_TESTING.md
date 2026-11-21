@@ -12,6 +12,20 @@ The ZADX Team's sandbox has no Flutter SDK and no phones, so real builds and dev
 | Backend | GitHub Actions | Cloud Functions compile, `npm audit` has no high/critical issues |
 | Windows Guard | GitHub Actions (Windows) | the C# service builds |
 
+## When each check runs (owner decision 2026-11-20: save GitHub Actions minutes)
+| Event | What runs |
+|---|---|
+| Pull request | light checks only: analyze, unit tests, Android debug APK, backend build + `npm audit` (web build runs on `main`/nightly only) |
+| Merge to `main` | light checks + the heavy job only for what changed (emulator if `lib/`/`android/`/`assets/`/`pubspec` changed, iOS if `ios/` changed, Windows if `windows_guard/` changed) |
+| Nightly Mon–Sat (~2–3 AM Pacific) | light checks + emulator + 300 taps — skipped if `main` had no commits in the last ~25 h |
+| Weekly, Sunday (~2–3 AM Pacific) | everything: emulator, iOS, Windows, real phones — skipped if `main` had no commits in 8 days |
+| "Run workflow" (manual) | everything |
+| Docs only (`*.md`, `docs/`, `reports/`) | nothing |
+
+Merge rule: a PR merges when its light checks are green and the Quality Gate approves. If the nightly or `main` heavy run fails, fixing it is P0 in the next morning cycle, and no new features merge until it is green again.
+Artifacts (APK, coverage) are kept 7 days. Caches: Flutter/pub, Gradle, npm.
+Why iOS is weekly: the owner keeps GitHub's free plan with a $0 spending limit (≈2,000 min/month); macOS minutes count ×10 and Windows ×2.
+
 ## One-time setup by the owner
 1. Create a free GitHub account and a **private** repository `zadx-play`, and upload this project (or connect GitHub to Claude so the team can push it).
 2. (Optional, real phones) In Firebase → Test Lab, create a service account with the "Firebase Test Lab Admin" role, and add its JSON key as the repository secret `GCP_SA_KEY`.
