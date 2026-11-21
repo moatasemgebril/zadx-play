@@ -20,9 +20,9 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
-  HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, hexDigestEquals, isPairingCode, isSafeId, needsStaleAlert,
-  newTamperReasons, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
-  rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
+  HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, heartbeatAction, hexDigestEquals,
+  isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
+  rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
 
 initializeApp();
@@ -658,29 +658,65 @@ export const reportProtection = onCall({ region: "europe-west1" }, async (req) =
 
   const ref = db.doc(`deviceHeartbeats/${familyId}__${uid}`);
   const prev = await ref.get();
-  const fresh = newTamperReasons(prev.get("reasons"), report.reasons);
+  const now = Date.now();
+  // New reasons only, and the same reason from this device at most once per hour.
+  const { reasons: fresh, alertedAt } = tamperReasonsToAlert(prev.get("reasons"), report.reasons, prev.get("alertedAt"), now);
   await ref.set({
-    familyId, childId: child, kind: report.platform, reasons: report.reasons, lastSeenMs: Date.now(), staleAlerted: false,
+    familyId, childId: child, kind: report.platform, reasons: report.reasons, alertedAt, lastSeenMs: now, staleAlerted: false,
   });
   const sent = fresh.length > 0 ? await pushToParents(family, "tamper", child) : 0;
   return { alerted: fresh, sent };
 });
 
-/** Every 6 hours: one alert per device that stopped reporting for a day (phone off, app removed, guard stopped). */
+/**
+ * Every 6 hours: one alert per device that stopped reporting for a day (phone off, app removed, guard
+ * stopped). Heartbeats of deleted families/children, and any older than 30 days, are deleted.
+ * Only not-yet-alerted docs are queried (composite index in firestore.indexes.json), so docs that were
+ * already alerted can never fill the batch and starve newly silent devices.
+ */
 export const checkHeartbeats = onSchedule({ schedule: "every 6 hours", region: "europe-west1" }, async () => {
   const now = Date.now();
-  const stale = await db.collection("deviceHeartbeats").where("lastSeenMs", "<", now - HEARTBEAT_STALE_MS).limit(500).get();
+  const hb = db.collection("deviceHeartbeats");
+
+  // 1) Retention: drop month-old heartbeats (alerted or not).
+  for (let page = 0; page < 10; page++) {
+    const old = await hb.where("lastSeenMs", "<", now - HEARTBEAT_RETENTION_MS).limit(500).get();
+    if (old.empty) break;
+    const batch = db.batch();
+    old.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // 2) Stale, not yet alerted.
+  const stale = await hb.where("staleAlerted", "==", false).where("lastSeenMs", "<", now - HEARTBEAT_STALE_MS)
+    .orderBy("lastSeenMs").limit(500).get();
+  const families = new Map<string, FirebaseFirestore.DocumentSnapshot>();
   for (const doc of stale.docs) {
-    if (!needsStaleAlert(doc.get("lastSeenMs"), doc.get("staleAlerted"), now)) continue;
     const familyId = doc.get("familyId");
-    if (!isSafeId(familyId)) continue;
-    const family = await db.doc(`families/${familyId}`).get();
-    if (!family.exists) {
-      await doc.ref.delete(); // family deleted: drop its heartbeats
-      continue;
+    const childId = doc.get("childId");
+    let family: FirebaseFirestore.DocumentSnapshot | undefined;
+    let childExists = false;
+    if (isSafeId(familyId)) {
+      family = families.get(familyId) ?? (await db.doc(`families/${familyId}`).get());
+      families.set(familyId, family);
+      // The first child may live only in the family doc (no children/{id} doc yet).
+      childExists = family.exists && (childId == null || childId === DEFAULT_CHILD_ID ||
+        (isSafeId(childId) && (await db.doc(`families/${familyId}/children/${childId}`).get()).exists));
     }
-    await pushToParents(family, "stale", doc.get("childId"));
-    await doc.ref.set({ staleAlerted: true }, { merge: true });
+    const action = heartbeatAction({
+      lastSeenMs: doc.get("lastSeenMs"),
+      staleAlerted: doc.get("staleAlerted"),
+      familyExists: family?.exists === true,
+      childExists,
+    }, now);
+    if (action === "delete") {
+      await doc.ref.delete();
+    } else if (action === "alert" && family) {
+      await pushToParents(family, "stale", childId);
+      await doc.ref.set({ staleAlerted: true }, { merge: true });
+    } else {
+      // Should not happen with this query; mark it so it cannot block the batch again.
+      await doc.ref.set({ staleAlerted: true }, { merge: true });
+    }
   }
 });
-

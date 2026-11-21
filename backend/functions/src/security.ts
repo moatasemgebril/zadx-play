@@ -216,3 +216,51 @@ export function protectionAlertText(kind: "tamper" | "stale", ar: boolean): stri
     ? "جهاز طفلك ما اتواصلش مع Zad X من أكتر من يوم. لو الجهاز كان مقفول تجاهل الرسالة، غير كده اتأكد إن الحماية لسه شغّالة."
     : "Your child's device has not checked in with Zad X for over a day. If it was switched off, ignore this; otherwise check that protection is still on.";
 }
+
+/** Heartbeats older than this are deleted (device gone for a month: nothing more to tell the parent). */
+export const HEARTBEAT_RETENTION_MS = 30 * 24 * 60 * 60_000;
+
+/** The same tamper reason from the same device is pushed at most once per this period. */
+export const TAMPER_ALERT_COOLDOWN_MS = 60 * 60_000;
+
+export type HeartbeatAction = "delete" | "alert" | "skip";
+
+/**
+ * What `checkHeartbeats` does with one heartbeat doc:
+ * delete when the family or child is gone, or it is older than the retention period;
+ * alert once when it has been silent for [staleMs]; otherwise skip.
+ */
+export function heartbeatAction(
+  hb: { lastSeenMs: unknown; staleAlerted: unknown; familyExists: boolean; childExists: boolean },
+  nowMs: number,
+  staleMs = HEARTBEAT_STALE_MS,
+  retentionMs = HEARTBEAT_RETENTION_MS,
+): HeartbeatAction {
+  if (!hb.familyExists || !hb.childExists) return "delete";
+  if (typeof hb.lastSeenMs !== "number" || !Number.isFinite(hb.lastSeenMs)) return "delete";
+  if (nowMs - hb.lastSeenMs > retentionMs) return "delete";
+  return needsStaleAlert(hb.lastSeenMs, hb.staleAlerted, nowMs, staleMs) ? "alert" : "skip";
+}
+
+/**
+ * Tamper reasons to push now: newly appeared since the last report AND not pushed for this device
+ * within [cooldownMs] (a child toggling the service off/on/off gets one alert per hour, not many).
+ * Returns the reasons plus the updated per-reason "last alerted" map to store.
+ */
+export function tamperReasonsToAlert(
+  previous: unknown,
+  current: readonly string[],
+  alertedAt: unknown,
+  nowMs: number,
+  cooldownMs = TAMPER_ALERT_COOLDOWN_MS,
+): { reasons: string[]; alertedAt: Record<string, number> } {
+  const map: Record<string, number> = {};
+  if (alertedAt && typeof alertedAt === "object" && !Array.isArray(alertedAt)) {
+    for (const [k, v] of Object.entries(alertedAt as Record<string, unknown>)) {
+      if (TAMPER_REASONS.includes(k) && typeof v === "number" && Number.isFinite(v)) map[k] = v;
+    }
+  }
+  const reasons = newTamperReasons(previous, current).filter((r) => !(r in map) || nowMs - map[r] >= cooldownMs);
+  for (const r of reasons) map[r] = nowMs;
+  return { reasons, alertedAt: map };
+}

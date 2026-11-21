@@ -47,8 +47,9 @@ bool lockRuleControls({
   Set<String> systemAllowed = const {},
 }) {
   if (pkg.isEmpty || pkg == ownPackage) return false;
-  if (mode != LockMode.allApps) return selectedGames.contains(pkg);
+  // Safety core + device roles first, in every mode.
   if (androidAlwaysAllowed.contains(pkg) || systemAllowed.contains(pkg)) return false;
+  if (mode != LockMode.allApps) return selectedGames.contains(pkg);
   return !parentAllowed.contains(pkg);
 }
 

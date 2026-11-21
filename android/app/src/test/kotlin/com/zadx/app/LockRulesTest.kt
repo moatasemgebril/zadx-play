@@ -168,3 +168,58 @@ class PrayerAutoEndTest {
         assertTrue(LockRules.shouldBlock(false, "none", true, 30, prayerOver = false))
     }
 }
+
+/** Quality Gate fix: the Play Store exemption is short-lived and not inherited. */
+class PlaySheetExemptTest {
+    private val own = "com.zadx.app"
+    private val play = LockRules.PLAY_STORE
+    private val t0 = 10_000_000L
+
+    private fun exempt(last: String?, chain: Boolean, now: Long, ownAt: Long = t0) =
+        LockRules.playSheetExempt(play, own, last, chain, now, ownAt)
+
+    @Test
+    fun playOpenedFromZadXIsExemptBriefly() {
+        assertTrue(exempt(own, false, t0 + 5_000))
+        // Follow-up Play windows of the same purchase (payment dialogs) within the window.
+        assertTrue(exempt(play, true, t0 + 60_000))
+    }
+
+    @Test
+    fun exemptionExpiresAfterTwoMinutes() {
+        assertFalse(exempt(play, true, t0 + LockRules.PLAY_SHEET_WINDOW_MS + 1))
+        assertFalse(exempt(own, false, t0 + LockRules.PLAY_SHEET_WINDOW_MS + 1))
+    }
+
+    @Test
+    fun laterPlayVisitsAreNotExempt() {
+        // Child left the purchase, opened another app, then came back to Play.
+        assertFalse(exempt("com.some.game", false, t0 + 30_000))
+        // Play reached again without an exempt chain (lastForeground is Play, chain broken).
+        assertFalse(exempt(play, false, t0 + 30_000))
+        // Zad X never seen in the foreground.
+        assertFalse(exempt(own, false, t0, ownAt = 0))
+        // Clock weirdness: Zad X time in the future.
+        assertFalse(exempt(own, false, t0 - 1))
+    }
+
+    @Test
+    fun onlyThePlayStoreIsEverExempt() {
+        assertFalse(LockRules.playSheetExempt("com.roblox.client", own, own, true, t0 + 1, t0))
+    }
+
+    @Test
+    fun safetyCoreBeatsTheLegacyGameList() {
+        // Even if a legacy list contains the dialer or a device role, it is never locked.
+        assertFalse(
+            LockRules.isControlled("com.android.phone", own, LockRules.MODE_SELECTED_GAMES, setOf("com.android.phone"), emptySet(), emptySet()),
+        )
+        assertFalse(
+            LockRules.isControlled("com.google.android.dialer", own, LockRules.MODE_SELECTED_GAMES,
+                setOf("com.google.android.dialer"), emptySet(), setOf("com.google.android.dialer")),
+        )
+        assertTrue(
+            LockRules.isControlled("com.roblox.client", own, LockRules.MODE_SELECTED_GAMES, setOf("com.roblox.client"), emptySet(), emptySet()),
+        )
+    }
+}

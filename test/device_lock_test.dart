@@ -63,6 +63,14 @@ void main() {
       expect(controls('org.school.other', allowed: {'org.school.classroom'}), isTrue);
     });
 
+    test('safety core and device roles win over the legacy game list', () {
+      expect(controls('com.android.phone', mode: LockMode.selectedGames, games: {'com.android.phone'}), isFalse);
+      expect(
+          controls('com.google.android.dialer',
+              mode: LockMode.selectedGames, games: {'com.google.android.dialer'}, system: {'com.google.android.dialer'}),
+          isFalse);
+    });
+
     test('legacy selectedGames mode locks only the selected games', () {
       const games = {'com.roblox.client'};
       expect(controls('com.roblox.client', mode: LockMode.selectedGames, games: games), isTrue);

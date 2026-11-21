@@ -43,6 +43,9 @@ object LockStore {
     fun mode(ctx: Context): String =
         prefs(ctx).getString("mode", LockRules.MODE_SELECTED_GAMES) ?: LockRules.MODE_SELECTED_GAMES
 
+    /** Free plan: minutes after which the prayer lock ends by itself (0 = paid plans). */
+    fun prayerAutoEndMinutes(ctx: Context): Int = prefs(ctx).getInt("prayerAutoEnd", 0)
+
     fun allowMessaging(ctx: Context): Boolean = prefs(ctx).getBoolean("allowMessaging", true)
 
     /** True when [pkg] is subject to the lock and the play-minute counter. See [LockRules]. */
@@ -55,8 +58,8 @@ object LockStore {
             mode = mode,
             selectedGames = p.getStringSet("packages", emptySet())!!,
             parentAllowed = p.getStringSet("allowed", emptySet())!!,
-            // Only resolve system roles when needed (allApps mode).
-            systemAllowed = if (mode == LockRules.MODE_ALL_APPS) AllowedApps.systemAllowed(ctx, allowMessaging(ctx)) else emptySet(),
+            // Device roles (dialer, launcher, keyboard…) are never locked in any mode (cached for a minute).
+            systemAllowed = AllowedApps.systemAllowed(ctx, allowMessaging(ctx)),
         )
     }
 

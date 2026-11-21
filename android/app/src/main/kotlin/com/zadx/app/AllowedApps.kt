@@ -65,6 +65,14 @@ object AllowedApps {
         // Safety: a resolver must never make the phone, launcher or Zad X itself a "settings" app.
         out.remove(ctx.packageName)
         out.removeAll(LockRules.ALWAYS_ALLOWED - LockRules.SETTINGS_PACKAGES)
+        // Never treat the phone or SMS app as "settings" (a vendor dialer/messaging app may also answer
+        // ACTION_SETTINGS for its own settings screen): calls and texts to parents must keep working.
+        runCatching {
+            val telecom = ctx.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            telecom.defaultDialerPackage?.let(out::remove)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) telecom.systemDialerPackage?.let(out::remove)
+        }
+        runCatching { Telephony.Sms.getDefaultSmsPackage(ctx)?.let(out::remove) }
         runCatching {
             // Blocking the home app would send the shield into a HOME loop.
             val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)

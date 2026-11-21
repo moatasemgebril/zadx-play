@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 
@@ -32,9 +33,9 @@ class AppBlockerService : AccessibilityService() {
     private var foregroundGame: String? = null
     private var lastForeground: String? = null
 
-    private companion object {
-        const val PLAY_STORE = "com.android.vending"
-    }
+    /** Elapsed time when Zad X (not its shield) was last in the foreground; see [LockRules.playSheetExempt]. */
+    private var ownForegroundAt = 0L
+    private var inExemptPlayChain = false
 
     private val minuteTicker = object : Runnable {
         override fun run() {
@@ -60,7 +61,10 @@ class AppBlockerService : AccessibilityService() {
         val pkg = event.packageName?.toString() ?: return
         if (pkg == packageName) {
             // The shield itself must not open the Play Store exemption below.
-            lastForeground = if (event.className?.toString() == BlockActivity::class.java.name) null else pkg
+            val shieldShown = event.className?.toString() == BlockActivity::class.java.name
+            lastForeground = if (shieldShown) null else pkg
+            if (!shieldShown) ownForegroundAt = SystemClock.elapsedRealtime()
+            inExemptPlayChain = false
             return
         }
         // Settings for the parent only / uninstall guard: applies whether or not apps are locked.
@@ -70,7 +74,14 @@ class AppBlockerService : AccessibilityService() {
             LockRules.Guard.NONE -> Unit
         }
         // Google Play's purchase sheet opened from Zad X (parent buying a plan) is part of Zad X's flow.
-        if (pkg == PLAY_STORE && lastForeground == packageName) return
+        // Exempt only for ~2 minutes after leaving Zad X, and not inherited by later Play Store visits.
+        if (LockRules.playSheetExempt(pkg, packageName, lastForeground, inExemptPlayChain, SystemClock.elapsedRealtime(), ownForegroundAt)) {
+            lastForeground = LockRules.PLAY_STORE
+            inExemptPlayChain = true
+            stopTicking()
+            return
+        }
+        if (!isTransientOverlay(pkg)) inExemptPlayChain = false
         // The notification shade, volume dialog or keyboard opening over a game must not stop
         // the minute counter (otherwise pulling down the shade gave unmetered play time).
         if (isTransientOverlay(pkg)) return

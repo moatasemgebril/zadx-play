@@ -78,3 +78,15 @@ Builds on docs/decisions/DEVICE-WIDE-LOCK.md. Risks: R-04, R-39, R-42..R-45 in s
   in ZadXMonitor lifts the prayer shield (keeps it if no minutes are left) and restarts the daily budget monitor.
   iOS runs the schedule; with device protection on, `requireAutomaticDateAndTime` stops the child moving the clock.
   Without protection, a clock change could shift the schedule (documented residual).
+
+## Quality Gate fixes (2026-11-21)
+- Play Store purchase-sheet exemption (`LockRules.playSheetExempt`): only within 2 minutes of Zad X being in the
+  foreground and only for Play windows that follow Zad X directly (or an exempt Play window); `lastForeground` is set to
+  the Play Store after an exempt event, so later Play visits are locked/metered normally. Residual: a child bouncing
+  Zad X → Play Store every 2 minutes can browse the store (not play), which is bounded and visible.
+- `checkHeartbeats`: deletes heartbeats of deleted families/children and any older than 30 days; queries only
+  `staleAlerted == false` (composite index in `backend/firestore.indexes.json`, deployed with `firestore:indexes`),
+  so alerted docs cannot starve new ones. `reportProtection`: same reason from the same device pushed at most once per hour.
+- `isControlled`: the safety core and device roles are checked before the legacy game list in every mode.
+- `settingsPackages()` never includes the default/system dialer or the default SMS app.
+- Free-plan shield text: "Apps are locked for prayer time — they open again soon" / «التطبيقات مقفولة وقت الصلاة، وهتفتح بعد شوية».

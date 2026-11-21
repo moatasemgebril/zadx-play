@@ -144,8 +144,10 @@ object LockRules {
         systemAllowed: Set<String>,
     ): Boolean {
         if (pkg.isEmpty() || pkg == ownPackage) return false
-        if (mode != MODE_ALL_APPS) return pkg in selectedGames
+        // The safety core and device roles are never locked, in any mode (even if a legacy game list
+        // somehow contains e.g. the dialer).
         if (pkg in ALWAYS_ALLOWED || pkg in systemAllowed) return false
+        if (mode != MODE_ALL_APPS) return pkg in selectedGames
         return pkg !in parentAllowed
     }
 
@@ -205,5 +207,39 @@ object LockRules {
         val prayerActive = (prayerLock || reason == "prayer") && !prayerOver
         val lockedOther = locked && reason != "prayer"
         return lockedOther || prayerActive || remainingMinutes <= 0
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Google Play purchase sheet opened from Zad X (parent buying a plan).
+    // ---------------------------------------------------------------------------------------------
+
+    const val PLAY_STORE = "com.android.vending"
+
+    /** How long after leaving Zad X the Play Store still counts as Zad X's purchase sheet. */
+    const val PLAY_SHEET_WINDOW_MS = 2 * 60_000L
+
+    /**
+     * True when a Play Store window is part of a purchase started in Zad X: Play Store opened straight
+     * from Zad X (or follows such an exempt Play window: payment dialogs), and less than
+     * [PLAY_SHEET_WINDOW_MS] after Zad X was last in the foreground. After that the Play Store is an
+     * ordinary app again (locked / metered), so reaching it once from Zad X does not exempt it for good.
+     *
+     * @param lastForeground last non-overlay foreground package (the service sets it to the Play Store
+     *   after an exempt event, so the exemption is not inherited by later visits)
+     * @param inExemptPlayChain the previous Play Store event was exempt
+     * @param ownForegroundAtElapsed elapsed time when Zad X was last foreground (0 = never)
+     */
+    fun playSheetExempt(
+        pkg: String,
+        ownPackage: String,
+        lastForeground: String?,
+        inExemptPlayChain: Boolean,
+        nowElapsed: Long,
+        ownForegroundAtElapsed: Long,
+    ): Boolean {
+        if (pkg != PLAY_STORE || ownForegroundAtElapsed <= 0) return false
+        val fromZadX = lastForeground == ownPackage || (lastForeground == PLAY_STORE && inExemptPlayChain)
+        val age = nowElapsed - ownForegroundAtElapsed
+        return fromZadX && age in 0..PLAY_SHEET_WINDOW_MS
     }
 }
