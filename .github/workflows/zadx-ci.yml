@@ -248,3 +248,32 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: "8.0.x" }
       - run: dotnet build windows_guard/ZadXGuard.csproj -c Release
+
+  # Owner test build: after the emulator smoke test passes on main, publish the debug APK
+  # to a fixed pre-release so the owner can install it from a direct link (no login, no zip):
+  # https://github.com/moatasemgebril/zadx-play/releases/download/test-latest/zadx-play-test.apk
+  publish-test-apk:
+    needs: [android-emulator]
+    if: >-
+      always() && needs.android-emulator.result == 'success' &&
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: zadx-android-apk }
+      - name: Rename APK
+        run: mv app-debug.apk zadx-play-test.apk
+      - name: Publish to the "test-latest" pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: test-latest
+          name: "Zad X Play – test build (not for children yet)"
+          prerelease: true
+          make_latest: false
+          body: |
+            Latest test build of Zad X Play from main (${{ github.sha }}).
+            For the owner and testers only. Debug build: not signed for the Play Store.
+            Install on Android: open the link on the phone, download, then allow "Install unknown apps" for your browser.
+          files: zadx-play-test.apk
