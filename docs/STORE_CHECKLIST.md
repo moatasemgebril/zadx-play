@@ -11,6 +11,7 @@
 - [ ] Quran text source attribution (Quran.com / Tanzil) as their terms require.
 - [ ] Licensed adhan recordings (written permission or royalty-free licence) for each muezzin.
 - [ ] Confirm the reciters' audio may be streamed in a paid app (or host your own licensed files).
+- [ ] Pre-launch blocker: no reciter licence confirmed in writing yet (flag licenceConfirmed in lib/data/catalog/quran.dart)
 - [ ] Game icons are our own; never ship publishers' logos or screenshots.
 
 ## Apple
