@@ -10,6 +10,7 @@ import '../../data/catalog/surah_index.dart';
 import '../../data/models/surah.dart';
 import '../../services/audio/audio_service.dart';
 import '../../services/quran/quran_repository.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../adhkar/adhkar_view.dart';
 import '../settings/settings_controller.dart';
@@ -23,9 +24,8 @@ class QuranScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    return PatternBackground(
-      tint: AppColors.pageTints['quran']!,
-      seed: 3,
+    return ZadSceneBackground(
+      scene: ZadScene.quran,
       child: DefaultTabController(
         length: 3,
         child: Column(children: [

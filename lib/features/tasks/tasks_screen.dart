@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/family_task.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import 'wallet_controller.dart';
 import 'widgets/exercise_card.dart';
@@ -21,25 +22,32 @@ class TasksScreen extends ConsumerWidget {
     final regular = wallet.tasks.where((t) => !t.isExercise).toList();
     final exercises = wallet.tasks.where((t) => t.isExercise).toList();
 
-    return PatternBackground(
-      tint: AppColors.pageTints['tasks']!,
-      seed: 4,
-      child: ListView(padding: const EdgeInsets.all(16), children: [
-        PageTitle(l10n.tasks, subtitle: l10n.tasksNote),
-        const SizedBox(height: 12),
-        for (final t in regular) ...[
-          _TaskCard(task: t, progress: wallet.progressOf(t.id)),
+    // Read-only: the garden grows with the share of today's tasks done.
+    final progress = wallet.tasks.isEmpty ? 0.0 : wallet.doneCount / wallet.tasks.length;
+
+    return ZadSceneBackground(
+      scene: ZadScene.tasks,
+      progress: progress,
+      child: ZadCelebrateOnIncrease(
+        // Celebrate when the child hands a task in, and when one is approved.
+        values: [wallet.doneCount + wallet.pending.length, wallet.doneCount],
+        child: ListView(padding: const EdgeInsets.all(16), children: [
+          PageTitle(l10n.tasks, subtitle: l10n.tasksNote),
+          const SizedBox(height: 12),
+          for (final t in regular) ...[
+            _TaskCard(task: t, progress: wallet.progressOf(t.id)),
+            const SizedBox(height: 10),
+          ],
+          const SizedBox(height: 8),
+          Text(l10n.exTitle, style: AppTheme.display(24)),
+          Text(l10n.exNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
           const SizedBox(height: 10),
-        ],
-        const SizedBox(height: 8),
-        Text(l10n.exTitle, style: AppTheme.display(24)),
-        Text(l10n.exNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
-        const SizedBox(height: 10),
-        for (final t in exercises) ...[
-          ExerciseCard(task: t, progress: wallet.progressOf(t.id)),
-          const SizedBox(height: 10),
-        ],
-      ]),
+          for (final t in exercises) ...[
+            ExerciseCard(task: t, progress: wallet.progressOf(t.id)),
+            const SizedBox(height: 10),
+          ],
+        ]),
+      ),
     );
   }
 }

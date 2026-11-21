@@ -85,6 +85,11 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - Note: `geolocator` is declared in pubspec.yaml but unused in lib/ — keep it out of child
   builds until the location review (docs/LOCATION_PRIVACY.md) is done, or remove it.
 
+### 8. Kids Art Director — engaging backgrounds, icons and celebrations (PR feat/kids-art-backgrounds)
+- New role **zadx-kids-art-director** (`.claude/agents/zadx-kids-art-director.md`): most senior visual specialist for ages 5–12; grades every screen A–F on appeal, clarity, accessibility and performance; original code-drawn art only; Islamic sensitivity (no figures, no music motifs, calm Quran screens). Audit: `docs/design/ART-AUDIT.md`.
+- Built: `lib/shared/art/` (per-area `ZadSceneBackground` scenes, `ZadIcon` set, `ZadCelebrationBurst`), wired into all screens; tests in `test/kids_art_test.dart`.
+- Follow-ups: Quality Gate device check of the CI APK (look + 60 fps on a low-end phone); the **web prototype should adopt the same scenes and icons**; remove the old `PatternBackground` once nothing uses it; reuse the burst for finished adhkar sections; golden tests with a bundled font.
+
 ## Done
 
 ## Firebase status (2026-11-21, set up by Claude with the owner)

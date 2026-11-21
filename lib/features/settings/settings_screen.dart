@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/catalog/locations.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
@@ -32,9 +33,8 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settingsTitle), backgroundColor: AppColors.navy, foregroundColor: Colors.white),
-      body: PatternBackground(
-        tint: AppColors.pageTints['parent']!,
-        seed: 6,
+      body: ZadSceneBackground(
+        scene: ZadScene.parent,
         child: ListView(padding: const EdgeInsets.all(16), children: [
           _Section(
             title: l10n.language,

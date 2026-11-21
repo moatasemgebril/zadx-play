@@ -7,11 +7,15 @@ import '../../../core/l10n_ext.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../shared/art/zad_art.dart';
 import '../../../shared/widgets/zad_widgets.dart';
 import '../stars_controller.dart';
 
 /// Full-screen frame for a Zad X learning game: app bar with the star balance
-/// and the playful pattern background.
+/// and the games scene. The scene stays still here (no motion) so it never
+/// competes with the question the child is reading.
+///
+/// [tint] is kept for API compatibility; the scene now sets the colours.
 class EduGameScaffold extends StatelessWidget {
   const EduGameScaffold({super.key, required this.title, required this.child, this.tint = const Color(0xFFF4EEFF)});
 
@@ -27,7 +31,7 @@ class EduGameScaffold extends StatelessWidget {
           title: Text(title, style: AppTheme.display(22, color: Colors.white)),
           actions: const [StarBalanceChip(), SizedBox(width: 12)],
         ),
-        body: PatternBackground(tint: tint, seed: 5, child: SafeArea(child: child)),
+        body: ZadSceneBackground(scene: ZadScene.games, animate: false, child: SafeArea(child: child)),
       );
 }
 
@@ -45,7 +49,7 @@ class StarBalanceChip extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.star_rounded, color: AppColors.yellow, size: 24),
+          const ZadIcon(ZadIconKind.star, size: 24),
           const SizedBox(width: 4),
           Text(text, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
         ]),
@@ -242,11 +246,14 @@ class CelebrationView extends StatelessWidget {
               const Positioned.fill(child: ExcludeSemantics(child: CustomPaint(painter: _SparklePainter()))),
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.2, end: 1),
-                duration: const Duration(milliseconds: 900),
+                // Reduce-motion: the stars simply appear.
+                duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 900),
                 curve: Curves.elasticOut,
                 builder: (context, v, child) => Transform.scale(scale: v, child: child),
                 child: StarsRow(count: stars, size: 64),
               ),
+              // A short star burst for the stars just earned.
+              const Positioned.fill(child: ZadCelebrationBurst(origin: Alignment.center)),
             ]),
           ),
           Semantics(

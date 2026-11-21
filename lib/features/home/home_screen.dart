@@ -10,9 +10,11 @@ import '../../data/catalog/locations.dart';
 import '../../data/catalog/quran.dart';
 import '../../router.dart';
 import '../../services/audio/audio_service.dart';
+import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
+import '../prayer/prayer_sky_banner.dart';
 import '../settings/settings_controller.dart';
 import '../tasks/wallet_controller.dart';
 
@@ -25,9 +27,8 @@ class HomeScreen extends ConsumerWidget {
     final lang = context.lang;
     final wallet = ref.watch(walletProvider);
 
-    return PatternBackground(
-      tint: AppColors.pageTints['home']!,
-      seed: 1,
+    return ZadSceneBackground(
+      scene: ZadScene.home,
       child: ListView(padding: const EdgeInsets.all(16), children: [
         _Hero(),
         const SizedBox(height: 12),
@@ -40,6 +41,8 @@ class HomeScreen extends ConsumerWidget {
         ZadCard(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
+              const ZadIcon(ZadIconKind.tasks, size: 30),
+              const SizedBox(width: 8),
               Expanded(child: Text(l10n.tasksToday, style: Theme.of(context).textTheme.titleMedium)),
               Text(
                 l10n.progressOf(Fmt.digits(wallet.doneCount, lang), Fmt.digits(wallet.tasks.length, lang)),
@@ -72,8 +75,8 @@ class _Hero extends StatelessWidget {
         child: Stack(children: [
           const PositionedDirectional(
             end: 0,
-            bottom: -6,
-            child: Icon(Icons.mosque_rounded, size: 96, color: AppColors.mint),
+            bottom: 0,
+            child: ZadIcon(ZadIconKind.prayer, size: 84),
           ),
           const PositionedDirectional(end: 70, top: 0, child: Icon(Icons.nightlight_round, size: 30, color: AppColors.yellow)),
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -139,6 +142,8 @@ class _PrayerCard extends ConsumerWidget {
 
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        const PrayerSkyBanner(),
+        const SizedBox(height: 12),
         Row(children: [
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
