@@ -12,11 +12,16 @@ class SurahInfo {
 
 /// A muezzin or a Quran reciter.
 class Voice {
-  const Voice({required this.id, required this.name, required this.source});
+  const Voice({required this.id, required this.name, required this.source, this.licenceConfirmed = false});
 
   final String id;
   final Localized name;
 
   /// Asset path (adhan) or remote folder name (reciter).
   final String source;
+
+  /// True only once the recording's licence is confirmed IN WRITING (owner
+  /// decision). Reciters that are not confirmed are hidden from children in
+  /// release builds — see `visibleReciters` in `data/catalog/quran.dart`.
+  final bool licenceConfirmed;
 }

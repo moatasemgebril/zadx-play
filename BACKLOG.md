@@ -61,7 +61,31 @@ steps that truly need his accounts, signature or money.
 - Before code: privacy & child-safety officer + CISO write docs/LOCATION_PRIVACY.md (COPPA verifiable parental consent, GDPR-K, Apple kids category + Family Controls impact, Google Play background-location + Families declarations, review notes) and list owner-only steps (store declarations, privacy policy update, maps API key with a spending cap). Record any map SDK's licence/cost; prefer no per-use cost.
 - Ship behind a feature flag that stays off until the owner approves the privacy review.
 
-### 7. Kids Art Director — engaging backgrounds, icons and celebrations (PR feat/kids-art-backgrounds)
+### 7. Offline-first (owner decision 2026-11-21, approved)
+Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully without internet.
+- [x] Step 1 (branch feat/offline-first-1): `EntitlementCache` with a 7-day offline grace and
+  clock-rollback guard + tests; `FeatureFlags.locationMap` (off in release) + tests.
+- [ ] Wire `EntitlementCache` into `entitlementProvider`: record the tier after `verifyPurchase` /
+  the server-written family doc, show the cached tier offline. Decide first what replaces the
+  client-side default "Plus trial" (R-16).
+- [ ] Quran text bundled as a verified Uthmani asset with attribution (today: fetched from
+  api.quran.com per surah on first open, then cached). Islamic Content Reviewer picks the source;
+  confirm the API is covered by the Quran Foundation approval or move to the QF API.
+- [ ] Quran recitation: switch the source from everyayah.com to the Quran Foundation recitations
+  API (the approved channel); optional "download for offline" to the user's own device for
+  licensed reciters only; never rehost on our servers.
+- [ ] Adhan: add the licensed `assets/audio/adhan_*.mp3` files (missing today) once the recordings
+  licence is confirmed.
+- [ ] Local DB (recommend drift, MIT) for tasks, progress, unlock timer, lock state and a queue of
+  parent commands; migrate from shared_preferences.
+- [ ] Sync: Firestore offline persistence (explicit on web), `commands` sub-collection with
+  rules + rules tests, conflict rule "parent's latest command wins" for locks/limits.
+- [ ] Parent-only offline indicator; never a blocking error on child screens.
+- [ ] Offline test suite that runs with networking disabled.
+- Note: `geolocator` is declared in pubspec.yaml but unused in lib/ — keep it out of child
+  builds until the location review (docs/LOCATION_PRIVACY.md) is done, or remove it.
+
+### 8. Kids Art Director — engaging backgrounds, icons and celebrations (PR feat/kids-art-backgrounds)
 - New role **zadx-kids-art-director** (`.claude/agents/zadx-kids-art-director.md`): most senior visual specialist for ages 5–12; grades every screen A–F on appeal, clarity, accessibility and performance; original code-drawn art only; Islamic sensitivity (no figures, no music motifs, calm Quran screens). Audit: `docs/design/ART-AUDIT.md`.
 - Built: `lib/shared/art/` (per-area `ZadSceneBackground` scenes, `ZadIcon` set, `ZadCelebrationBurst`), wired into all screens; tests in `test/kids_art_test.dart`.
 - Follow-ups: Quality Gate device check of the CI APK (look + 60 fps on a low-end phone); the **web prototype should adopt the same scenes and icons**; remove the old `PatternBackground` once nothing uses it; reuse the burst for finished adhkar sections; golden tests with a bundled font.

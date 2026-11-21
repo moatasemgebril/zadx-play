@@ -26,6 +26,7 @@ class ZadPlayerState {
 ///
 /// Quran audio source: EveryAyah per-ayah MP3s, e.g.
 /// https://everyayah.com/data/Alafasy_128kbps/001001.mp3
+/// Only reciters with `licenceConfirmed` are streamed in release builds.
 /// TODO(release): confirm usage terms or host recitations on your own CDN.
 class PlayerController extends Notifier<ZadPlayerState> {
   final AudioPlayer _player = AudioPlayer();
@@ -72,7 +73,13 @@ class PlayerController extends Notifier<ZadPlayerState> {
 
   Future<void> playSurah(SurahInfo surah) async {
     final id = ref.read(settingsProvider).reciterId;
-    final reciter = reciters.firstWhere((v) => v.id == id, orElse: () => reciters.first);
+    // Release builds only stream reciters whose licence is confirmed in writing.
+    final reciter = resolveReciter(id, visibleReciters());
+    if (reciter == null) {
+      // No licensed recitation yet: the screen shows "recitation coming soon".
+      state = const ZadPlayerState();
+      return;
+    }
     state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: surah.number, loading: true);
     final s = surah.number.toString().padLeft(3, '0');
     final playlist = ConcatenatingAudioSource(children: [
