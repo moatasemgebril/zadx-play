@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 
 import '../../data/catalog/quran.dart';
+import '../../data/catalog/surah_index.dart';
 import '../../data/models/surah.dart';
 import '../../features/settings/settings_controller.dart';
 
@@ -71,7 +72,27 @@ class PlayerController extends Notifier<ZadPlayerState> {
     }
   }
 
-  Future<void> playSurah(SurahInfo surah) async {
+  /// Called right after the parent/child picks another reciter. If a surah is
+  /// playing, it switches immediately to the new reciter at the same ayah, so
+  /// there is no need to press pause first. Does nothing when nothing plays.
+  Future<void> onReciterChanged() async {
+    final target = reciterSwitchTarget(state);
+    if (target == null) return;
+    final surah = surahIndex.where((s) => s.number == target.surahNumber).firstOrNull;
+    if (surah == null) return;
+    await _player.stop();
+    await playSurah(surah, startAyahIndex: target.ayahIndex);
+  }
+
+  /// Called right after another muezzin is picked: if the adhan is playing,
+  /// restart it immediately with the new voice.
+  Future<void> onMuezzinChanged() async {
+    if (state.kind != PlayerKind.adhan) return;
+    await _player.stop();
+    await playAdhan();
+  }
+
+  Future<void> playSurah(SurahInfo surah, {int startAyahIndex = 0}) async {
     final id = ref.read(settingsProvider).reciterId;
     // Release builds only stream reciters whose licence is confirmed in writing.
     final reciter = resolveReciter(id, visibleReciters());
@@ -89,8 +110,9 @@ class PlayerController extends Notifier<ZadPlayerState> {
         )),
     ]);
     try {
-      await _player.setAudioSource(playlist);
-      state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: surah.number);
+      final start = startAyahIndex.clamp(0, surah.ayahCount - 1);
+      await _player.setAudioSource(playlist, initialIndex: start);
+      state = ZadPlayerState(kind: PlayerKind.quran, surahNumber: surah.number, index: start);
       await _player.play();
     } catch (e) {
       debugPrint('quran audio failed: $e');
@@ -102,6 +124,13 @@ class PlayerController extends Notifier<ZadPlayerState> {
     await _player.stop();
     state = const ZadPlayerState();
   }
+}
+
+/// Where to resume after a reciter change: the surah and ayah that were
+/// playing, or null when no recitation is playing (pure, unit-tested).
+({int surahNumber, int ayahIndex})? reciterSwitchTarget(ZadPlayerState s) {
+  if (s.kind != PlayerKind.quran || s.surahNumber == null) return null;
+  return (surahNumber: s.surahNumber!, ayahIndex: s.index < 0 ? 0 : s.index);
 }
 
 final playerProvider = NotifierProvider<PlayerController, ZadPlayerState>(PlayerController.new);

@@ -219,7 +219,11 @@ class _AdhanCard extends ConsumerWidget {
           selected: s.muezzinId,
           columns: 2,
           label: (id) => muezzins.firstWhere((m) => m.id == id).name.of(lang),
-          onSelected: ref.read(settingsProvider.notifier).setMuezzin,
+          onSelected: (id) {
+            ref.read(settingsProvider.notifier).setMuezzin(id);
+            // If the adhan is playing, restart it right away with the new voice.
+            ref.read(playerProvider.notifier).onMuezzinChanged();
+          },
         ),
         const SizedBox(height: 12),
         if (!playing)
