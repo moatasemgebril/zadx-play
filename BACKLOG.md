@@ -112,3 +112,9 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 
 ## رسالة من صاحب المشروع (2026-11-21)
 معتصم بيشكر فريق ZADX كله على الشغل: الأصوات، والألعاب التعليمية، ودعم أكتر من طفل، ومراجعة الأمان، وموافقة Quran Foundation، وإعداد Firebase. جزاكم الله خيراً، كمّلوا بنفس الجودة.
+
+## Owner feedback 2026-11-21 (iPhone web preview)
+- [x] Reciter switch works instantly while playing (PR #16).
+- [x] Audio plays on iPhone Safari (PR #17) — owner confirmed it works.
+- [ ] On web, switching reciter restarts the surah from ayah 1 instead of the current ayah (initialIndex / currentIndex on just_audio web). Fix and add a test (P2).
+- [ ] Adhan audio files still missing (assets/audio/adhan_*.mp3) — blocked on recordings licence.
