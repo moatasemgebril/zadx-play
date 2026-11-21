@@ -84,16 +84,20 @@ class SfxService {
       final i = _next % _pool.length;
       _next = (_next + 1) % poolSize;
       final player = _pool[i];
+      // iPhone Safari only allows sound that starts inside the tap itself, so we
+      // call play() right away (it waits for the asset) instead of after `await`.
+      final Future<void> ready;
       if (_loaded[i] != sfx.asset) {
-        await player.setAsset(sfx.asset);
         _loaded[i] = sfx.asset;
+        ready = player.setAsset(sfx.asset).then((_) {});
       } else {
-        await player.seek(Duration.zero);
+        ready = player.seek(Duration.zero);
       }
-      await player.setVolume(sfxVolumeFor(settings));
-      // Re-check: the adhan may have started while the asset was loading.
-      if (_disposed || !shouldPlaySfx(_kind, _settings)) return;
+      unawaited(player.setVolume(sfxVolumeFor(settings)));
       unawaited(player.play().catchError((Object e) => debugPrint('sfx play failed: $e')));
+      await ready;
+      // Re-check: the adhan may have started while the asset was loading.
+      if (_disposed || !shouldPlaySfx(_kind, _settings)) await player.stop();
     } catch (e) {
       debugPrint('sfx ${sfx.name} failed: $e');
     }
