@@ -75,6 +75,34 @@ export function rateLimitKey(bucket: string, subject: string): string {
 // Subscriptions
 // ---------------------------------------------------------------------------
 
+/**
+ * Feature matrix, mirrored from lib/data/models/plan.dart (`AppFeature`,
+ * `freeFeatures`, `basicFeatures`, `plusFeatures`). Keep the names identical:
+ * test/plan_matrix_test.dart in the app compares both lists.
+ * Free = no plan (or an expired one).
+ */
+export const PLAN_FEATURES = {
+  free: ["appLock", "prayerTimes", "adhan", "quran"],
+  basic: [
+    "appLock", "prayerTimes", "adhan", "quran",
+    "tasksRewards", "games", "eduGames", "exercises", "adhkar", "customUnlockTasks", "multipleChildren", "assistant",
+  ],
+  plus: [
+    "appLock", "prayerTimes", "adhan", "quran",
+    "tasksRewards", "games", "eduGames", "exercises", "adhkar", "customUnlockTasks", "multipleChildren", "assistant",
+    "consoleLinks", "unlimitedAssistant", "weeklyReport",
+  ],
+} as const;
+
+export type PlanFeature = (typeof PLAN_FEATURES)["plus"][number];
+
+/** True when the family's plan in force at [now] includes [feature]. Free features are always allowed. */
+export function planAllows(plan: unknown, planExpiresAt: unknown, now: number, feature: PlanFeature): boolean {
+  if ((PLAN_FEATURES.free as readonly string[]).includes(feature)) return true;
+  if (!hasActivePlan(plan, planExpiresAt, now)) return false;
+  return (PLAN_FEATURES[plan as "basic" | "plus"] as readonly string[]).includes(feature);
+}
+
 /** True when the family has a paid or trial plan that has not expired. */
 export function hasActivePlan(plan: unknown, planExpiresAt: unknown, now: number): boolean {
   if (plan !== "basic" && plan !== "plus") return false;

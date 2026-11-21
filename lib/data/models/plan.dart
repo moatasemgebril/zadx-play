@@ -1,8 +1,114 @@
+/// Paid tiers sold in the stores. The free plan has no tier: a `null` tier
+/// (see [Entitlement.effectiveTier]) means "Free".
 enum PlanTier { basic, plus }
 
 enum BillingPeriod { monthly, yearly }
 
-/// Suggested list prices (USD). Real prices come from the store per country.
+/// Every feature that a plan can include. The single source of truth for
+/// "who gets what" is [featuresOf]; screens ask [hasFeature].
+///
+/// Names are mirrored in `backend/functions/src/security.ts` (`PLAN_FEATURES`)
+/// and a test keeps both lists identical.
+enum AppFeature {
+  // ---- Free forever (owner decision 2026-11-21) ----
+  /// Device lock: lock at prayer times + a simple daily time limit (1 child).
+  appLock,
+
+  /// Prayer times (the adhan needs them).
+  prayerTimes,
+
+  /// Adhan with every free muezzin voice.
+  adhan,
+
+  /// Quran reading + recitation with the approved reciters.
+  quran,
+
+  // ---- Basic (and Plus) ----
+  /// Tasks, parent approval and the rewards wallet (play minutes).
+  tasksRewards,
+
+  /// Device games that unlock after tasks or on a timer.
+  games,
+
+  /// Built-in Zad X learning games.
+  eduGames,
+
+  /// Light exercises with animated figures.
+  exercises,
+
+  /// Adhkar section.
+  adhkar,
+
+  /// Parent-made tasks that unlock games.
+  customUnlockTasks,
+
+  /// More than one child profile (see [PlanPricing.maxChildren]).
+  multipleChildren,
+
+  /// Parent help assistant (daily cap on Basic).
+  assistant,
+
+  // ---- Plus only ----
+  /// PlayStation Family and Microsoft Family Safety links + alerts.
+  consoleLinks,
+
+  /// Assistant with the high Plus daily cap.
+  unlimitedAssistant,
+
+  /// Weekly report for the parent.
+  weeklyReport,
+}
+
+/// Free: only the app lock, prayer times, adhan and Quran.
+const freeFeatures = <AppFeature>{
+  AppFeature.appLock,
+  AppFeature.prayerTimes,
+  AppFeature.adhan,
+  AppFeature.quran,
+};
+
+/// Basic: everything in Free + the core paid features.
+const basicFeatures = <AppFeature>{
+  ...freeFeatures,
+  AppFeature.tasksRewards,
+  AppFeature.games,
+  AppFeature.eduGames,
+  AppFeature.exercises,
+  AppFeature.adhkar,
+  AppFeature.customUnlockTasks,
+  AppFeature.multipleChildren,
+  AppFeature.assistant,
+};
+
+/// Plus: everything.
+const plusFeatures = <AppFeature>{
+  ...basicFeatures,
+  AppFeature.consoleLinks,
+  AppFeature.unlimitedAssistant,
+  AppFeature.weeklyReport,
+};
+
+/// The feature set of a tier (`null` = Free).
+Set<AppFeature> featuresOf(PlanTier? tier) => switch (tier) {
+      null => freeFeatures,
+      PlanTier.basic => basicFeatures,
+      PlanTier.plus => plusFeatures,
+    };
+
+/// True when the family's current plan includes [feature].
+/// Free features are always true, with or without login or purchase.
+bool hasFeature(Entitlement entitlement, AppFeature feature) =>
+    freeFeatures.contains(feature) || featuresOf(entitlement.effectiveTier).contains(feature);
+
+/// Reads the tier string the server returns (`verifyPurchase`, family doc).
+/// Anything unknown is Free, never silently Basic.
+PlanTier? parsePlanTier(Object? value) => switch (value) {
+      'basic' => PlanTier.basic,
+      'plus' => PlanTier.plus,
+      _ => null,
+    };
+
+/// Suggested list prices (USD) and limits. Real prices come from the store per country.
 class PlanPricing {
   const PlanPricing({
     required this.tier,
@@ -15,18 +121,35 @@ class PlanPricing {
     required this.weeklyReport,
   });
 
-  final PlanTier tier;
+  /// `null` for the Free plan.
+  final PlanTier? tier;
   final double monthly;
   final double yearly;
+
+  /// May become obsolete with the device-wide lock (feat/device-wide-lock).
   final int maxGames;
   final int maxChildren;
   final bool playStation;
   final bool unlimitedAssistant;
   final bool weeklyReport;
 
+  bool get isFree => tier == null;
+  Set<AppFeature> get features => featuresOf(tier);
+
   double get yearlyPerMonth => yearly / 12;
-  int get yearlySavingPercent => (100 - yearly / (monthly * 12) * 100).round();
+  int get yearlySavingPercent => monthly <= 0 ? 0 : (100 - yearly / (monthly * 12) * 100).round();
 }
+
+const planFree = PlanPricing(
+  tier: null,
+  monthly: 0,
+  yearly: 0,
+  maxGames: 0,
+  maxChildren: 1,
+  playStation: false,
+  unlimitedAssistant: false,
+  weeklyReport: false,
+);
 
 const planBasic = PlanPricing(
   tier: PlanTier.basic,
@@ -50,16 +173,37 @@ const planPlus = PlanPricing(
   weeklyReport: true,
 );
 
+/// The three offers in display order: Free, Basic, Plus.
+const allPlans = [planFree, planBasic, planPlus];
+
+/// The pricing/limits for a tier (`null` = Free).
+PlanPricing planFor(PlanTier? tier) => switch (tier) {
+      null => planFree,
+      PlanTier.basic => planBasic,
+      PlanTier.plus => planPlus,
+    };
+
 /// What the family currently has access to.
 class Entitlement {
-  const Entitlement({this.tier, this.inTrial = false, this.expiresAt});
+  const Entitlement({this.tier, this.inTrial = false, this.expiresAt, this.now});
 
+  /// The tier the store/server reported (`null` = Free). A trial is a Plus
+  /// tier with [inTrial] set.
   final PlanTier? tier;
   final bool inTrial;
   final DateTime? expiresAt;
 
-  bool get isPlus => tier == PlanTier.plus;
-  bool get isActive => tier != null && (expiresAt == null || expiresAt!.isAfter(DateTime.now()));
+  /// Clock override for tests.
+  final DateTime Function()? now;
 
-  PlanPricing get limits => isPlus ? planPlus : planBasic;
+  bool get isActive => tier != null && (expiresAt == null || expiresAt!.isAfter((now ?? DateTime.now)()));
+
+  /// The tier in force right now: `null` (Free) once the plan expired.
+  PlanTier? get effectiveTier => isActive ? tier : null;
+
+  bool get isFree => effectiveTier == null;
+  bool get isPlus => effectiveTier == PlanTier.plus;
+
+  /// Limits of the plan in force. Free users get [planFree], never Basic.
+  PlanPricing get limits => planFor(effectiveTier);
 }

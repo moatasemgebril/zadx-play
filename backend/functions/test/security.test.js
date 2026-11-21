@@ -102,3 +102,26 @@ test("sanitiseNotifyData drops reserved and non-scalar values", () => {
   assert.deepEqual(s.sanitiseNotifyData(["a"]), {});
   assert.equal(s.sanitiseNotifyData({ prayer: "x".repeat(500) }).prayer.length, 100);
 });
+
+test("PLAN_FEATURES: free is only lock, prayer times, adhan and Quran; basic ⊂ plus", () => {
+  assert.deepEqual([...s.PLAN_FEATURES.free].sort(), ["adhan", "appLock", "prayerTimes", "quran"]);
+  for (const f of s.PLAN_FEATURES.free) assert.ok(s.PLAN_FEATURES.basic.includes(f), f);
+  for (const f of s.PLAN_FEATURES.basic) assert.ok(s.PLAN_FEATURES.plus.includes(f), f);
+  assert.ok(s.PLAN_FEATURES.plus.length > s.PLAN_FEATURES.basic.length);
+});
+
+test("planAllows: free features always, paid only with an active plan", () => {
+  const now = Date.parse("2026-01-15T00:00:00Z");
+  const future = "2026-02-01T00:00:00Z";
+  const past = "2025-12-01T00:00:00Z";
+  for (const f of ["appLock", "prayerTimes", "adhan", "quran"]) {
+    assert.equal(s.planAllows(null, null, now, f), true, f);
+    assert.equal(s.planAllows("plus", past, now, f), true, f);
+  }
+  assert.equal(s.planAllows(null, null, now, "assistant"), false);
+  assert.equal(s.planAllows("basic", past, now, "assistant"), false);
+  assert.equal(s.planAllows("basic", future, now, "assistant"), true);
+  assert.equal(s.planAllows("basic", future, now, "unlimitedAssistant"), false);
+  assert.equal(s.planAllows("plus", future, now, "unlimitedAssistant"), true);
+  assert.equal(s.planAllows("gold", future, now, "games"), false);
+});

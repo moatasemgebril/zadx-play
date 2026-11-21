@@ -10,12 +10,14 @@ import '../../core/utils/formatters.dart';
 import '../../data/catalog/games.dart';
 import '../../data/models/family_task.dart';
 import '../../data/models/game.dart';
+import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../settings/settings_controller.dart';
+import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
 import '../tasks/widgets/praise_dialog.dart';
 
@@ -38,12 +40,15 @@ class GamesScreen extends ConsumerWidget {
         Text(l10n.zadGames, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.zadGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
         const SizedBox(height: 10),
-        Row(children: [
-          for (final g in zadGames) ...[
-            Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
-            if (g != zadGames.last) const SizedBox(width: 10),
-          ],
-        ]),
+        PaidFeatureGate(
+          feature: AppFeature.eduGames,
+          child: Row(children: [
+            for (final g in zadGames) ...[
+              Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
+              if (g != zadGames.last) const SizedBox(width: 10),
+            ],
+          ]),
+        ),
         const SizedBox(height: 18),
         Text(l10n.deviceGames, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.deviceGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
@@ -51,17 +56,22 @@ class GamesScreen extends ConsumerWidget {
         _LockBanner(wallet: wallet),
         if (wallet.prayerLock) ...[const SizedBox(height: 10), const _PrayerLockCard()],
         const SizedBox(height: 10),
-        Text(l10n.gamesCount(Fmt.digits(games.length, lang)),
-            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.purpleDark)),
-        const SizedBox(height: 8),
-        GridView.count(
-          crossAxisCount: 3,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.62,
-          children: [for (final g in games) _GameTile(game: g, unlocked: wallet.gamesUnlocked)],
+        PaidFeatureGate(
+          feature: AppFeature.games,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(l10n.gamesCount(Fmt.digits(games.length, lang)),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.purpleDark)),
+            const SizedBox(height: 8),
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: 0.62,
+              children: [for (final g in games) _GameTile(game: g, unlocked: wallet.gamesUnlocked)],
+            ),
+          ]),
         ),
       ]),
     );

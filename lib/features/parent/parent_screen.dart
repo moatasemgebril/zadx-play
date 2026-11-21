@@ -18,6 +18,7 @@ import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
 import '../settings/settings_controller.dart';
 import '../settings/sound_settings_card.dart';
+import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
 import 'children_card.dart';
 import 'devices_card.dart';
@@ -39,13 +40,13 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
-          const _ApprovalsCard(),
+          const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),
           const SizedBox(height: 12),
           const DevicesCard(),
           const SizedBox(height: 12),
           const _ConsolesCard(),
           const SizedBox(height: 12),
-          const _GamesPickerCard(),
+          const PaidFeatureGate(feature: AppFeature.games, child: _GamesPickerCard()),
           const SizedBox(height: 12),
           const _SettingsCard(),
           const SizedBox(height: 12),
@@ -63,7 +64,11 @@ class _PlanCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
-    final planName = ent.inTrial ? l10n.freeTrial : (ent.isPlus ? l10n.plusName : l10n.basicName);
+    final planName = ent.isFree
+        ? l10n.freeName
+        : ent.inTrial
+            ? l10n.freeTrial
+            : (ent.isPlus ? l10n.plusName : l10n.basicName);
     return ZadCard(
       color: AppColors.ink,
       child: Row(children: [
@@ -163,7 +168,7 @@ class _ConsolesCard extends ConsumerWidget {
         Text(l10n.consolesTitle, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.consolesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted, height: 1.5)),
         const SizedBox(height: 12),
-        if (!ent.isPlus)
+        if (!hasFeature(ent, AppFeature.consoleLinks))
           FilledButton(onPressed: () => context.push(Routes.subscription), child: Text(l10n.plusName))
         else ...[
           Banner2(text: l10n.psEarned(Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),

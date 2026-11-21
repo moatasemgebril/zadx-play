@@ -67,7 +67,8 @@ class SubscriptionService {
           });
           final data = Map<String, dynamic>.from(result.data as Map);
           _entitlement.add(Entitlement(
-            tier: data['tier'] == 'plus' ? PlanTier.plus : PlanTier.basic,
+            // Unknown or missing tier = Free, never silently Basic.
+            tier: parsePlanTier(data['tier']),
             inTrial: data['inTrial'] as bool? ?? false,
             expiresAt: DateTime.tryParse(data['expiresAt'] as String? ?? ''),
           ));
@@ -91,7 +92,9 @@ final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
   return s;
 });
 
-/// Current plan. Defaults to a trial of Plus so the parent can try everything.
+/// Current plan. Defaults to a trial of Plus so the parent can try everything
+/// (a trial always gives Plus features, see `featuresOf`). Free features
+/// (lock, prayer times, adhan, Quran) never depend on this provider's value.
 final entitlementProvider = StreamProvider<Entitlement>((ref) async* {
   yield const Entitlement(tier: PlanTier.plus, inTrial: true);
   yield* ref.watch(subscriptionServiceProvider).entitlementStream;

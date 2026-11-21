@@ -92,6 +92,15 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - Built: `lib/shared/art/` (per-area `ZadSceneBackground` scenes, `ZadIcon` set, `ZadCelebrationBurst`), wired into all screens; tests in `test/kids_art_test.dart`.
 - Follow-ups: Quality Gate device check of the CI APK (look + 60 fps on a low-end phone); the **web prototype should adopt the same scenes and icons**; remove the old `PatternBackground` once nothing uses it; reuse the burst for finished adhkar sections; golden tests with a bundled font.
 
+### 9. Free plan: lock + Quran + adhan free forever (owner request 2026-11-21) — PR feat/free-plan
+- [x] Feature matrix in one place (`AppFeature` / `hasFeature`, server mirror `PLAN_FEATURES`), Free card "مجاني للأبد"
+  on the plans screen, paid screens gated with a kid-safe "ask a parent" card behind the parent PIN.
+- [ ] feat/device-wide-lock: for Free, `lockPolicyProvider` must lock on prayer times + a daily time limit only
+  (Free has no tasks, so "required tasks" / earned minutes must not keep the device locked all day). Add the
+  daily-limit setting for 1 child.
+- [ ] Owner decision: should adhkar be free too? (today: paid, Basic+.)
+- [ ] Decide what replaces the client default "Plus trial" (R-16) so Free is reachable after the trial.
+
 ## Done
 
 ## Firebase status (2026-11-21, set up by Claude with the owner)

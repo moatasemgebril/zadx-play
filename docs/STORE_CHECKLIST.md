@@ -40,6 +40,9 @@
       (`com.microsoft.familysafety`) open correctly from the Parent screen.
 
 ## Business
+- [ ] Store listing and screenshots show the three offers: Free forever (app lock, prayer times, adhan, Quran),
+      Basic and Plus (feature table in docs/ARCHITECTURE.md "Plans"). No subscription product is created for Free.
+- [ ] App Review / Families notes: purchase screens and upgrade prompts are behind the parent PIN.
 - [ ] Final prices per country (Play/App Store price tiers), e.g. lower tiers for Egypt, India, Pakistan.
 - [ ] Referral terms page (friend must pay after trial; max 6 free months/year).
 - [ ] Anthropic API key with a spend limit; Basic plan quota (10 questions/day) tuned to budget.

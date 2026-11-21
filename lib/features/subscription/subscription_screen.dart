@@ -14,6 +14,7 @@ import '../../services/billing/subscription_service.dart';
 import '../../services/referral/referral_service.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../parent/parent_gate.dart';
 
 final _billingProvider = StateProvider<BillingPeriod>((_) => BillingPeriod.yearly);
 
@@ -29,42 +30,74 @@ class SubscriptionScreen extends ConsumerWidget {
       appBar: AppBar(title: Text(l10n.subTitle), backgroundColor: AppColors.navy, foregroundColor: Colors.white),
       body: ZadSceneBackground(
         scene: ZadScene.parent,
-        child: ListView(padding: const EdgeInsets.all(16), children: [
-          Text(l10n.subIntro, style: const TextStyle(fontSize: 17, color: AppColors.muted)),
-          const SizedBox(height: 12),
-          SegmentedButton<BillingPeriod>(
-            segments: [
-              ButtonSegment(value: BillingPeriod.monthly, label: Text(l10n.monthly, style: const TextStyle(fontSize: 16))),
-              ButtonSegment(value: BillingPeriod.yearly, label: Text('${l10n.yearly} · ${l10n.saveUpTo}', style: const TextStyle(fontSize: 15))),
-            ],
-            selected: {period},
-            onSelectionChanged: (s) => ref.read(_billingProvider.notifier).state = s.first,
-          ),
-          const SizedBox(height: 14),
-          _PlanCard(plan: planPlus, period: period, highlighted: true),
-          const SizedBox(height: 12),
-          _PlanCard(plan: planBasic, period: period),
-          const SizedBox(height: 14),
-          ZadCard(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              Text(l10n.launchOffers, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Banner2(text: l10n.offer1, bg: AppColors.mintSoft, fg: AppColors.mintText),
-              const SizedBox(height: 6),
-              Banner2(text: l10n.offer2, bg: AppColors.purpleSoft, fg: AppColors.purpleDark),
-              const SizedBox(height: 6),
-              Banner2(text: l10n.offer3, bg: const Color(0xFFFFF4D6), fg: AppColors.pendingText),
-            ]),
-          ),
-          const SizedBox(height: 14),
-          const _ReferralCard(),
-          const SizedBox(height: 10),
-          Text(l10n.pricesNote, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
-          TextButton(onPressed: () => ref.read(subscriptionServiceProvider).restore(), child: Text(l10n.restorePurchases)),
-        ]),
+        // Prices and purchase are for parents only: a child who reaches this
+        // screen (home banner, upgrade sheet, deep link) sees the PIN prompt.
+        child: ParentGate(
+          child: ListView(padding: const EdgeInsets.all(16), children: [
+            Text(l10n.subIntro, style: const TextStyle(fontSize: 17, color: AppColors.muted)),
+            const SizedBox(height: 12),
+            SegmentedButton<BillingPeriod>(
+              segments: [
+                ButtonSegment(value: BillingPeriod.monthly, label: Text(l10n.monthly, style: const TextStyle(fontSize: 16))),
+                ButtonSegment(value: BillingPeriod.yearly, label: Text('${l10n.yearly} · ${l10n.saveUpTo}', style: const TextStyle(fontSize: 15))),
+              ],
+              selected: {period},
+              onSelectionChanged: (s) => ref.read(_billingProvider.notifier).state = s.first,
+            ),
+            const SizedBox(height: 14),
+            _PlanCards(period: period),
+            const SizedBox(height: 14),
+            ZadCard(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text(l10n.launchOffers, style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Banner2(text: l10n.offer1, bg: AppColors.mintSoft, fg: AppColors.mintText),
+                const SizedBox(height: 6),
+                Banner2(text: l10n.offer2, bg: AppColors.purpleSoft, fg: AppColors.purpleDark),
+                const SizedBox(height: 6),
+                Banner2(text: l10n.offer3, bg: const Color(0xFFFFF4D6), fg: AppColors.pendingText),
+              ]),
+            ),
+            const SizedBox(height: 14),
+            const _ReferralCard(),
+            const SizedBox(height: 10),
+            Text(l10n.pricesNote, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+            TextButton(onPressed: () => ref.read(subscriptionServiceProvider).restore(), child: Text(l10n.restorePurchases)),
+          ]),
+        ),
       ),
     );
   }
+}
+
+/// Free / Basic / Plus. Three columns on wide screens (in reading order, so
+/// RTL puts Free on the right), stacked cards on phones.
+class _PlanCards extends StatelessWidget {
+  const _PlanCards({required this.period});
+  final BillingPeriod period;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(builder: (context, constraints) {
+        final cards = [
+          for (final plan in allPlans) _PlanCard(plan: plan, period: period, highlighted: plan.tier == PlanTier.plus),
+        ];
+        if (constraints.maxWidth >= 720) {
+          return IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (var i = 0; i < cards.length; i++) ...[
+                if (i > 0) const SizedBox(width: 12),
+                Expanded(child: cards[i]),
+              ],
+            ]),
+          );
+        }
+        return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: 12),
+            cards[i],
+          ],
+        ]);
+      });
 }
 
 class _PlanCard extends ConsumerWidget {
@@ -78,62 +111,98 @@ class _PlanCard extends ConsumerWidget {
     final l10n = context.l10n;
     final lang = context.lang;
     final service = ref.watch(subscriptionServiceProvider);
+    final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
     final yearly = period == BillingPeriod.yearly;
-    // Prefer the localized store price; fall back to the suggested USD price.
-    final price = service.storePrice(plan.tier, period) ?? Fmt.usd(yearly ? plan.yearly : plan.monthly);
-    final isPlus = plan.tier == PlanTier.plus;
+    final tier = plan.tier;
+    final has = plan.features.contains;
+    final isCurrent = !ent.inTrial && ent.effectiveTier == tier;
 
+    final name = switch (tier) {
+      null => l10n.freeName,
+      PlanTier.basic => l10n.basicName,
+      PlanTier.plus => l10n.plusName,
+    };
+
+    // One checklist for all three cards, driven by the feature matrix in plan.dart.
     final features = <(String, Object)>[
-      (l10n.featTasks, true),
-      (l10n.featPrayer, true),
-      (l10n.featQuran, true),
-      (l10n.featGames, l10n.gamesN(Fmt.digits(plan.maxGames, lang))),
-      (l10n.featPs, plan.playStation),
-      (l10n.featAi, plan.unlimitedAssistant ? l10n.unlimited : l10n.limited),
+      (l10n.featLock, has(AppFeature.appLock)),
+      (l10n.featPrayer, has(AppFeature.prayerTimes) && has(AppFeature.adhan)),
+      (l10n.featQuran, has(AppFeature.quran)),
+      (l10n.featTasks, has(AppFeature.tasksRewards)),
+      (l10n.featGames, has(AppFeature.games) ? l10n.gamesN(Fmt.digits(plan.maxGames, lang)) : false),
+      (l10n.featEduGames, has(AppFeature.eduGames)),
+      (l10n.featExercises, has(AppFeature.exercises)),
+      (l10n.featAdhkar, has(AppFeature.adhkar)),
+      (l10n.featCustomTasks, has(AppFeature.customUnlockTasks)),
       (l10n.featKids, Fmt.digits(plan.maxChildren, lang)),
-      (l10n.featReport, plan.weeklyReport),
+      (
+        l10n.featAi,
+        has(AppFeature.unlimitedAssistant)
+            ? l10n.unlimited
+            : has(AppFeature.assistant)
+                ? l10n.limited
+                : false
+      ),
+      (l10n.featPs, has(AppFeature.consoleLinks)),
+      (l10n.featReport, has(AppFeature.weeklyReport)),
     ];
 
     return ZadCard(
       border: Border.all(color: highlighted ? AppColors.purple : Colors.transparent, width: 3),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (highlighted)
+        if (highlighted || isCurrent)
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(color: AppColors.yellow, borderRadius: BorderRadius.circular(999)),
-              child: Text(l10n.mostPopular, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+              decoration: BoxDecoration(
+                color: isCurrent ? AppColors.mintSoft : AppColors.yellow,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(isCurrent ? l10n.yourPlan : l10n.mostPopular,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
             ),
           ),
         const SizedBox(height: 6),
-        Text(isPlus ? l10n.plusName : l10n.basicName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        Wrap(crossAxisAlignment: WrapCrossAlignment.end, spacing: 8, children: [
-          Text(price, textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800)),
-          Text(yearly ? l10n.perYear : l10n.perMonth, style: const TextStyle(fontSize: 16, color: AppColors.muted)),
+        Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+        if (tier == null) ...[
+          Text(l10n.freeForever, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.mintText)),
+          Text(l10n.freeNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
+        ] else ...[
+          Wrap(crossAxisAlignment: WrapCrossAlignment.end, spacing: 8, children: [
+            Text(
+              // Prefer the localized store price; fall back to the suggested USD price.
+              service.storePrice(tier, period) ?? Fmt.usd(yearly ? plan.yearly : plan.monthly),
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800),
+            ),
+            Text(yearly ? l10n.perYear : l10n.perMonth, style: const TextStyle(fontSize: 16, color: AppColors.muted)),
+            if (yearly)
+              Text(Fmt.usd(plan.monthly * 12),
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(fontSize: 16, color: AppColors.muted, decoration: TextDecoration.lineThrough)),
+          ]),
           if (yearly)
-            Text(Fmt.usd(plan.monthly * 12),
-                textDirection: TextDirection.ltr,
-                style: const TextStyle(fontSize: 16, color: AppColors.muted, decoration: TextDecoration.lineThrough)),
-        ]),
-        if (yearly)
-          Text(l10n.yearEq(Fmt.usd(plan.yearlyPerMonth)),
-              style: const TextStyle(fontSize: 15, color: AppColors.mintText, fontWeight: FontWeight.w800)),
+            Text(l10n.yearEq(Fmt.usd(plan.yearlyPerMonth)),
+                style: const TextStyle(fontSize: 15, color: AppColors.mintText, fontWeight: FontWeight.w800)),
+        ],
         const SizedBox(height: 8),
         for (final (label, value) in features) _FeatureRow(label: label, value: value),
         const SizedBox(height: 10),
-        if (!AppPlatform.canPurchase)
+        if (tier == null)
+          const SizedBox.shrink()
+        else if (!AppPlatform.canPurchase)
           Banner2(text: l10n.subscribeOnPhone, bg: AppColors.purpleSoft, fg: AppColors.purpleDark)
         else
-        FilledButton(
-          style: highlighted ? null : FilledButton.styleFrom(backgroundColor: AppColors.purpleSoft, foregroundColor: AppColors.purpleDark),
-          onPressed: () async {
-            final code = ref.read(_appliedReferralProvider);
-            final ok = await service.buy(plan.tier, period, referralCode: code);
-            if (!ok && context.mounted) showToast(context, l10n.purchaseError);
-          },
-          child: Text(l10n.startTrial),
-        ),
+          FilledButton(
+            style: highlighted ? null : FilledButton.styleFrom(backgroundColor: AppColors.purpleSoft, foregroundColor: AppColors.purpleDark),
+            onPressed: () async {
+              final code = ref.read(_appliedReferralProvider);
+              final ok = await service.buy(tier, period, referralCode: code);
+              if (!ok && context.mounted) showToast(context, l10n.purchaseError);
+            },
+            child: Text(l10n.startTrial),
+          ),
       ]),
     );
   }
@@ -146,18 +215,24 @@ class _FeatureRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (text, color) = switch (value) {
-      true => ('✓', AppColors.mintText),
-      false => ('—', const Color(0xFF8A86A3)),
-      _ => (value.toString(), AppColors.mintText),
+    final l10n = context.l10n;
+    final (text, color, spoken) = switch (value) {
+      true => ('✓', AppColors.mintText, l10n.featIncluded),
+      false => ('—', const Color(0xFF6E6A87), l10n.featNotIncluded),
+      _ => (value.toString(), AppColors.mintText, value.toString()),
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.purpleSoft))),
-      child: Row(children: [
-        Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
-        Text(text, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
-      ]),
+    return Semantics(
+      label: '$label: $spoken',
+      excludeSemantics: true,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.purpleSoft))),
+        child: Row(children: [
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 16))),
+          const SizedBox(width: 8),
+          Text(text, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+        ]),
+      ),
     );
   }
 }

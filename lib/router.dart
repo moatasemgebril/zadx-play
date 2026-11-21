@@ -11,6 +11,8 @@ import 'features/parent/parent_screen.dart';
 import 'features/quran/quran_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/app_shell.dart';
+import 'data/models/plan.dart';
+import 'features/subscription/paid_feature_gate.dart';
 import 'features/subscription/subscription_screen.dart';
 import 'features/tasks/tasks_screen.dart';
 
@@ -50,8 +52,8 @@ final appRouter = GoRouter(
     GoRoute(parentNavigatorKey: _rootKey, path: Routes.settings, builder: (_, __) => const SettingsScreen()),
     GoRoute(parentNavigatorKey: _rootKey, path: Routes.help, builder: (_, __) => const HelpScreen()),
     GoRoute(parentNavigatorKey: _rootKey, path: Routes.subscription, builder: (_, __) => const SubscriptionScreen()),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduLetters, builder: (_, __) => const LettersGameScreen()),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduProphets, builder: (_, __) => const ProphetsGameScreen()),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduMasjid, builder: (_, __) => const MosqueGameScreen()),
+    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduLetters, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: LettersGameScreen())),
+    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduProphets, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: ProphetsGameScreen())),
+    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduMasjid, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: MosqueGameScreen())),
   ],
 );

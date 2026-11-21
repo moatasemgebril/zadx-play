@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/catalog/locations.dart';
 import '../../data/catalog/quran.dart';
+import '../../data/models/plan.dart';
 import '../../router.dart';
 import '../../services/audio/audio_service.dart';
 import '../../shared/art/zad_art.dart';
@@ -16,6 +17,7 @@ import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
 import '../prayer/prayer_sky_banner.dart';
 import '../settings/settings_controller.dart';
+import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -38,28 +40,31 @@ class HomeScreen extends ConsumerWidget {
         const SizedBox(height: 14),
         const _AdhanCard(),
         const SizedBox(height: 14),
-        ZadCard(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Row(children: [
-              const ZadIcon(ZadIconKind.tasks, size: 30),
-              const SizedBox(width: 8),
-              Expanded(child: Text(l10n.tasksToday, style: Theme.of(context).textTheme.titleMedium)),
-              Text(
-                l10n.progressOf(Fmt.digits(wallet.doneCount, lang), Fmt.digits(wallet.tasks.length, lang)),
-                style: const TextStyle(fontSize: 16, color: AppColors.muted),
-              ),
+        PaidFeatureGate(
+          feature: AppFeature.tasksRewards,
+          child: ZadCard(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Row(children: [
+                const ZadIcon(ZadIconKind.tasks, size: 30),
+                const SizedBox(width: 8),
+                Expanded(child: Text(l10n.tasksToday, style: Theme.of(context).textTheme.titleMedium)),
+                Text(
+                  l10n.progressOf(Fmt.digits(wallet.doneCount, lang), Fmt.digits(wallet.tasks.length, lang)),
+                  style: const TextStyle(fontSize: 16, color: AppColors.muted),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              ProgressBar(value: wallet.tasks.isEmpty ? 0 : wallet.doneCount / wallet.tasks.length, color: AppColors.yellow, height: 12),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: _Stat(label: l10n.earned, value: l10n.minutesShort(Fmt.digits(wallet.earnedMinutes, lang)), bg: const Color(0xFFFFF4D6))),
+                const SizedBox(width: 10),
+                Expanded(child: _Stat(label: l10n.played, value: l10n.minutesShort(Fmt.digits(wallet.usedMinutes, lang)), bg: const Color(0xFFE6F7FD))),
+              ]),
+              const SizedBox(height: 12),
+              FilledButton(onPressed: () => context.go(Routes.tasks), child: Text(l10n.goTasks)),
             ]),
-            const SizedBox(height: 10),
-            ProgressBar(value: wallet.tasks.isEmpty ? 0 : wallet.doneCount / wallet.tasks.length, color: AppColors.yellow, height: 12),
-            const SizedBox(height: 12),
-            Row(children: [
-              Expanded(child: _Stat(label: l10n.earned, value: l10n.minutesShort(Fmt.digits(wallet.earnedMinutes, lang)), bg: const Color(0xFFFFF4D6))),
-              const SizedBox(width: 10),
-              Expanded(child: _Stat(label: l10n.played, value: l10n.minutesShort(Fmt.digits(wallet.usedMinutes, lang)), bg: const Color(0xFFE6F7FD))),
-            ]),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: () => context.go(Routes.tasks), child: Text(l10n.goTasks)),
-          ]),
+          ),
         ),
       ]),
     );

@@ -17,8 +17,8 @@ import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
-  NOTIFY_TYPES, WindowState, hasActivePlan, hexDigestEquals, isPairingCode, isSafeId,
-  normaliseReferralCode, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
+  NOTIFY_TYPES, WindowState, hexDigestEquals, isPairingCode, isSafeId,
+  normaliseReferralCode, planAllows, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
 } from "./security";
 
 initializeApp();
@@ -87,8 +87,11 @@ child earns play minutes. Device games (up to 5 on Basic, 15 on Plus) unlock onl
 must-do tasks are approved, it is not prayer time, and minutes remain. At every adhan games
 lock until the child taps "I prayed" and a parent approves. Prayer times follow the city and
 calculation method chosen with the globe icon. PlayStation cannot be controlled directly;
-Plus users get alerts and open the PlayStation Family app. Plans: Basic $4.99/month or
-$39.99/year; Plus $7.99/month or $59.99/year; 14-day free trial. Referral: 1 paying friend =
+Plus users get alerts and open the PlayStation Family app. Plans: Free forever (device lock at
+prayer times with a daily limit for one child, prayer times, adhan, Quran; no sign-in needed);
+Basic $4.99/month or $39.99/year adds tasks and rewards, games, learning games, exercises,
+adhkar, custom tasks, up to 2 children and this assistant; Plus $7.99/month or $59.99/year adds
+up to 5 children, PlayStation/Microsoft family links and a weekly report; 14-day free trial of Plus. Referral: 1 paying friend =
 2 free months, 2 = 4, 3 = 6.
 Answer briefly and kindly in the user's language (Egyptian Arabic if they write Arabic).
 Only answer questions about using Zad X, parenting screen time, or general Islamic etiquette
@@ -119,10 +122,12 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
   // The assistant is for parents: paired child devices may not use it (child-safety).
   if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
   const plan = family.get("plan");
-  if (!hasActivePlan(plan, family.get("planExpiresAt"), Date.now())) {
+  if (!planAllows(plan, family.get("planExpiresAt"), Date.now(), "assistant")) {
     throw new HttpsError("permission-denied", "subscription_required");
   }
-  const dailyLimit = plan === "plus" ? PLUS_DAILY_QUESTIONS : BASIC_DAILY_QUESTIONS;
+  const dailyLimit = planAllows(plan, family.get("planExpiresAt"), Date.now(), "unlimitedAssistant")
+    ? PLUS_DAILY_QUESTIONS
+    : BASIC_DAILY_QUESTIONS;
   const day = new Date().toISOString().slice(0, 10);
   const usageRef = family.ref.collection("assistantUsage").doc(day);
   await db.runTransaction(async (tx) => {
