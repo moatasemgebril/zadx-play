@@ -67,6 +67,10 @@ abstract class FamilyRepository {
 
   /// Deletes a child's profile and synced days.
   Future<void> deleteChild(String childId);
+
+  /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
+  /// `accessibility_off`. The backend alerts the parent devices once per new reason.
+  Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -89,6 +93,9 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> deleteChild(String childId) async {}
+
+  @override
+  Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {}
 }
 
 /// True when Firebase initialised (overridden in main()).

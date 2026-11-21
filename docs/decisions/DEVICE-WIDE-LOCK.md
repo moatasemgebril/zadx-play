@@ -112,7 +112,7 @@ Blocking every process except an allow-list on a PC is **too risky**: Windows ru
 | Windows: renamed game exe | R-09 | R-09 (browsers/social reduce it, do not remove it) |
 | Windows: allowed browser used for games | n/a | Parent's choice; documented |
 
-**Owner decisions** (not blocking this PR):
+**Owner decisions** — decided 2026-11-21, see docs/decisions/DEVICE-PROTECTION.md (Settings for the parent only, default on; optional Device Admin; tamper alerts). Original options:
 1. Lock the Settings app while locked (quick settings stay)? Team recommends **no** until tamper alerts exist.
 2. Optional Device Admin uninstall protection (separate disclosure) — team recommends a later PR.
 3. Make Family Link / Family Sharing setup a step in parent onboarding.

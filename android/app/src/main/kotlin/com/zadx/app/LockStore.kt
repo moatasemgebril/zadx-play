@@ -2,6 +2,8 @@ package com.zadx.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.os.SystemClock
+import android.provider.Settings
 
 /**
  * Lock policy shared between Flutter (via AppLockChannel), the AccessibilityService
@@ -94,4 +96,84 @@ object LockStore {
         p.edit().putInt("pendingMinutes", 0).apply()
         return m
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Device protection (docs/decisions/DEVICE-PROTECTION.md). Defaults: Settings locked for the
+    // child (owner decision), uninstall guard off until the parent turns it on.
+    // ---------------------------------------------------------------------------------------------
+
+    fun setProtection(ctx: Context, settingsLock: Boolean, uninstallGuard: Boolean) {
+        prefs(ctx).edit()
+            .putBoolean("settingsLock", settingsLock)
+            .putBoolean("uninstallGuard", uninstallGuard)
+            .apply()
+    }
+
+    fun settingsLock(ctx: Context): Boolean = prefs(ctx).getBoolean("settingsLock", true)
+
+    fun uninstallGuard(ctx: Context): Boolean = prefs(ctx).getBoolean("uninstallGuard", false)
+
+    private fun bootCount(ctx: Context): Int =
+        runCatching { Settings.Global.getInt(ctx.contentResolver, Settings.Global.BOOT_COUNT) }.getOrDefault(-1)
+
+    /** Opens the parent window (Settings + uninstall allowed). Call only after the parent PIN. */
+    fun openParentWindow(ctx: Context, minutes: Int) {
+        val ms = (minutes.coerceIn(1, 10) * 60_000L).coerceAtMost(LockRules.MAX_PARENT_WINDOW_MS)
+        prefs(ctx).edit()
+            .putLong("windowUntil", SystemClock.elapsedRealtime() + ms)
+            .putInt("windowBoot", bootCount(ctx))
+            .apply()
+    }
+
+    fun closeParentWindow(ctx: Context) {
+        prefs(ctx).edit().remove("windowUntil").remove("windowBoot").apply()
+    }
+
+    fun isParentWindowOpen(ctx: Context): Boolean {
+        val p = prefs(ctx)
+        return LockRules.isParentWindowOpen(
+            nowElapsed = SystemClock.elapsedRealtime(),
+            untilElapsed = p.getLong("windowUntil", 0L),
+            bootCount = bootCount(ctx),
+            windowBootCount = p.getInt("windowBoot", Int.MIN_VALUE),
+        )
+    }
+
+    /** Seconds left in the parent window (0 when closed). */
+    fun parentWindowSecondsLeft(ctx: Context): Int {
+        if (!isParentWindowOpen(ctx)) return 0
+        val left = prefs(ctx).getLong("windowUntil", 0L) - SystemClock.elapsedRealtime()
+        return (left / 1000).toInt().coerceAtLeast(0)
+    }
+
+    fun protectionGuard(ctx: Context, pkg: String, className: String?): LockRules.Guard {
+        val settingsLock = settingsLock(ctx)
+        val uninstallGuard = uninstallGuard(ctx)
+        if (!settingsLock && !uninstallGuard) return LockRules.Guard.NONE
+        return LockRules.protectionGuard(
+            pkg = pkg,
+            className = className,
+            ownPackage = ctx.packageName,
+            settingsLock = settingsLock,
+            uninstallGuard = uninstallGuard,
+            parentWindowOpen = isParentWindowOpen(ctx),
+            resolvedSettings = if (settingsLock) AllowedApps.settingsPackages(ctx) else emptySet(),
+        )
+    }
+
+    // Tamper detection: remember that a protection was on, so turning it off can be reported.
+    fun markServiceEnabled(ctx: Context) = prefs(ctx).edit().putBoolean("serviceEverEnabled", true).apply()
+
+    fun serviceEverEnabled(ctx: Context): Boolean = prefs(ctx).getBoolean("serviceEverEnabled", false)
+
+    fun markAdminEnabled(ctx: Context, on: Boolean) {
+        val e = prefs(ctx).edit()
+        if (on) e.putBoolean("adminEverEnabled", true) else e.putLong("adminDisabledAt", System.currentTimeMillis())
+        e.apply()
+    }
+
+    fun adminEverEnabled(ctx: Context): Boolean = prefs(ctx).getBoolean("adminEverEnabled", false)
+
+    /** The parent removed Device Admin from Zad X with the PIN: not a tamper event. */
+    fun forgetAdmin(ctx: Context) = prefs(ctx).edit().remove("adminEverEnabled").apply()
 }

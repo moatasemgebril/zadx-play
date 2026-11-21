@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Zad X uses Device Admin only so Android refuses to uninstall it while the parent keeps
+     "Prevent deleting Zad X" on. No policies are requested (no wipe, lock, password or camera
+     control). docs/decisions/DEVICE-PROTECTION.md -->
+<device-admin>
+    <uses-policies />
+</device-admin>

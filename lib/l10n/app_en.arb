@@ -352,5 +352,30 @@
         "type": "String"
       }
     }
-  }
+  },
+  "protectTitle": "Protect Zad X on this device",
+  "protectSettingsSwitch": "Lock Settings for the child",
+  "protectSettingsDesc": "The phone's Settings app opens only for you, with your PIN, for 5 minutes, then locks again by itself. Phone and emergency calls always work.",
+  "protectSettingsDescIos": "On iPhone the Settings app itself can't be locked, but Screen Time stops changes to accounts, the device passcode and the date and time. For the best protection, set up Screen Time through Family Sharing.",
+  "protectOpenSettings": "Open phone Settings for 5 minutes",
+  "protectWindowOpen": "Settings are open for {n} min, then they lock again by themselves.",
+  "@protectWindowOpen": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "protectLockNow": "Lock Settings now",
+  "protectUninstallSwitch": "Prevent deleting Zad X",
+  "protectUninstallDesc": "While this is on, apps can't be deleted on this phone without you, and Android refuses to remove Zad X.",
+  "protectUninstallDescIos": "While this is on, no apps can be deleted on this iPhone (iOS applies this to all apps).",
+  "protectAdminActive": "Delete protection is active.",
+  "protectAdminInactive": "Delete protection is not active yet. Tap here to finish.",
+  "protectAdminDisclosureTitle": "Before you turn on delete protection",
+  "protectAdminDisclosureBody": "Zad X will ask Android to make it a \"device admin app\". It uses this only so Zad X can't be deleted from this phone without you. Zad X asks for no other device controls: it can't erase, lock or read anything on the phone. You can turn it off here at any time with your PIN.\n\nOn the next screen, tap \"Activate\".",
+  "protectAdminExplanation": "Stops Zad X being deleted without the parent. No other device controls are used.",
+  "protectTamperNote": "If protection is turned off on the child's device, or the device stops checking in for a day, you'll get an alert on your phone.",
+  "protectDisclosureExtra": "Zad X also keeps the phone's Settings app for you only (you open it with your PIN) and can stop apps being deleted without you.",
+  "deviceLockAlwaysOpenProtected": "Always open: phone and emergency calls, Zad X, home screen and keyboard. Settings open for the parent with the PIN."
 }

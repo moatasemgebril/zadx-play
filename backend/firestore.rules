@@ -94,6 +94,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Tamper-alert heartbeats (Cloud Functions only). docs/decisions/DEVICE-PROTECTION.md
+    match /deviceHeartbeats/{id} {
+      allow read, write: if false;
+    }
+
     // Rate-limit counters (Cloud Functions only). Anything not matched above is denied by default.
     match /rateLimits/{key} {
       allow read, write: if false;

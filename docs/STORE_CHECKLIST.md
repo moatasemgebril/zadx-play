@@ -29,6 +29,9 @@
 - [ ] Family Controls **Distribution** entitlement approved.
 - [ ] App Review notes: "all apps except allowed" shielding (`.all(except:)`) is turned on by the parent behind a
       PIN; Screen Time tokens stay in the App Group and are never uploaded.
+- [ ] Device protection on iOS: `denyAppRemoval` (blocks deleting **all** apps while on), `lockAccounts`,
+      `lockPasscode`, `requireAutomaticDateAndTime` from a separate `ManagedSettingsStore("zadx.protection")`.
+      Review notes: parent-enabled, no data leaves the device. Test with `.child` authorization.
 - [ ] App Group + extensions signed; test on a real device with a child Apple ID in Family Sharing.
 - [ ] Subscriptions created: zadx_basic_monthly / yearly, zadx_plus_monthly / yearly, 14-day intro offer.
 - [ ] App Store Server Notifications v2 endpoint.
@@ -43,8 +46,28 @@
       this phone."
 - [ ] Package visibility: intent `<queries>` only (LAUNCHER, HOME, APP_MESSAGING, APP_CONTACTS, SETTINGS); **no**
       `QUERY_ALL_PACKAGES`. Be ready to justify LAUNCHER visibility as the parent's allow-list editor.
-- [ ] Device Admin / uninstall protection is **not** used. If added later: separate prominent disclosure and an
-      easy parent-only way to remove it (Play Device and Network Abuse / Unwanted Software policies).
+- [ ] **Device protection** (docs/decisions/DEVICE-PROTECTION.md). Update the Accessibility declaration: the same
+      service (package + class name only, never screen text) also keeps the **Settings app for the parent only**
+      (opened for 5 minutes with the parent PIN) and, when the parent turns it on, covers the **system uninstall
+      dialog**. Phone, emergency and SOS are never covered. The in-app disclosure now adds: "Zad X also keeps the
+      phone's Settings app for you only (you open it with your PIN) and can stop apps being deleted without you."
+- [ ] **Device Admin (optional, parent-enabled) — Play disclosure text.** Use in the Permissions Declaration /
+      review notes and the store listing:
+      > "Zad X is a parental-control app. If the parent turns on *Prevent deleting Zad X*, Zad X asks to become a
+      > device admin app. It requests **no device-admin policies** (no wipe, lock, password, camera or encryption
+      > control); being active only makes Android refuse to uninstall Zad X. Before Android's activation screen the
+      > parent sees a prominent disclosure explaining this, and must enter the parent PIN. The parent can turn it
+      > off at any time in Zad X (PIN) and Android always lets it be removed in Settings → Security → Device admin
+      > apps."
+      Check the current Play Developer Program Policy (Device and Network Abuse, Unwanted Software, Families)
+      wording before submission; legal review of the AR/EN text.
+- [ ] Device Admin activation screen shows `protectAdminExplanation`; `res/xml/zadx_device_admin.xml` has an empty
+      `<uses-policies>` (verify in the merged APK manifest).
+- [ ] Real-device protection tests (Pixel + Samsung + one Xiaomi, Android 10 and 14): Settings blocked for the
+      child; quick-settings tile long-press into Settings blocked; settings search blocked; PIN opens 5 minutes then
+      re-locks; Accessibility setup flow from Zad X is not interrupted; Device Admin activation and removal from
+      Zad X; uninstall from the launcher and from Play blocked while on; emergency call / power-button SOS /
+      emergency info still work while Settings is locked; safe-mode recovery for a parent who forgot the PIN.
 - [ ] Exact alarm usage justification (prayer locks).
 - [ ] Verify every game package name in `lib/data/catalog/games.dart` and the manifest `<queries>`.
 - [ ] Subscriptions + base plans + 14-day free trial offer tagged `trial`; RTDN Pub/Sub → `playNotifications`.
@@ -56,6 +79,8 @@
 - [ ] Tell parents: in "lock all apps" mode the PC closes games, launchers, social apps and (unless allowed)
       browsers; it does not lock every program.
 - [ ] Explain to parents that the child must use a Standard (non-admin) Windows account.
+- [ ] Test `install.ps1` service ACL (a Standard user gets "Access is denied" for `sc stop ZadXGuard`) and
+      `child_settings_lock.ps1` on Windows 10 and 11 (lock + `-Unlock`, refuses admin accounts).
 
 ## Consoles
 - [ ] PlayStation Family (Android package `com.playstation.ohana.android`) and Microsoft Family Safety

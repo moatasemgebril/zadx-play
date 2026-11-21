@@ -125,3 +125,39 @@ test("planAllows: free features always, paid only with an active plan", () => {
   assert.equal(s.planAllows("plus", future, now, "unlimitedAssistant"), true);
   assert.equal(s.planAllows("gold", future, now, "games"), false);
 });
+
+// Device protection (docs/decisions/DEVICE-PROTECTION.md)
+test("parseProtectionReport keeps only known platforms and reasons", () => {
+  assert.deepEqual(s.parseProtectionReport({ platform: "android", reasons: ["accessibility_off", "x", "accessibility_off", 3] }), {
+    platform: "android", reasons: ["accessibility_off"],
+  });
+  assert.deepEqual(s.parseProtectionReport({ platform: "ios" }), { platform: "ios", reasons: [] });
+  for (const bad of [null, [], "android", { platform: "windows" }, { platform: "web", reasons: [] }]) {
+    assert.equal(s.parseProtectionReport(bad), null);
+  }
+});
+
+test("newTamperReasons alerts each reason once", () => {
+  assert.deepEqual(s.newTamperReasons(undefined, ["accessibility_off"]), ["accessibility_off"]);
+  assert.deepEqual(s.newTamperReasons(["accessibility_off"], ["accessibility_off"]), []);
+  assert.deepEqual(s.newTamperReasons(["accessibility_off"], ["accessibility_off", "device_admin_off"]), ["device_admin_off"]);
+  assert.deepEqual(s.newTamperReasons("junk", []), []);
+});
+
+test("needsStaleAlert after a day without a heartbeat, once", () => {
+  const now = Date.UTC(2026, 10, 21);
+  const day = 24 * 60 * 60_000;
+  assert.equal(s.needsStaleAlert(now - day - 1, false, now), true);
+  assert.equal(s.needsStaleAlert(now - day - 1, true, now), false);
+  assert.equal(s.needsStaleAlert(now - 1000, false, now), false);
+  assert.equal(s.needsStaleAlert(undefined, false, now), false);
+});
+
+test("protectionAlertText never names the child", () => {
+  for (const kind of ["tamper", "stale"]) {
+    for (const ar of [true, false]) {
+      const t = s.protectionAlertText(kind, ar);
+      assert.ok(t.length > 20 && t.length < 300);
+    }
+  }
+});

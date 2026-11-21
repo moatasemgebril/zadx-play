@@ -8,17 +8,21 @@
  *  playNotifications– Google Play RTDN webhook: credits referrers on a friend's first payment
  *  createPairingCode / redeemPairingCode – link child phones and Windows PCs to a family
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
+ *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
+ *                     was turned off, or stops reporting for a day (docs/decisions/DEVICE-PROTECTION.md)
  */
 import { initializeApp } from "firebase-admin/app";
 import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
-  NOTIFY_TYPES, WindowState, hexDigestEquals, isPairingCode, isSafeId,
-  normaliseReferralCode, planAllows, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
+  HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, hexDigestEquals, isPairingCode, isSafeId, needsStaleAlert,
+  newTamperReasons, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
+  rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
 } from "./security";
 
 initializeApp();
@@ -530,7 +534,16 @@ async function authenticateDevice(req: { get(name: string): string | undefined }
     throw new HttpsError("unauthenticated", "bad secret");
   }
   if (device.get("revoked") === true) throw new HttpsError("unauthenticated", "revoked");
-  await device.ref.set({ lastSeenAt: FieldValue.serverTimestamp() }, { merge: true });
+  // Heartbeat for the "guard stopped reporting" alert (checkHeartbeats), at most every 30 minutes
+  // so the per-minute guard calls do not double the Firestore writes.
+  const now = Date.now();
+  const beat = typeof device.get("heartbeatMs") === "number" && now - device.get("heartbeatMs") < 30 * 60_000;
+  await device.ref.set({ lastSeenAt: FieldValue.serverTimestamp(), ...(beat ? {} : { heartbeatMs: now }) }, { merge: true });
+  if (!beat) {
+    await db.doc(`deviceHeartbeats/${familyId}__win_${deviceId}`).set({
+      familyId, childId: device.get("childId") ?? null, kind: "windows", reasons: [], lastSeenMs: now, staleAlerted: false,
+    });
+  }
   return { familyId, device };
 }
 
@@ -604,3 +617,66 @@ export const reportUsage = onRequest({ region: "europe-west1" }, async (req, res
     res.status(unauth ? 401 : 500).json({ error: unauth ? "unauthenticated" : "internal" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Device protection: tamper alerts (docs/decisions/DEVICE-PROTECTION.md)
+// Heartbeats live in the top-level `deviceHeartbeats` collection (Cloud Functions only; denied to
+// clients by the default rule). No personal data: ids, platform, reason codes and a timestamp.
+// ---------------------------------------------------------------------------
+
+async function pushToParents(family: FirebaseFirestore.DocumentSnapshot, kind: "tamper" | "stale", childId: unknown) {
+  const tokens: string[] = family.get("parentTokens") ?? [];
+  if (tokens.length === 0) return 0;
+  const lang = family.get("language") ?? family.get("settings")?.language ?? "ar";
+  const res = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: { title: "Zad X", body: protectionAlertText(kind, lang === "ar") },
+    data: { type: kind === "tamper" ? "protection_off" : "device_silent", childId: typeof childId === "string" ? childId : "" },
+  });
+  return res.successCount;
+}
+
+/**
+ * Child phone/tablet reports its protection state (on start, on resume, after policy changes).
+ * Newly appeared tamper reasons (accessibility service off, Device Admin removed, Screen Time
+ * access revoked) are pushed to the parent devices once.
+ */
+export const reportProtection = onCall({ region: "europe-west1" }, async (req) => {
+  const uid = requireUid(req.auth);
+  const { familyId, childId } = req.data ?? {};
+  const family = await requireFamilyMember(familyId, uid);
+  const bound = boundChildOf(family, uid);
+  const child = bound ?? parseChildId(childId);
+  assertChildAccess(family, uid, child);
+  await enforceRateLimit("protection", uid, 60, 60 * 60_000);
+  const report = parseProtectionReport(req.data?.status);
+  if (!report) throw new HttpsError("invalid-argument", "Bad report.");
+
+  const ref = db.doc(`deviceHeartbeats/${familyId}__${uid}`);
+  const prev = await ref.get();
+  const fresh = newTamperReasons(prev.get("reasons"), report.reasons);
+  await ref.set({
+    familyId, childId: child, kind: report.platform, reasons: report.reasons, lastSeenMs: Date.now(), staleAlerted: false,
+  });
+  const sent = fresh.length > 0 ? await pushToParents(family, "tamper", child) : 0;
+  return { alerted: fresh, sent };
+});
+
+/** Every 6 hours: one alert per device that stopped reporting for a day (phone off, app removed, guard stopped). */
+export const checkHeartbeats = onSchedule({ schedule: "every 6 hours", region: "europe-west1" }, async () => {
+  const now = Date.now();
+  const stale = await db.collection("deviceHeartbeats").where("lastSeenMs", "<", now - HEARTBEAT_STALE_MS).limit(500).get();
+  for (const doc of stale.docs) {
+    if (!needsStaleAlert(doc.get("lastSeenMs"), doc.get("staleAlerted"), now)) continue;
+    const familyId = doc.get("familyId");
+    if (!isSafeId(familyId)) continue;
+    const family = await db.doc(`families/${familyId}`).get();
+    if (!family.exists) {
+      await doc.ref.delete(); // family deleted: drop its heartbeats
+      continue;
+    }
+    await pushToParents(family, "stale", doc.get("childId"));
+    await doc.ref.set({ staleAlerted: true }, { merge: true });
+  }
+});
+

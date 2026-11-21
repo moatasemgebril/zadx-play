@@ -76,6 +76,35 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
             }
             result(nil)
 
+        // MARK: Device protection (docs/decisions/DEVICE-PROTECTION.md)
+        case "setProtection":
+            if AuthorizationCenter.shared.authorizationStatus == .approved {
+                SharedStore.applyProtection(
+                    lockSettings: args["settingsLock"] as? Bool ?? true,
+                    preventRemoval: args["uninstallGuard"] as? Bool ?? false
+                )
+            }
+            result(nil)
+
+        case "protectionStatus":
+            let approved = AuthorizationCenter.shared.authorizationStatus == .approved
+            if approved { SharedStore.authorizationEverApproved = true }
+            let ever = SharedStore.authorizationEverApproved
+            result([
+                "platform": "ios",
+                "authorization": approved,
+                "authorizationEverApproved": ever,
+                "tamper": (ever && !approved) ? ["screen_time_off"] : [String](),
+            ])
+
+        // Android-only (Settings window / Device Admin): iOS cannot lock the Settings app.
+        case "openParentWindow", "parentWindowSeconds":
+            result(0)
+        case "closeParentWindow", "requestDeviceAdmin", "removeDeviceAdmin":
+            result(nil)
+        case "deviceAdminActive", "openDeviceSettings":
+            result(false)
+
         case "schedulePrayerLocks":
             let times = (args["times"] as? [NSNumber] ?? []).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
             schedulePrayerLocks(times)

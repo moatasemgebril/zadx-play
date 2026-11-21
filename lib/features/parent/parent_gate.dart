@@ -141,3 +141,88 @@ class _ParentGateState extends ConsumerState<ParentGate> {
     );
   }
 }
+
+/// Asks for the parent PIN again before a sensitive step, even inside the unlocked parent area
+/// (the area may have been left open on the child's phone). Used to open the phone's Settings for
+/// a few minutes and to turn device protection off (docs/decisions/DEVICE-PROTECTION.md).
+/// Shares the wrong-PIN counter and lock-out with [ParentGate].
+Future<bool> confirmParentPin(BuildContext context, WidgetRef ref) async {
+  final stored = ref.read(settingsProvider).parentPinHash;
+  if (stored == null) return false; // the parent area always creates a PIN first
+  final ok = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _PinConfirmDialog(stored: stored),
+  );
+  return ok == true;
+}
+
+class _PinConfirmDialog extends ConsumerStatefulWidget {
+  const _PinConfirmDialog({required this.stored});
+  final String stored;
+
+  @override
+  ConsumerState<_PinConfirmDialog> createState() => _PinConfirmDialogState();
+}
+
+class _PinConfirmDialogState extends ConsumerState<_PinConfirmDialog> {
+  final _ctrl = TextEditingController();
+  bool _error = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  int _lockSecondsLeft() {
+    final until = ref.read(sharedPrefsProvider).getInt(_lockedUntilKey) ?? 0;
+    final left = (until - DateTime.now().millisecondsSinceEpoch).clamp(0, PinSecurity.lockoutFor(1000).inMilliseconds);
+    return (left / 1000).ceil();
+  }
+
+  void _submit() {
+    if (_lockSecondsLeft() > 0) return setState(() => _error = true);
+    final prefs = ref.read(sharedPrefsProvider);
+    if (PinSecurity.verifyPin(_ctrl.text.trim(), widget.stored)) {
+      prefs.remove(_failuresKey);
+      prefs.remove(_lockedUntilKey);
+      Navigator.pop(context, true);
+      return;
+    }
+    final failures = (prefs.getInt(_failuresKey) ?? 0) + 1;
+    prefs.setInt(_failuresKey, failures);
+    final lock = PinSecurity.lockoutFor(failures);
+    if (lock > Duration.zero) prefs.setInt(_lockedUntilKey, DateTime.now().add(lock).millisecondsSinceEpoch);
+    _ctrl.clear();
+    setState(() => _error = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final lockedFor = _lockSecondsLeft();
+    return AlertDialog(
+      title: Text(l10n.parentPin),
+      content: TextField(
+        controller: _ctrl,
+        autofocus: true,
+        obscureText: true,
+        keyboardType: TextInputType.number,
+        maxLength: 6,
+        textAlign: TextAlign.center,
+        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        style: const TextStyle(fontSize: 24, letterSpacing: 8),
+        decoration: InputDecoration(
+          labelText: l10n.enterPin,
+          errorText: lockedFor > 0 ? l10n.pinTooManyTries(lockedFor.toString()) : (_error ? l10n.wrongPin : null),
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l10n.lockDisclosureCancel)),
+        FilledButton(onPressed: _submit, child: Text(l10n.approve)),
+      ],
+    );
+  }
+}

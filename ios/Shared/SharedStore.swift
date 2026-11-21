@@ -87,4 +87,32 @@ enum SharedStore {
         store.shield.applicationCategories = nil
         store.shield.webDomainCategories = nil
     }
+
+    // MARK: - Device protection (docs/decisions/DEVICE-PROTECTION.md)
+    //
+    // What iOS allows (Screen Time API, needs FamilyControls authorization):
+    //  * `application.denyAppRemoval`  – no app can be deleted while on (iOS has no per-app variant).
+    //  * `account.lockAccounts`        – no adding/removing accounts (Apple ID, mail).
+    //  * `passcode.lockPasscode`       – the device passcode cannot be changed or removed.
+    //  * `dateAndTime.requireAutomaticDateAndTime` – the clock cannot be moved to skip a lock.
+    // What iOS does NOT allow: locking or shielding the Settings app itself, or stopping the child from
+    // revoking Screen Time access when Zad X was authorized with `.individual`. With `.child`
+    // (Family Sharing) removing the authorization needs the parent's Apple ID / Screen Time passcode.
+    // A separate named store keeps these settings when the app shield is cleared.
+
+    static let protectionStore = ManagedSettingsStore(named: .init("zadx.protection"))
+    private static let authEverKey = "zadx.authEverApproved"
+
+    static func applyProtection(lockSettings: Bool, preventRemoval: Bool) {
+        protectionStore.application.denyAppRemoval = preventRemoval ? true : nil
+        protectionStore.account.lockAccounts = lockSettings ? true : nil
+        protectionStore.passcode.lockPasscode = lockSettings ? true : nil
+        protectionStore.dateAndTime.requireAutomaticDateAndTime = lockSettings ? true : nil
+    }
+
+    /// Set once Screen Time access was approved, so a later revocation is reported to the parent.
+    static var authorizationEverApproved: Bool {
+        get { defaults.bool(forKey: authEverKey) }
+        set { defaults.set(newValue, forKey: authEverKey) }
+    }
 }
