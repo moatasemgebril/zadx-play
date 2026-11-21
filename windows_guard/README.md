@@ -8,7 +8,9 @@ games on the child's PC:
   prayer task is approved on the phone.
 - Minutes played on the PC are reported to Firebase and reduce the balance everywhere.
 - Steam / Epic / Battle.net / Riot / Xbox app launchers are closed while locked (configurable).
-- Never synced or offline before the first sync → games stay locked (safe default).
+- "Lock all apps" mode (default, docs/decisions/DEVICE-WIDE-LOCK.md): also closes social/chat apps and,
+  unless the parent allows them for homework, browsers. It never blocks every process (too risky on a PC).
+- Never synced or offline before the first sync → games, launchers and social apps stay locked (safe default).
 
 ## Build & install
 ```powershell
@@ -27,7 +29,8 @@ Set `FunctionsBaseUrl` in `appsettings.json` to your Firebase project.
   Accounts → Family to create a child (standard) account.
 
 ## Limits
-- Browser games aren't covered (use Microsoft Family Safety web filters).
+- Browser games are covered only when browsers are locked ("lock all apps" mode without the homework
+  exception); otherwise use Microsoft Family Safety web filters.
 - Process names per game are in `GameCatalog.cs`; check them on current game versions.
 - Release builds should be code-signed (Authenticode) and shipped as MSI/MSIX.
 

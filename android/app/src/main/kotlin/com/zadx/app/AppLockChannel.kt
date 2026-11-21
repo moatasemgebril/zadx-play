@@ -53,7 +53,14 @@ object AppLockChannel {
                     result.success(isAccessibilityEnabled(context))
                 }
 
-                "pickGames" -> result.success(null) // iOS only
+                "pickGames", "pickAllowedApps" -> result.success(null) // iOS only
+
+                // Parent allow-list editor (runs behind the parent PIN; the list never leaves the device).
+                "listApps" -> result.success(AllowedApps.launchableApps(context))
+
+                "alwaysAllowedApps" -> result.success(
+                    AllowedApps.alwaysAllowedApps(context, call.argument<Boolean>("allowMessaging") ?: true),
+                )
 
                 "applyPolicy" -> {
                     @Suppress("UNCHECKED_CAST")
@@ -65,6 +72,9 @@ object AppLockChannel {
                         reason = reason,
                         packages = packages,
                         remainingMinutes = call.argument<Int>("remainingMinutes") ?: 0,
+                        mode = call.argument<String>("mode") ?: LockRules.MODE_SELECTED_GAMES,
+                        allowedPackages = call.argument<List<String>>("allowedPackages") ?: emptyList(),
+                        allowMessaging = call.argument<Boolean>("allowMessaging") ?: true,
                     )
                     // Flutter is the source of truth for the prayer lock once it is running.
                     LockStore.setPrayerLock(context, reason == "prayer")

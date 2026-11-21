@@ -19,22 +19,47 @@ object LockStore {
         reason: String,
         packages: List<String>,
         remainingMinutes: Int,
+        mode: String = LockRules.MODE_SELECTED_GAMES,
+        allowedPackages: List<String> = emptyList(),
+        allowMessaging: Boolean = true,
     ) {
         prefs(ctx).edit()
             .putBoolean("locked", locked)
             .putString("reason", reason)
             .putStringSet("packages", packages.toSet())
             .putInt("remaining", remainingMinutes)
+            .putString("mode", mode)
+            .putStringSet("allowed", allowedPackages.toSet())
+            .putBoolean("allowMessaging", allowMessaging)
             .apply()
+        AllowedApps.invalidate()
     }
 
-    fun isControlled(ctx: Context, pkg: String): Boolean =
-        prefs(ctx).getStringSet("packages", emptySet())!!.contains(pkg)
+    /** "allApps" (lock everything except allowed) or "selectedGames" (legacy). */
+    fun mode(ctx: Context): String =
+        prefs(ctx).getString("mode", LockRules.MODE_SELECTED_GAMES) ?: LockRules.MODE_SELECTED_GAMES
+
+    fun allowMessaging(ctx: Context): Boolean = prefs(ctx).getBoolean("allowMessaging", true)
+
+    /** True when [pkg] is subject to the lock and the play-minute counter. See [LockRules]. */
+    fun isControlled(ctx: Context, pkg: String): Boolean {
+        val p = prefs(ctx)
+        val mode = mode(ctx)
+        return LockRules.isControlled(
+            pkg = pkg,
+            ownPackage = ctx.packageName,
+            mode = mode,
+            selectedGames = p.getStringSet("packages", emptySet())!!,
+            parentAllowed = p.getStringSet("allowed", emptySet())!!,
+            // Only resolve system roles when needed (allApps mode).
+            systemAllowed = if (mode == LockRules.MODE_ALL_APPS) AllowedApps.systemAllowed(ctx, allowMessaging(ctx)) else emptySet(),
+        )
+    }
 
     fun controlledPackages(ctx: Context): Set<String> =
         prefs(ctx).getStringSet("packages", emptySet())!!
 
-    /** True when a controlled game must be blocked right now. */
+    /** True when a controlled app must be blocked right now. */
     fun shouldBlock(ctx: Context): Boolean {
         val p = prefs(ctx)
         return p.getBoolean("locked", true) || p.getBoolean("prayerLock", false) || p.getInt("remaining", 0) <= 0

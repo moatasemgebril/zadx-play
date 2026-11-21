@@ -20,6 +20,7 @@ import '../settings/settings_controller.dart';
 import '../settings/sound_settings_card.dart';
 import '../tasks/wallet_controller.dart';
 import 'children_card.dart';
+import 'device_lock_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
 
@@ -44,6 +45,8 @@ class ParentScreen extends ConsumerWidget {
           const DevicesCard(),
           const SizedBox(height: 12),
           const _ConsolesCard(),
+          const SizedBox(height: 12),
+          const DeviceLockCard(),
           const SizedBox(height: 12),
           const _GamesPickerCard(),
           const SizedBox(height: 12),
@@ -294,9 +297,9 @@ class _GamesPickerCard extends ConsumerWidget {
         // iOS: Apple requires choosing apps through its own picker.
         OutlinedButton.icon(
           onPressed: () async {
-            final lock = ref.read(appLockServiceProvider);
-            if (!await lock.hasPermissions()) await lock.requestPermissions();
-            await lock.pickGamesIos();
+            // Android: prominent disclosure first (Google Play Accessibility policy).
+            await requestLockPermission(context, ref);
+            await ref.read(appLockServiceProvider).pickGamesIos();
           },
           icon: const Icon(Icons.lock_person_rounded),
           label: Text(l10n.lockPermission, style: const TextStyle(fontSize: 16)),

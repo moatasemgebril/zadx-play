@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="zadx_accessibility_description">Zad X uses this permission only to detect when a game chosen by the parent is opened, so it can lock it during prayer time or until tasks are done. Zad X does not read what is on the screen.</string>
+    <string name="zadx_accessibility_description">Zad X uses this permission only to see which app is open (its name, never what is on the screen), so it can lock games and apps chosen by the parent during prayer time or until tasks are done. Phone and emergency calls are never locked. Nothing about the apps used leaves this phone.</string>
 </resources>

@@ -61,7 +61,10 @@ public sealed class GuardWorker : BackgroundService
     {
         var policy = _policy;
         var gameIds = policy?.Games ?? GameCatalog.Executables.Keys.ToArray();
-        var running = FindRunning(GameCatalog.ProcessNamesFor(gameIds, includeLaunchers: false));
+        // Never synced → widest scope (safe default), but keep browsers open until the parent's choice is known.
+        var mode = policy is null ? "allApps" : policy.Mode;
+        var allowBrowsers = policy is null || policy.AllowBrowsers;
+        var running = FindRunning(GameCatalog.ControlledProcesses(mode, gameIds, allowBrowsers, includeLaunchers: false));
         var launchers = _options.BlockLaunchersWhenLocked ? FindRunning(new HashSet<string>(GameCatalog.Launchers, StringComparer.OrdinalIgnoreCase)) : new List<Process>();
 
         var (locked, reason) = Decide(policy);

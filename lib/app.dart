@@ -97,6 +97,9 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
       'notifyOnTasks': s.notifyParentOnTasks,
       'notifyOnAdhan': s.notifyParentOnAdhan,
       'games': s.controlledGameIds.toList()..sort(),
+      // Windows Guard scope (docs/decisions/DEVICE-WIDE-LOCK.md). The Android allow-list stays on the device.
+      'lockMode': s.lockMode.name,
+      'pcAllowBrowsers': s.pcAllowBrowsers,
     }).catchError((Object e) => debugPrint('settings sync failed: $e'));
   }
 

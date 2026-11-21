@@ -54,7 +54,10 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
             }
 
         case "pickGames":
-            presentPicker(result: result)
+            presentPicker(allowed: false, result: result)
+
+        case "pickAllowedApps":
+            presentPicker(allowed: true, result: result)
 
         case "applyPolicy":
             let locked = args["locked"] as? Bool ?? true
@@ -62,6 +65,7 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
             let remaining = args["remainingMinutes"] as? Int ?? 0
             SharedStore.reason = reason
             SharedStore.prayerLock = reason == "prayer"
+            SharedStore.mode = args["mode"] as? String ?? "selectedGames"
             if locked {
                 SharedStore.shieldGames()
                 center.stopMonitoring([.playBudget])
@@ -93,10 +97,18 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
 
     // MARK: - Picker
 
-    private func presentPicker(result: @escaping FlutterResult) {
-        let model = PickerModel(selection: SharedStore.selection)
+    /// `allowed == false`: games/apps that use play time (legacy lock list + time budget).
+    /// `allowed == true`: apps the parent always allows in "allApps" mode.
+    private func presentPicker(allowed: Bool, result: @escaping FlutterResult) {
+        let model = PickerModel(selection: allowed ? SharedStore.allowedSelection : SharedStore.selection)
         let host = UIHostingController(rootView: GamesPickerView(model: model) { saved in
-            if let saved { SharedStore.selection = saved }
+            if let saved {
+                if allowed { SharedStore.allowedSelection = saved } else { SharedStore.selection = saved }
+                // Re-apply an active shield so the new choice takes effect at once.
+                if SharedStore.store.shield.applicationCategories != nil || SharedStore.store.shield.applications != nil {
+                    SharedStore.shieldGames()
+                }
+            }
             UIApplication.shared.topViewController?.dismiss(animated: true)
             result(nil)
         })
@@ -106,6 +118,8 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
     // MARK: - Device activity
 
     /// Unshield now; the monitor extension re-shields after `minutes` of use of the selected games.
+    /// In "allApps" mode DeviceActivityEvent cannot express "every app", so the budget still counts the
+    /// parent's "apps that use play time" selection (recommend Games + Social + Entertainment).
     private func startBudget(minutes: Int) {
         guard minutes > 0 else { SharedStore.shieldGames(); return }
         let s = SharedStore.selection
