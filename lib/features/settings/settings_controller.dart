@@ -23,7 +23,7 @@ class AppSettings {
     this.cityId = 'cairo',
     this.methodId = 'egypt',
     this.asrFactor = 1,
-    this.muezzinId = 'zadx',
+    this.muezzinId = 'madinah_rec',
     this.reciterId = 'afasy',
     this.lockAtAdhan = true,
     this.notifyParentOnTasks = true,
