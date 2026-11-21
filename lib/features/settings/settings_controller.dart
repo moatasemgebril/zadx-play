@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/catalog/locations.dart';
+import '../../services/app_lock/lock_rules.dart';
 
 /// Overridden in main() with the real instance.
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -31,6 +32,13 @@ class AppSettings {
     this.parentPinHash,
     this.soundEffectsOn = true,
     this.sfxVolume = 0.6,
+    this.lockMode = LockMode.allApps,
+    this.allowedApps = const {},
+    this.allowMessaging = true,
+    this.pcAllowBrowsers = false,
+    this.dailyLimitMinutes = 60,
+    this.lockDeviceSettings = true,
+    this.preventUninstall = false,
   });
 
   final String language;
@@ -52,6 +60,29 @@ class AppSettings {
   /// 0.0–1.0, effects volume.
   final double sfxVolume;
 
+  /// Device-wide lock (default) or legacy "selected games only". docs/decisions/DEVICE-WIDE-LOCK.md
+  final LockMode lockMode;
+
+  /// Android packages the parent always allows in [LockMode.allApps] (school apps, camera, maps…).
+  final Set<String> allowedApps;
+
+  /// SMS + contacts stay open in [LockMode.allApps]. Phone/emergency calls are never locked.
+  final bool allowMessaging;
+
+  /// Windows Guard: keep browsers open (homework) in [LockMode.allApps].
+  final bool pcAllowBrowsers;
+
+  /// Plans without tasks (Free): screen minutes per day before the lock closes (prayer lock still applies).
+  final int dailyLimitMinutes;
+
+  /// Device protection (docs/decisions/DEVICE-PROTECTION.md): the phone's Settings app is for the
+  /// parent only (opened for 5 minutes with the PIN). On by default (owner decision 2026-11-21).
+  final bool lockDeviceSettings;
+
+  /// Device protection: stop the child deleting Zad X (Android: uninstall dialog guard + optional
+  /// Device Admin; iOS: Screen Time `denyAppRemoval`). Off until the parent turns it on.
+  final bool preventUninstall;
+
   Locale get locale => Locale(language);
   bool get isRtl => language == 'ar' || language == 'ur';
 
@@ -70,6 +101,13 @@ class AppSettings {
     String? parentPinHash,
     bool? soundEffectsOn,
     double? sfxVolume,
+    LockMode? lockMode,
+    Set<String>? allowedApps,
+    bool? allowMessaging,
+    bool? pcAllowBrowsers,
+    int? dailyLimitMinutes,
+    bool? lockDeviceSettings,
+    bool? preventUninstall,
   }) =>
       AppSettings(
         language: language ?? this.language,
@@ -86,6 +124,13 @@ class AppSettings {
         parentPinHash: parentPinHash ?? this.parentPinHash,
         soundEffectsOn: soundEffectsOn ?? this.soundEffectsOn,
         sfxVolume: sfxVolume ?? this.sfxVolume,
+        lockMode: lockMode ?? this.lockMode,
+        allowedApps: allowedApps ?? this.allowedApps,
+        allowMessaging: allowMessaging ?? this.allowMessaging,
+        pcAllowBrowsers: pcAllowBrowsers ?? this.pcAllowBrowsers,
+        dailyLimitMinutes: dailyLimitMinutes ?? this.dailyLimitMinutes,
+        lockDeviceSettings: lockDeviceSettings ?? this.lockDeviceSettings,
+        preventUninstall: preventUninstall ?? this.preventUninstall,
       );
 }
 
@@ -113,6 +158,13 @@ class SettingsController extends Notifier<AppSettings> {
       parentPinHash: p.getString('${_k}pin'),
       soundEffectsOn: p.getBool('${_k}sfxOn') ?? d.soundEffectsOn,
       sfxVolume: (p.getDouble('${_k}sfxVolume') ?? d.sfxVolume).clamp(0.0, 1.0),
+      lockMode: LockMode.parse(p.getString('${_k}lockMode')),
+      allowedApps: p.getStringList('${_k}allowedApps')?.toSet() ?? d.allowedApps,
+      allowMessaging: p.getBool('${_k}allowMessaging') ?? d.allowMessaging,
+      pcAllowBrowsers: p.getBool('${_k}pcAllowBrowsers') ?? d.pcAllowBrowsers,
+      dailyLimitMinutes: (p.getInt('${_k}dailyLimit') ?? d.dailyLimitMinutes).clamp(0, 24 * 60),
+      lockDeviceSettings: p.getBool('${_k}lockDeviceSettings') ?? d.lockDeviceSettings,
+      preventUninstall: p.getBool('${_k}preventUninstall') ?? d.preventUninstall,
     );
   }
 
@@ -181,6 +233,52 @@ class SettingsController extends Notifier<AppSettings> {
     state = state.copyWith(controlledGameIds: next);
     _prefs.setStringList('${_k}games', next.toList());
     return true;
+  }
+
+  void setLockMode(LockMode mode) {
+    state = state.copyWith(lockMode: mode);
+    _prefs.setString('${_k}lockMode', mode.name);
+  }
+
+  /// Adds or removes an Android package from the parent's allow-list. Zad X and the
+  /// always-allowed core are handled natively and need no entry here.
+  void setAppAllowed(String package, bool allowed) {
+    if (package.trim().isEmpty) return;
+    final next = {...state.allowedApps};
+    if (allowed) {
+      next.add(package);
+    } else {
+      next.remove(package);
+    }
+    state = state.copyWith(allowedApps: next);
+    _prefs.setStringList('${_k}allowedApps', next.toList()..sort());
+  }
+
+  void setAllowMessaging(bool v) {
+    state = state.copyWith(allowMessaging: v);
+    _prefs.setBool('${_k}allowMessaging', v);
+  }
+
+  void setPcAllowBrowsers(bool v) {
+    state = state.copyWith(pcAllowBrowsers: v);
+    _prefs.setBool('${_k}pcAllowBrowsers', v);
+  }
+
+  void setDailyLimitMinutes(int minutes) {
+    final v = minutes.clamp(0, 24 * 60);
+    state = state.copyWith(dailyLimitMinutes: v);
+    _prefs.setInt('${_k}dailyLimit', v);
+  }
+
+  /// Call only after [confirmParentPin] (parent_gate.dart) when turning a protection off.
+  void setLockDeviceSettings(bool v) {
+    state = state.copyWith(lockDeviceSettings: v);
+    _prefs.setBool('${_k}lockDeviceSettings', v);
+  }
+
+  void setPreventUninstall(bool v) {
+    state = state.copyWith(preventUninstall: v);
+    _prefs.setBool('${_k}preventUninstall', v);
   }
 
   void setLockAtAdhan(bool v) {

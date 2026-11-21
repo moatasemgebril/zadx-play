@@ -35,8 +35,10 @@ class AppConfig {
     productPlusYearly,
   };
 
-  /// Free trial length offered on both plans (configured in the stores).
-  static const trialDays = 14;
+  /// Plus trial from the first launch, kept on the device (owner decision 2026-11-21).
+  /// See `TrialClock` in lib/services/billing/trial_clock.dart. Store intro offers, if any,
+  /// must not promise a longer trial.
+  static const trialDays = 7;
 
   /// Referral rewards: friends who paid -> free months.
   static const referralRewards = {1: 2, 2: 4, 3: 6};

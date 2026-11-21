@@ -75,6 +75,34 @@ export function rateLimitKey(bucket: string, subject: string): string {
 // Subscriptions
 // ---------------------------------------------------------------------------
 
+/**
+ * Feature matrix, mirrored from lib/data/models/plan.dart (`AppFeature`,
+ * `freeFeatures`, `basicFeatures`, `plusFeatures`). Keep the names identical:
+ * test/plan_matrix_test.dart in the app compares both lists.
+ * Free = no plan (or an expired one).
+ */
+export const PLAN_FEATURES = {
+  free: ["appLock", "prayerTimes", "adhan", "quran", "adhkar"],
+  basic: [
+    "appLock", "prayerTimes", "adhan", "quran", "adhkar",
+    "tasksRewards", "games", "eduGames", "exercises", "customUnlockTasks", "multipleChildren", "assistant",
+  ],
+  plus: [
+    "appLock", "prayerTimes", "adhan", "quran", "adhkar",
+    "tasksRewards", "games", "eduGames", "exercises", "customUnlockTasks", "multipleChildren", "assistant",
+    "consoleLinks", "unlimitedAssistant", "weeklyReport",
+  ],
+} as const;
+
+export type PlanFeature = (typeof PLAN_FEATURES)["plus"][number];
+
+/** True when the family's plan in force at [now] includes [feature]. Free features are always allowed. */
+export function planAllows(plan: unknown, planExpiresAt: unknown, now: number, feature: PlanFeature): boolean {
+  if ((PLAN_FEATURES.free as readonly string[]).includes(feature)) return true;
+  if (!hasActivePlan(plan, planExpiresAt, now)) return false;
+  return (PLAN_FEATURES[plan as "basic" | "plus"] as readonly string[]).includes(feature);
+}
+
 /** True when the family has a paid or trial plan that has not expired. */
 export function hasActivePlan(plan: unknown, planExpiresAt: unknown, now: number): boolean {
   if (plan !== "basic" && plan !== "plus") return false;
@@ -138,4 +166,101 @@ export function sanitiseNotifyData(raw: unknown): Record<string, string> {
     out[k] = String(v).slice(0, 100);
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Device protection: tamper alerts + heartbeats (docs/decisions/DEVICE-PROTECTION.md)
+// ---------------------------------------------------------------------------
+
+/** Why a child device's protection is off. Anything else from a client is dropped. */
+export const TAMPER_REASONS: readonly string[] = ["accessibility_off", "device_admin_off", "screen_time_off"];
+
+/** A device that has not reported for this long gets one "not checking in" alert. */
+export const HEARTBEAT_STALE_MS = 24 * 60 * 60_000;
+
+export interface ProtectionReport {
+  platform: "android" | "ios";
+  reasons: string[];
+}
+
+/** Validates a child device's protection report: only known platforms and reasons, deduplicated. */
+export function parseProtectionReport(raw: unknown): ProtectionReport | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (r.platform !== "android" && r.platform !== "ios") return null;
+  const list = Array.isArray(r.reasons) ? r.reasons.slice(0, 10) : [];
+  const reasons = [...new Set(list.filter((x): x is string => typeof x === "string" && TAMPER_REASONS.includes(x)))].sort();
+  return { platform: r.platform, reasons };
+}
+
+/** Reasons present now that were not reported last time (each tamper is alerted once). */
+export function newTamperReasons(previous: unknown, current: readonly string[]): string[] {
+  const prev = new Set(Array.isArray(previous) ? previous.filter((x) => typeof x === "string") : []);
+  return current.filter((r) => !prev.has(r));
+}
+
+/** True when a heartbeat is older than [staleMs] and no stale alert was sent for it yet. */
+export function needsStaleAlert(lastSeenMs: unknown, staleAlerted: unknown, nowMs: number, staleMs = HEARTBEAT_STALE_MS): boolean {
+  if (typeof lastSeenMs !== "number" || !Number.isFinite(lastSeenMs)) return false;
+  return staleAlerted !== true && nowMs - lastSeenMs > staleMs;
+}
+
+/** Parent push text. `kind` is "tamper" or "stale". Never includes the child's name. */
+export function protectionAlertText(kind: "tamper" | "stale", ar: boolean): string {
+  if (kind === "tamper") {
+    return ar
+      ? "تنبيه: حماية Zad X اتقفلت على جهاز طفلك (إمكانية الوصول أو منع المسح أو Screen Time). افتح Zad X على الجهاز ده وشغّلها تاني."
+      : "Alert: Zad X protection was turned off on your child's device (accessibility, delete protection or Screen Time). Open Zad X on that device to turn it back on.";
+  }
+  return ar
+    ? "جهاز طفلك ما اتواصلش مع Zad X من أكتر من يوم. لو الجهاز كان مقفول تجاهل الرسالة، غير كده اتأكد إن الحماية لسه شغّالة."
+    : "Your child's device has not checked in with Zad X for over a day. If it was switched off, ignore this; otherwise check that protection is still on.";
+}
+
+/** Heartbeats older than this are deleted (device gone for a month: nothing more to tell the parent). */
+export const HEARTBEAT_RETENTION_MS = 30 * 24 * 60 * 60_000;
+
+/** The same tamper reason from the same device is pushed at most once per this period. */
+export const TAMPER_ALERT_COOLDOWN_MS = 60 * 60_000;
+
+export type HeartbeatAction = "delete" | "alert" | "skip";
+
+/**
+ * What `checkHeartbeats` does with one heartbeat doc:
+ * delete when the family or child is gone, or it is older than the retention period;
+ * alert once when it has been silent for [staleMs]; otherwise skip.
+ */
+export function heartbeatAction(
+  hb: { lastSeenMs: unknown; staleAlerted: unknown; familyExists: boolean; childExists: boolean },
+  nowMs: number,
+  staleMs = HEARTBEAT_STALE_MS,
+  retentionMs = HEARTBEAT_RETENTION_MS,
+): HeartbeatAction {
+  if (!hb.familyExists || !hb.childExists) return "delete";
+  if (typeof hb.lastSeenMs !== "number" || !Number.isFinite(hb.lastSeenMs)) return "delete";
+  if (nowMs - hb.lastSeenMs > retentionMs) return "delete";
+  return needsStaleAlert(hb.lastSeenMs, hb.staleAlerted, nowMs, staleMs) ? "alert" : "skip";
+}
+
+/**
+ * Tamper reasons to push now: newly appeared since the last report AND not pushed for this device
+ * within [cooldownMs] (a child toggling the service off/on/off gets one alert per hour, not many).
+ * Returns the reasons plus the updated per-reason "last alerted" map to store.
+ */
+export function tamperReasonsToAlert(
+  previous: unknown,
+  current: readonly string[],
+  alertedAt: unknown,
+  nowMs: number,
+  cooldownMs = TAMPER_ALERT_COOLDOWN_MS,
+): { reasons: string[]; alertedAt: Record<string, number> } {
+  const map: Record<string, number> = {};
+  if (alertedAt && typeof alertedAt === "object" && !Array.isArray(alertedAt)) {
+    for (const [k, v] of Object.entries(alertedAt as Record<string, unknown>)) {
+      if (TAMPER_REASONS.includes(k) && typeof v === "number" && Number.isFinite(v)) map[k] = v;
+    }
+  }
+  const reasons = newTamperReasons(previous, current).filter((r) => !(r in map) || nowMs - map[r] >= cooldownMs);
+  for (const r of reasons) map[r] = nowMs;
+  return { reasons, alertedAt: map };
 }

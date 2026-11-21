@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/catalog/quran.dart';
 import '../../data/catalog/surah_index.dart';
+import '../../data/models/plan.dart';
 import '../../data/models/surah.dart';
 import '../../services/audio/audio_service.dart';
 import '../../services/quran/quran_repository.dart';
@@ -14,6 +15,7 @@ import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../adhkar/adhkar_view.dart';
 import '../settings/settings_controller.dart';
+import '../subscription/paid_feature_gate.dart';
 
 const _badgeColors = [Color(0xFFFFC83D), Color(0xFF4CC9F0), Color(0xFFFF6B6B), Color(0xFF7ED9B8), Color(0xFFC4B5FD), Color(0xFFFFB38A)];
 
@@ -43,7 +45,10 @@ class QuranScreen extends StatelessWidget {
             child: TabBarView(children: [
               _SurahList(juz: 30, includeFatiha: true),
               _SurahList(juz: 29),
-              AdhkarView(),
+              PaidFeatureGate(
+                feature: AppFeature.adhkar,
+                child: AdhkarView(),
+              ),
             ]),
           ),
         ]),

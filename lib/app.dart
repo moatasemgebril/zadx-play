@@ -13,6 +13,7 @@ import 'features/settings/settings_controller.dart';
 import 'l10n/app_localizations.dart';
 import 'router.dart';
 import 'services/app_lock/app_lock_service.dart';
+import 'services/app_lock/protection_monitor.dart';
 import 'services/audio/sfx_service.dart';
 import 'services/notifications/prayer_notification_service.dart';
 
@@ -60,6 +61,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
 
     // Keeps native lock policy in sync with the wallet for the app's lifetime.
     ref.watch(lockCoordinatorProvider);
+    // Tamper alert: reports protection state on start/resume (docs/decisions/DEVICE-PROTECTION.md).
+    ref.watch(protectionMonitorProvider);
     // Star / task / unlock sounds.
     ref.watch(soundCoordinatorProvider);
 
@@ -97,6 +100,9 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
       'notifyOnTasks': s.notifyParentOnTasks,
       'notifyOnAdhan': s.notifyParentOnAdhan,
       'games': s.controlledGameIds.toList()..sort(),
+      // Windows Guard scope (docs/decisions/DEVICE-WIDE-LOCK.md). The Android allow-list stays on the device.
+      'lockMode': s.lockMode.name,
+      'pcAllowBrowsers': s.pcAllowBrowsers,
     }).catchError((Object e) => debugPrint('settings sync failed: $e'));
   }
 

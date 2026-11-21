@@ -9,7 +9,7 @@
   "minutesLeft": "{n} min left",
   "greet": "Assalamu alaikum, champ!",
   "homeHeroSub": "Let's start the day with prayer and tasks",
-  "promoBanner": "Launch offer: try Zad X Plus free for 14 days",
+  "promoBanner": "For parents: see the Zad X plans",
   "prayerToday": "Today's prayer times",
   "change": "Change",
   "nextPrayer": "Next prayer: {name} at {time}",
@@ -53,7 +53,7 @@
   "ayatCount": "{n} verses",
   "playSurah": "Play {name}",
   "tasks": "Tasks",
-  "tasksNote": "Must-do tasks unlock games; bonus tasks add time.",
+  "tasksNote": "Must-do tasks unlock your screen time; bonus tasks add more.",
   "mustDo": "Must-do",
   "bonus": "Bonus",
   "doneBtn": "Done",
@@ -61,7 +61,7 @@
   "completed": "Completed",
   "minsPlus": "+{n} min",
   "exTitle": "Exercise",
-  "exNote": "Each exercise earns play time. Go slowly and rest if you get tired.",
+  "exNote": "Each exercise earns screen time. Go slowly and rest if you get tired.",
   "exReps": "{n} reps",
   "exCount": "{a} of {b}",
   "exPending": "Awaiting approval",
@@ -145,17 +145,17 @@
   "how1T": "Set your country and language",
   "how1B": "Tap the globe icon at the top and pick your country and city.",
   "how2T": "Set up tasks",
-  "how2B": "Must-do tasks unlock games; bonus tasks add time.",
+  "how2B": "Must-do tasks unlock screen time; bonus tasks add more minutes.",
   "how3T": "Your child finishes a task",
   "how3B": "They tap \"Done\" on the Tasks page and you're notified right away.",
   "how4T": "Approve from your phone",
-  "how4B": "Once you approve, minutes are added and games unlock.",
+  "how4B": "Once you approve, the minutes are added and locked apps open for that time.",
   "how5T": "The adhan locks play",
-  "how5B": "At every adhan, games lock until your child prays and you approve.",
-  "faq1Q": "How do games unlock?",
-  "faq1A": "Your child finishes the must-do tasks and a parent approves; games then open for the minutes earned.",
+  "how5B": "At every adhan, apps lock until your child prays and you approve. On the free plan they open again by themselves after the prayer time.",
+  "faq1Q": "How do games and apps unlock?",
+  "faq1A": "Your child finishes the must-do tasks and a parent approves; then locked apps open for the minutes earned. On the free plan, apps stay open up to the daily screen time you set.",
   "faq2Q": "What happens at the adhan?",
-  "faq2A": "The adhan plays and games lock until your child taps \"I prayed\" and a parent approves.",
+  "faq2A": "The adhan plays and apps lock until your child taps \"I prayed\" and a parent approves. On the free plan they open again by themselves after the prayer time.",
   "faq3Q": "How do I change my country or prayer times?",
   "faq3A": "Tap the globe icon at the top and pick your country and city; the calculation method is set automatically.",
   "faq4Q": "Does Zad X control PlayStation?",
@@ -173,9 +173,8 @@
   "perMonth": "/ month",
   "perYear": "/ year",
   "yearEq": "Just {price} a month",
-  "startTrial": "Start your 14-day free trial",
   "launchOffers": "Launch offers",
-  "offer1": "14-day free trial on both plans",
+  "offer1": "Zad X Plus is free for 7 days from the first launch",
   "offer2": "Discounted first year of Plus",
   "offer3": "Ramadan: a free month with any yearly plan",
   "inviteTitle": "Invite friends, earn free months",
@@ -192,17 +191,16 @@
   "noRewardYet": "No reward yet",
   "inviteShareText": "Try Zad X for your kids and use my code {code}",
   "pricesNote": "Prices are set by the store per country.",
-  "featTasks": "Tasks & parent approval",
-  "featPrayer": "Prayer times, adhan & game lock",
-  "featQuran": "Quran & exercise",
-  "featGames": "Controlled games",
-  "featPs": "PlayStation link",
+  "featTasks": "Tasks & rewards wallet",
+  "featPrayer": "Prayer times & adhan (all voices)",
+  "featQuran": "Quran (approved reciters)",
+  "featGames": "Screen time unlocked by tasks",
+  "featPs": "PlayStation & Microsoft family links",
   "featAi": "AI assistant",
   "featKids": "Number of children",
   "featReport": "Weekly parent report",
   "limited": "Limited",
   "unlimited": "Unlimited",
-  "gamesN": "{n} games",
   "toastSent": "Sent for approval: {x}",
   "toastApproved": "Approved: {x}",
   "toastRejected": "Rejected: {x}",
@@ -302,5 +300,104 @@
   "formOfAddress": "How should Arabic praise address your child? (optional)",
   "addressNotSet": "Not set",
   "addressBoy": "Boy (أحسنتَ)",
-  "addressGirl": "Girl (أحسنتِ)"
+  "addressGirl": "Girl (أحسنتِ)",
+  "featLock": "Device lock at prayer times + daily limit (1 child)",
+  "featEduGames": "Zad X learning games",
+  "featExercises": "Exercises",
+  "featAdhkar": "Adhkar",
+  "featCustomTasks": "Custom tasks that unlock screen time",
+  "freeName": "Free",
+  "freeForever": "Free forever",
+  "freeNote": "No sign-in or payment needed",
+  "featIncluded": "included",
+  "featNotIncluded": "not included",
+  "lockedTitle": "This part is still locked",
+  "lockedKidBody": "Ask your mum or dad to open it for you",
+  "askParent": "Call a parent",
+  "upgradeBasicTitle": "Available in Basic and Plus",
+  "upgradePlusTitle": "Available in Plus",
+  "upgradeBody": "Quran, adhan, prayer times and the device lock are free forever. Paid plans add games, tasks & rewards, adhkar, exercises and more.",
+  "seePlans": "See plans",
+  "deviceLockTitle": "Lock the whole device",
+  "deviceLockSwitch": "Lock all apps on this device (recommended)",
+  "deviceLockDesc": "All games and apps (like Facebook, YouTube and the browser) stay locked until tasks and prayers are done, except the allowed apps.",
+  "deviceLockAlwaysOpen": "Always open: phone and emergency calls, Zad X, home screen, keyboard and settings.",
+  "deviceLockMessaging": "Messages and contacts (to reach parents)",
+  "deviceLockShowAlways": "See apps that are always open",
+  "deviceLockChooseApps": "Choose allowed apps (school, camera, maps…)",
+  "deviceLockAllowedCount": "Allowed apps: {n}",
+  "@deviceLockAllowedCount": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceLockIosNote": "On iPhone: add Zad X and school apps to the allowed apps. Screen time is counted on the apps you chose under \"games\".",
+  "deviceLockMinutesNote": "Earned minutes are screen time: they count down in any app that is not allowed.",
+  "deviceLockPcBrowsers": "On the PC: allow browsers (homework)",
+  "deviceLockNoApps": "No apps to show here.",
+  "deviceLockDone": "Done",
+  "lockDisclosureTitle": "Before we turn on the lock",
+  "lockDisclosureBody": "Zad X will see which app is open on this phone (only the app's name, never what is on the screen) so it can lock apps until tasks and prayers are done. Phone and emergency calls are never locked. Nothing about the apps used leaves this phone.\n\nOn the next screen, turn on \"Zad X\" in Accessibility settings.",
+  "lockDisclosureAgree": "I agree, continue",
+  "lockDisclosureCancel": "Not now",
+  "deviceLockDailyLimit": "Daily screen time (free plan)",
+  "deviceLockMinutes": "{n} min",
+  "@deviceLockMinutes": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "subscribeNow": "Subscribe",
+  "trialDaysLeft": "{count, plural, =1{Plus free trial: 1 day left} other{Plus free trial: {days} days left}}",
+  "@trialDaysLeft": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "days": {
+        "type": "String"
+      }
+    }
+  },
+  "trialEndsNote": "After the trial you keep the free plan unless you subscribe.",
+  "deviceLockDescFree": "All games and apps (like Facebook, YouTube and the browser) lock at every prayer time and when the daily screen time runs out, except the allowed apps.",
+  "deviceLockFreePrayerNote": "At every adhan the device locks for {n} minutes for prayer, then opens again by itself.",
+  "@deviceLockFreePrayerNote": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "protectTitle": "Protect Zad X on this device",
+  "protectSettingsSwitch": "Lock Settings for the child",
+  "protectSettingsDesc": "The phone's Settings app opens only for you, with your PIN, for 5 minutes, then locks again by itself. Phone and emergency calls always work.",
+  "protectSettingsDescIos": "On iPhone the Settings app itself can't be locked, but Screen Time stops changes to accounts, the device passcode and the date and time. For the best protection, set up Screen Time through Family Sharing.",
+  "protectOpenSettings": "Open phone Settings for 5 minutes",
+  "protectWindowOpen": "Settings are open for {n} min, then they lock again by themselves.",
+  "@protectWindowOpen": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "protectLockNow": "Lock Settings now",
+  "protectUninstallSwitch": "Prevent deleting Zad X",
+  "protectUninstallDesc": "While this is on, apps can't be deleted on this phone without you, and Android refuses to remove Zad X.",
+  "protectUninstallDescIos": "While this is on, no apps can be deleted on this iPhone (iOS applies this to all apps).",
+  "protectAdminActive": "Delete protection is active.",
+  "protectAdminInactive": "Delete protection is not active yet. Tap here to finish.",
+  "protectAdminDisclosureTitle": "Before you turn on delete protection",
+  "protectAdminDisclosureBody": "Zad X will ask Android to make it a \"device admin app\". It uses this only so Zad X can't be deleted from this phone without you. Zad X asks for no other device controls: it can't erase, lock or read anything on the phone. You can turn it off here at any time with your PIN.\n\nOn the next screen, tap \"Activate\".",
+  "protectAdminExplanation": "Stops Zad X being deleted without the parent. No other device controls are used.",
+  "protectTamperNote": "If protection is turned off on the child's device, or the device stops checking in for a day, you'll get an alert on your phone.",
+  "protectDisclosureExtra": "Zad X also keeps the phone's Settings app for you only (you open it with your PIN) and can stop apps being deleted without you.",
+  "deviceLockAlwaysOpenProtected": "Always open: phone and emergency calls, Zad X, home screen and keyboard. Settings open for the parent with the PIN.",
+  "startTrial": "Start your 14-day free trial",
+  "gamesN": "{n} games"
 }

@@ -44,7 +44,13 @@ if (Get-Service -Name 'ZadXGuard' -ErrorAction SilentlyContinue) {
 New-Service -Name 'ZadXGuard' -BinaryPathName "`"$exe`"" -DisplayName 'Zad X Guard' `
   -Description 'Locks games until tasks and prayer are done (Zad X).' -StartupType Automatic | Out-Null
 sc.exe failure ZadXGuard reset= 0 actions= restart/5000/restart/5000/restart/5000 | Out-Null
+# Only SYSTEM and Administrators may stop, pause, reconfigure or delete the service. Signed-in users
+# (the child's Standard account) may only query it. docs/decisions/DEVICE-PROTECTION.md
+#   SY: query/start/stop/pause/interrogate/read   BA: full control   AU + IU: query + interrogate + read only
+sc.exe sdset ZadXGuard 'D:(A;;CCLCSWRPWPDTLOCRRC;;;SY)(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)(A;;CCLCSWLORC;;;AU)(A;;CCLCSWLORC;;;IU)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not protect the Zad X Guard service.' }
 Start-Service ZadXGuard
 
 Write-Host 'Zad X Guard is installed and running.' -ForegroundColor Green
 Write-Host 'Important: make sure the child uses a Standard (non-administrator) Windows account.'
+Write-Host 'Optional: lock Windows Settings + Control Panel for the child account with child_settings_lock.ps1.'

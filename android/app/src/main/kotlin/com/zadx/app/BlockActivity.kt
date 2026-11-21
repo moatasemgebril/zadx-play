@@ -11,7 +11,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 
-/** Full-screen shield shown over a locked game. */
+/** Full-screen shield shown over a locked app, the Settings app (child) or the uninstall dialog. */
 class BlockActivity : Activity() {
 
     companion object {
@@ -22,11 +22,28 @@ class BlockActivity : Activity() {
         super.onCreate(savedInstanceState)
         val arabic = resources.configuration.locales[0].language == "ar"
         val reason = intent.getStringExtra(EXTRA_REASON) ?: "requiredTasks"
+        val allApps = LockStore.mode(this) == LockRules.MODE_ALL_APPS
 
         val message = when (reason) {
-            "prayer" -> if (arabic) "وقت الصلاة\nالألعاب مقفولة لحد ما تصلي" else "Prayer time\nGames are locked until you pray"
+            // Device protection (docs/decisions/DEVICE-PROTECTION.md).
+            "settings" -> if (arabic) "الإعدادات لبابا وماما بس\nاطلب منهم يفتحوها من Zad X" else "Settings are for parents\nAsk your parent to open them in Zad X"
+            "uninstall" -> if (arabic) "مسح التطبيقات محتاج بابا أو ماما\nاطلب منهم من Zad X" else "Deleting apps needs a parent\nAsk your parent in Zad X"
+            // Free plan: the prayer lock ends by itself after a short window.
+            "prayer" -> if (LockStore.prayerAutoEndMinutes(this) > 0) {
+                if (arabic) "التطبيقات مقفولة وقت الصلاة، وهتفتح بعد شوية" else "Apps are locked for prayer time — they open again soon"
+            } else when {
+                allApps && arabic -> "وقت الصلاة\nالتطبيقات مقفولة لحد ما تصلي"
+                allApps -> "Prayer time\nApps are locked until you pray"
+                arabic -> "وقت الصلاة\nالألعاب مقفولة لحد ما تصلي"
+                else -> "Prayer time\nGames are locked until you pray"
+            }
             "noTime" -> if (arabic) "خلص وقتك النهارده\nاعمل مهمة تكسب وقت" else "Out of time today\nDo a task to earn more"
-            else -> if (arabic) "خلّص مهامك الأول\nوبعدها اللعبة تتفتح" else "Finish your tasks first\nthen the game unlocks"
+            else -> when {
+                allApps && arabic -> "خلّص مهامك الأول\nوبعدها التطبيق يتفتح"
+                allApps -> "Finish your tasks first\nthen the app unlocks"
+                arabic -> "خلّص مهامك الأول\nوبعدها اللعبة تتفتح"
+                else -> "Finish your tasks first\nthen the game unlocks"
+            }
         }
 
         val root = LinearLayout(this).apply {

@@ -6,8 +6,10 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/family_task.dart';
+import '../../data/models/plan.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../subscription/paid_feature_gate.dart';
 import 'wallet_controller.dart';
 import 'widgets/exercise_card.dart';
 import 'widgets/praise_dialog.dart';
@@ -34,18 +36,28 @@ class TasksScreen extends ConsumerWidget {
         child: ListView(padding: const EdgeInsets.all(16), children: [
           PageTitle(l10n.tasks, subtitle: l10n.tasksNote),
           const SizedBox(height: 12),
-          for (final t in regular) ...[
-            _TaskCard(task: t, progress: wallet.progressOf(t.id)),
-            const SizedBox(height: 10),
-          ],
+          PaidFeatureGate(
+            feature: AppFeature.tasksRewards,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (final t in regular) ...[
+                _TaskCard(task: t, progress: wallet.progressOf(t.id)),
+                const SizedBox(height: 10),
+              ],
+            ]),
+          ),
           const SizedBox(height: 8),
           Text(l10n.exTitle, style: AppTheme.display(24)),
           Text(l10n.exNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
           const SizedBox(height: 10),
-          for (final t in exercises) ...[
-            ExerciseCard(task: t, progress: wallet.progressOf(t.id)),
-            const SizedBox(height: 10),
-          ],
+          PaidFeatureGate(
+            feature: AppFeature.exercises,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              for (final t in exercises) ...[
+                ExerciseCard(task: t, progress: wallet.progressOf(t.id)),
+                const SizedBox(height: 10),
+              ],
+            ]),
+          ),
         ]),
       ),
     );

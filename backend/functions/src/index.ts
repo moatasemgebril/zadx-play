@@ -8,17 +8,21 @@
  *  playNotifications– Google Play RTDN webhook: credits referrers on a friend's first payment
  *  createPairingCode / redeemPairingCode – link child phones and Windows PCs to a family
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
+ *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
+ *                     was turned off, or stops reporting for a day (docs/decisions/DEVICE-PROTECTION.md)
  */
 import { initializeApp } from "firebase-admin/app";
 import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
-  NOTIFY_TYPES, WindowState, hasActivePlan, hexDigestEquals, isPairingCode, isSafeId,
-  normaliseReferralCode, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex,
+  HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, heartbeatAction, hexDigestEquals,
+  isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
+  rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
 
 initializeApp();
@@ -83,12 +87,19 @@ async function requireFamilyMember(familyId: unknown, uid: string): Promise<Fire
 const SYSTEM_PROMPT = `You are the help assistant inside "Zad X", an Islamic family app.
 How the app works: children complete must-do tasks (prayer, homework) and bonus tasks
 (Quran memorisation, adhkar, chores, light exercises); a parent approves each task and the
-child earns play minutes. Device games (up to 5 on Basic, 15 on Plus) unlock only when
-must-do tasks are approved, it is not prayer time, and minutes remain. At every adhan games
-lock until the child taps "I prayed" and a parent approves. Prayer times follow the city and
+child earns screen minutes. With "Lock all apps" (the default) every app except the phone,
+emergency, messages, Zad X and the apps the parent allows is locked; earned minutes are screen
+time on any locked app. Apps unlock only when must-do tasks are approved, it is not prayer
+time, and minutes remain. At every adhan the device locks until the child taps "I prayed" and a
+parent approves. Prayer times follow the city and
 calculation method chosen with the globe icon. PlayStation cannot be controlled directly;
-Plus users get alerts and open the PlayStation Family app. Plans: Basic $4.99/month or
-$39.99/year; Plus $7.99/month or $59.99/year; 14-day free trial. Referral: 1 paying friend =
+Plus users get alerts and open the PlayStation Family app. Plans: Free forever (device lock at
+prayer times that opens again by itself after the prayer window, a daily screen-time limit for
+one child, prayer times, adhan, Quran, adhkar; no sign-in needed); Basic $4.99/month or
+$39.99/year adds tasks and rewards (screen time unlocked by tasks), games, learning games,
+exercises, custom tasks, up to 2 children and this assistant; Plus $7.99/month or $59.99/year
+adds up to 5 children, PlayStation/Microsoft family links and a weekly report. New installs get
+Plus free for 7 days, then Free unless the parent subscribes. Referral: 1 paying friend =
 2 free months, 2 = 4, 3 = 6.
 Answer briefly and kindly in the user's language (Egyptian Arabic if they write Arabic).
 Only answer questions about using Zad X, parenting screen time, or general Islamic etiquette
@@ -119,10 +130,12 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
   // The assistant is for parents: paired child devices may not use it (child-safety).
   if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
   const plan = family.get("plan");
-  if (!hasActivePlan(plan, family.get("planExpiresAt"), Date.now())) {
+  if (!planAllows(plan, family.get("planExpiresAt"), Date.now(), "assistant")) {
     throw new HttpsError("permission-denied", "subscription_required");
   }
-  const dailyLimit = plan === "plus" ? PLUS_DAILY_QUESTIONS : BASIC_DAILY_QUESTIONS;
+  const dailyLimit = planAllows(plan, family.get("planExpiresAt"), Date.now(), "unlimitedAssistant")
+    ? PLUS_DAILY_QUESTIONS
+    : BASIC_DAILY_QUESTIONS;
   const day = new Date().toISOString().slice(0, 10);
   const usageRef = family.ref.collection("assistantUsage").doc(day);
   await db.runTransaction(async (tx) => {
@@ -525,7 +538,16 @@ async function authenticateDevice(req: { get(name: string): string | undefined }
     throw new HttpsError("unauthenticated", "bad secret");
   }
   if (device.get("revoked") === true) throw new HttpsError("unauthenticated", "revoked");
-  await device.ref.set({ lastSeenAt: FieldValue.serverTimestamp() }, { merge: true });
+  // Heartbeat for the "guard stopped reporting" alert (checkHeartbeats), at most every 30 minutes
+  // so the per-minute guard calls do not double the Firestore writes.
+  const now = Date.now();
+  const beat = typeof device.get("heartbeatMs") === "number" && now - device.get("heartbeatMs") < 30 * 60_000;
+  await device.ref.set({ lastSeenAt: FieldValue.serverTimestamp(), ...(beat ? {} : { heartbeatMs: now }) }, { merge: true });
+  if (!beat) {
+    await db.doc(`deviceHeartbeats/${familyId}__win_${deviceId}`).set({
+      familyId, childId: device.get("childId") ?? null, kind: "windows", reasons: [], lastSeenMs: now, staleAlerted: false,
+    });
+  }
   return { familyId, device };
 }
 
@@ -558,6 +580,10 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
       reason: prayerLock ? "prayer" : !requiredDone ? "requiredTasks" : remaining <= 0 ? "noTime" : "none",
       remainingMinutes: remaining,
       games: settings.games ?? [],
+      // Device-wide lock (docs/decisions/DEVICE-WIDE-LOCK.md). Windows locks games + launchers +
+      // social apps (+ browsers unless allowed); it never blocks every process.
+      mode: settings.lockMode === "selectedGames" ? "selectedGames" : "allApps",
+      allowBrowsers: settings.pcAllowBrowsers === true,
       planActive: plan === "plus" || family.get("inTrial") === true,
       language: settings.language ?? "ar",
       prayer: {
@@ -593,5 +619,104 @@ export const reportUsage = onRequest({ region: "europe-west1" }, async (req, res
     // Never echo internal errors (paths, ids) back to the client.
     const unauth = e instanceof HttpsError && e.code === "unauthenticated";
     res.status(unauth ? 401 : 500).json({ error: unauth ? "unauthenticated" : "internal" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Device protection: tamper alerts (docs/decisions/DEVICE-PROTECTION.md)
+// Heartbeats live in the top-level `deviceHeartbeats` collection (Cloud Functions only; denied to
+// clients by the default rule). No personal data: ids, platform, reason codes and a timestamp.
+// ---------------------------------------------------------------------------
+
+async function pushToParents(family: FirebaseFirestore.DocumentSnapshot, kind: "tamper" | "stale", childId: unknown) {
+  const tokens: string[] = family.get("parentTokens") ?? [];
+  if (tokens.length === 0) return 0;
+  const lang = family.get("language") ?? family.get("settings")?.language ?? "ar";
+  const res = await getMessaging().sendEachForMulticast({
+    tokens,
+    notification: { title: "Zad X", body: protectionAlertText(kind, lang === "ar") },
+    data: { type: kind === "tamper" ? "protection_off" : "device_silent", childId: typeof childId === "string" ? childId : "" },
+  });
+  return res.successCount;
+}
+
+/**
+ * Child phone/tablet reports its protection state (on start, on resume, after policy changes).
+ * Newly appeared tamper reasons (accessibility service off, Device Admin removed, Screen Time
+ * access revoked) are pushed to the parent devices once.
+ */
+export const reportProtection = onCall({ region: "europe-west1" }, async (req) => {
+  const uid = requireUid(req.auth);
+  const { familyId, childId } = req.data ?? {};
+  const family = await requireFamilyMember(familyId, uid);
+  const bound = boundChildOf(family, uid);
+  const child = bound ?? parseChildId(childId);
+  assertChildAccess(family, uid, child);
+  await enforceRateLimit("protection", uid, 60, 60 * 60_000);
+  const report = parseProtectionReport(req.data?.status);
+  if (!report) throw new HttpsError("invalid-argument", "Bad report.");
+
+  const ref = db.doc(`deviceHeartbeats/${familyId}__${uid}`);
+  const prev = await ref.get();
+  const now = Date.now();
+  // New reasons only, and the same reason from this device at most once per hour.
+  const { reasons: fresh, alertedAt } = tamperReasonsToAlert(prev.get("reasons"), report.reasons, prev.get("alertedAt"), now);
+  await ref.set({
+    familyId, childId: child, kind: report.platform, reasons: report.reasons, alertedAt, lastSeenMs: now, staleAlerted: false,
+  });
+  const sent = fresh.length > 0 ? await pushToParents(family, "tamper", child) : 0;
+  return { alerted: fresh, sent };
+});
+
+/**
+ * Every 6 hours: one alert per device that stopped reporting for a day (phone off, app removed, guard
+ * stopped). Heartbeats of deleted families/children, and any older than 30 days, are deleted.
+ * Only not-yet-alerted docs are queried (composite index in firestore.indexes.json), so docs that were
+ * already alerted can never fill the batch and starve newly silent devices.
+ */
+export const checkHeartbeats = onSchedule({ schedule: "every 6 hours", region: "europe-west1" }, async () => {
+  const now = Date.now();
+  const hb = db.collection("deviceHeartbeats");
+
+  // 1) Retention: drop month-old heartbeats (alerted or not).
+  for (let page = 0; page < 10; page++) {
+    const old = await hb.where("lastSeenMs", "<", now - HEARTBEAT_RETENTION_MS).limit(500).get();
+    if (old.empty) break;
+    const batch = db.batch();
+    old.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  // 2) Stale, not yet alerted.
+  const stale = await hb.where("staleAlerted", "==", false).where("lastSeenMs", "<", now - HEARTBEAT_STALE_MS)
+    .orderBy("lastSeenMs").limit(500).get();
+  const families = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  for (const doc of stale.docs) {
+    const familyId = doc.get("familyId");
+    const childId = doc.get("childId");
+    let family: FirebaseFirestore.DocumentSnapshot | undefined;
+    let childExists = false;
+    if (isSafeId(familyId)) {
+      family = families.get(familyId) ?? (await db.doc(`families/${familyId}`).get());
+      families.set(familyId, family);
+      // The first child may live only in the family doc (no children/{id} doc yet).
+      childExists = family.exists && (childId == null || childId === DEFAULT_CHILD_ID ||
+        (isSafeId(childId) && (await db.doc(`families/${familyId}/children/${childId}`).get()).exists));
+    }
+    const action = heartbeatAction({
+      lastSeenMs: doc.get("lastSeenMs"),
+      staleAlerted: doc.get("staleAlerted"),
+      familyExists: family?.exists === true,
+      childExists,
+    }, now);
+    if (action === "delete") {
+      await doc.ref.delete();
+    } else if (action === "alert" && family) {
+      await pushToParents(family, "stale", childId);
+      await doc.ref.set({ staleAlerted: true }, { merge: true });
+    } else {
+      // Should not happen with this query; mark it so it cannot block the batch again.
+      await doc.ref.set({ staleAlerted: true }, { merge: true });
+    }
   }
 });

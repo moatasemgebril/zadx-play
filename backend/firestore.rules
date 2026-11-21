@@ -20,6 +20,7 @@ service cloud.firestore {
         && (!('usedMinutes' in d) || (d.usedMinutes is int && d.usedMinutes >= 0 && d.usedMinutes <= 100000))
         && (!('requiredDone' in d) || d.requiredDone is bool)
         && (!('prayerLock' in d) || d.prayerLock is bool)
+        && (!('prayerLockSinceMs' in d) || (d.prayerLockSinceMs is int && d.prayerLockSinceMs >= 0))
         && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
     }
 
@@ -91,6 +92,11 @@ service cloud.firestore {
     }
 
     match /referralCodes/{code} {
+      allow read, write: if false;
+    }
+
+    // Tamper-alert heartbeats (Cloud Functions only). docs/decisions/DEVICE-PROTECTION.md
+    match /deviceHeartbeats/{id} {
       allow read, write: if false;
     }
 

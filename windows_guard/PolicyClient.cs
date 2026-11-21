@@ -24,7 +24,10 @@ public sealed record DevicePolicy(
     [property: JsonPropertyName("games")] string[] Games,
     [property: JsonPropertyName("planActive")] bool PlanActive,
     [property: JsonPropertyName("language")] string Language,
-    [property: JsonPropertyName("prayer")] PrayerSettings Prayer);
+    [property: JsonPropertyName("prayer")] PrayerSettings Prayer,
+    // Device-wide lock (absent from older backends → legacy "selectedGames" behaviour).
+    [property: JsonPropertyName("mode")] string? Mode = null,
+    [property: JsonPropertyName("allowBrowsers")] bool AllowBrowsers = false);
 
 public sealed class PolicyClient
 {

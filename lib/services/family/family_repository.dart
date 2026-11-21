@@ -14,6 +14,7 @@ class FamilyDay {
     required this.prayerLock,
     this.earnedMinutes = 0,
     this.requiredDone = false,
+    this.prayerLockSinceMs,
   });
 
   final String day; // yyyy-MM-dd in the family's city
@@ -25,6 +26,10 @@ class FamilyDay {
   final int earnedMinutes;
   final bool requiredDone;
 
+  /// When the current prayer lock started (UTC ms). Free plans end the lock automatically
+  /// after the prayer window, measured from this time.
+  final int? prayerLockSinceMs;
+
   Map<String, dynamic> toJson() => {
         'earnedMinutes': earnedMinutes,
         'requiredDone': requiredDone,
@@ -32,6 +37,7 @@ class FamilyDay {
         'progress': progress,
         'usedMinutes': usedMinutes,
         'prayerLock': prayerLock,
+        if (prayerLockSinceMs != null) 'prayerLockSinceMs': prayerLockSinceMs,
       };
 
   factory FamilyDay.fromJson(Map<String, dynamic> j) => FamilyDay(
@@ -42,6 +48,7 @@ class FamilyDay {
         prayerLock: j['prayerLock'] as bool? ?? false,
         earnedMinutes: j['earnedMinutes'] as int? ?? 0,
         requiredDone: j['requiredDone'] as bool? ?? false,
+        prayerLockSinceMs: j['prayerLockSinceMs'] as int?,
       );
 }
 
@@ -67,6 +74,10 @@ abstract class FamilyRepository {
 
   /// Deletes a child's profile and synced days.
   Future<void> deleteChild(String childId);
+
+  /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
+  /// `accessibility_off`. The backend alerts the parent devices once per new reason.
+  Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -89,6 +100,9 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> deleteChild(String childId) async {}
+
+  @override
+  Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {}
 }
 
 /// True when Firebase initialised (overridden in main()).

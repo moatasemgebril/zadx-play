@@ -3,8 +3,10 @@
 ## Principles
 - **One source of truth for play time:** `WalletController` (`lib/features/tasks/wallet_controller.dart`).
   UI and native code only read `WalletState`; every change goes through the controller.
-- **Native code enforces, Dart decides:** Dart computes a `LockPolicy` (locked?, reason, games,
-  minutes) and pushes it over `com.zadx.app/app_lock`. Native blockers keep enforcing it when the
+- **Native code enforces, Dart decides:** Dart computes a `LockPolicy` (locked?, reason, mode, games,
+  allow-list, minutes) and pushes it over `com.zadx.app/app_lock`. Default mode `allApps` locks every app
+  except an always-allowed core + the parent's allow-list (docs/decisions/DEVICE-WIDE-LOCK.md);
+  `selectedGames` is the legacy block-list. Native blockers keep enforcing it when the
   app is closed (Android `LockStore` + AccessibilityService; iOS ManagedSettings + DeviceActivity).
 - **No secrets in the app:** AI and store verification run in Cloud Functions.
 - **No hand-typed Quran:** surah metadata only; text comes from Quran.com and is cached.
@@ -40,7 +42,7 @@ Riverpod 2 (`Notifier`/`Provider`). Key providers:
 | `lockPolicyProvider` / `lockCoordinatorProvider` | bridge to native blockers |
 | `playerProvider` | adhan + Quran audio |
 | `adhkarProvider` | daily tasbeeh counts → submits adhkar tasks |
-| `entitlementProvider` | Basic / Plus / trial |
+| `entitlementProvider` | Free / Basic / Plus / trial (trial = Plus) |
 
 ## Family sync & pairing
 `FamilyRepository` has a local and a Firestore implementation, chosen by `familyIdProvider`.
@@ -66,8 +68,33 @@ derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
 | Web | — | ✓ dashboard |
 | PlayStation / Xbox | no public API → parent alerts + deep link to PlayStation Family / Microsoft Family Safety, plus suggested play windows between prayers | — |
 
+## Plans: Free / Basic / Plus (owner request 2026-11-21)
+Single source of truth: `lib/data/models/plan.dart` (`AppFeature`, `featuresOf`, `hasFeature`),
+mirrored in `backend/functions/src/security.ts` (`PLAN_FEATURES`); `test/plan_matrix_test.dart`
+fails if the two differ. Free = no store purchase (`Entitlement.effectiveTier == null`); a trial is Plus.
+
+| Feature | Free (مجاني للأبد) | Basic (أساسي) | Plus (بلس) |
+|---|---|---|---|
+| App lock: prayer-time lock + daily time limit | ✓ (1 child) | ✓ | ✓ |
+| Prayer times | ✓ | ✓ | ✓ |
+| Adhan (all voices) | ✓ | ✓ | ✓ |
+| Quran (approved reciters) | ✓ | ✓ | ✓ |
+| Tasks & rewards wallet | — | ✓ | ✓ |
+| Games that unlock after tasks/timer | — | ✓ (5) | ✓ (15) |
+| Zad X learning games | — | ✓ | ✓ |
+| Exercises | — | ✓ | ✓ |
+| Adhkar | — | ✓ | ✓ |
+| Custom unlock tasks | — | ✓ | ✓ |
+| Children | 1 | 2 | 5 |
+| Parent assistant | — | 10/day | 100/day |
+| PlayStation / Microsoft family links | — | — | ✓ |
+| Weekly parent report | — | — | ✓ |
+
+Free features never need login, network or purchase. Paid screens show a kid-safe
+"ask a parent" card; the upgrade sheet and the plans screen sit behind the parent PIN.
+
 ## Multiple children
-Basic = up to 2 children, Plus = up to 5 (`PlanPricing.maxChildren`).
+Free = 1 child, Basic = up to 2, Plus = up to 5 (`PlanPricing.maxChildren`).
 
 - **Profile** (`lib/data/models/child_profile.dart`): random id, nickname, built-in avatar.
   No birthdate, photo or last name (COPPA / GDPR-K data minimisation); nicknames that look

@@ -89,7 +89,11 @@ Status legend: **Fixed** (this branch) · **Open** (see risk register id) · **A
 | Game kept running in split-screen beside the shield | **Fixed** (go Home before shield) |
 | Exported components | Checked: service/activity/receivers `exported=false`; a11y service protected by `BIND_ACCESSIBILITY_SERVICE` |
 | Accessibility scope | Checked: window-state events only, `canRetrieveWindowContent=false` (minimal) |
-| Child disables the accessibility service, force-stops or uninstalls the app, or changes the clock | **Open R-04** (detect + alert parent; consider Device Admin / Family Link guidance) |
+| Child disables the accessibility service, force-stops or uninstalls the app, or changes the clock | **Mitigated R-04** (2026-11-21, `feat/device-protection`): Settings locked for the child (parent PIN window, 5 min, elapsed-time + boot-count bound); uninstall dialog guard + optional no-policy Device Admin; tamper report + 24 h heartbeat alert to parents. Residual: safe-mode boot, clock change while Settings open, OEM settings surfaces not in the list |
+| Parent PIN window abused (child finds the parent area unlocked) | **Mitigated**: opening the window and turning protection off ask for the PIN again (shared throttle) |
+| Over-blocking: Settings lock hides emergency / SOS / accessibility | **Mitigated**: safety core checked before the Settings rule (unit-tested in Kotlin + Dart); real-device matrix in STORE_CHECKLIST |
+| Parent locked out (forgot PIN) | **Accepted/documented**: safe-mode boot disables third-party accessibility services → Settings reachable (help text, not shown in the child UI) |
+| Uninstall guard reads screen content | **Not done by design**: only package + class name; therefore all uninstall dialogs are covered while on |
 | Restore old prefs from backup | **Fixed** (`allowBackup=false`) |
 | Lock state in plain SharedPreferences (rooted device) | Accepted |
 
@@ -97,7 +101,8 @@ Status legend: **Fixed** (this branch) · **Open** (see risk register id) · **A
 | Threat | Status |
 |---|---|
 | Entitlements | Checked: only `family-controls` + app group `group.com.zadx.app`; no extra entitlements |
-| Child removes Screen Time authorization (`.individual` mode) | **Open R-13** — prefer `.child` authorization via Family Sharing (removal then needs parent) |
+| Child removes Screen Time authorization (`.individual` mode) | **Open R-13** — prefer `.child` authorization via Family Sharing (removal then needs parent). Now detected: `screen_time_off` tamper report + heartbeat alert |
+| Child deletes Zad X / changes passcode, accounts or clock | **Mitigated** (protection store: `denyAppRemoval`, `lockPasscode`, `lockAccounts`, `requireAutomaticDateAndTime`). The Settings app itself cannot be locked on iOS |
 
 ### 3.7 Windows Guard
 | Threat | Status |
@@ -107,6 +112,8 @@ Status legend: **Fixed** (this branch) · **Open** (see risk register id) · **A
 | Secret sent over plain HTTP by misconfiguration | **Fixed** (https enforced) |
 | Child renames/copies a game exe (process-name matching) | **Open R-09** |
 | Child is a Windows administrator | Accepted / documented (must be Standard) |
+| Child's Standard account stops/reconfigures the guard service | **Fixed** (`sc sdset`: SYSTEM/Admins only; users query-only) + stale-heartbeat alert |
+| Child changes Windows settings | **Optional** `child_settings_lock.ps1` (per-user NoControlPanel policy, child account only) |
 | Unsigned installer / binary tampering | **Open** (code-signing in checklist) |
 
 ### 3.8 Child location map (planned, behind `FeatureFlags.locationMap`, off in release)
