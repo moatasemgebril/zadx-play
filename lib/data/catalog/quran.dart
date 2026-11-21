@@ -19,22 +19,13 @@ const adhanPhrases = <String>[
   'لا إله إلا الله',
 ];
 
-/// Adhan voices. Only voices with `licenceConfirmed: true` AND a bundled file are
-/// offered (see [availableMuezzins]); the others stay hidden until a licensed
-/// recording is added to assets/audio/.
+/// The adhan voice. Owner decision 2026-11-21: one adhan only, from the
+/// Prophet's Mosque in Madinah, with no chooser. Attribution required by its
+/// CC BY 3.0 licence is shown in the parent area (Credits card) and in
+/// assets/audio/ADHAN-CREDITS.txt.
 const muezzins = <Voice>[
-  // Freely-licensed recordings from Wikimedia Commons (see assets/audio/ADHAN-CREDITS.txt).
-  Voice(id: 'zadx', name: Localized('أذان زاد ١', 'Zad X adhan 1'), source: 'assets/audio/adhan_zadx.mp3', licenceConfirmed: true),
-  Voice(id: 'aaqib', name: Localized('عاقب عزيز', 'Aaqib Azeez'), source: 'assets/audio/adhan_aaqib.mp3', licenceConfirmed: true,
-      credit: 'Atcovi · CC BY-SA 4.0 · Wikimedia Commons'),
-  Voice(id: 'andrewler', name: Localized('أذان زاد ٢', 'Zad X adhan 2'), source: 'assets/audio/adhan_andrewler.mp3', licenceConfirmed: true,
-      credit: 'Andrewler · CC BY-SA 4.0 · Wikimedia Commons'),
-  Voice(id: 'madinah_rec', name: Localized('من المسجد النبوي', 'From the Prophet\'s Mosque'), source: 'assets/audio/adhan_madinah_rec.mp3', licenceConfirmed: true,
+  Voice(id: 'madinah_rec', name: Localized('أذان المسجد النبوي', "Adhan from the Prophet's Mosque"), source: 'assets/audio/adhan_madinah_rec.mp3', licenceConfirmed: true,
       credit: 'ejaz215 · CC BY 3.0 · Freesound / Wikimedia Commons'),
-  Voice(id: 'makkah', name: Localized('أذان مكة', 'Makkah adhan'), source: 'assets/audio/adhan_makkah.mp3'),
-  Voice(id: 'madinah', name: Localized('أذان المدينة', 'Madinah adhan'), source: 'assets/audio/adhan_madinah.mp3'),
-  Voice(id: 'refaat', name: Localized('محمد رفعت', 'Muhammad Refaat'), source: 'assets/audio/adhan_refaat.mp3'),
-  Voice(id: 'afasy', name: Localized('مشاري العفاسي', 'Mishary Alafasy'), source: 'assets/audio/adhan_afasy.mp3'),
 ];
 
 /// The adhan voices a screen may offer: licensed ones with a bundled file.
