@@ -9,13 +9,16 @@ const _pendingC = Voice(id: 'c', name: Localized('ج', 'C'), source: 'C');
 
 void main() {
   group('reciter licence', () {
-    test('no reciter is confirmed yet (pre-launch blocker)', () {
-      expect(reciters, isNotEmpty);
-      expect(reciters.where((r) => r.licenceConfirmed), isEmpty);
+    test('only the four Quran Foundation-approved reciters are confirmed', () {
+      expect(
+        reciters.where((r) => r.licenceConfirmed).map((r) => r.id).toSet(),
+        {'afasy', 'basit', 'husary', 'minshawi'},
+      );
+      // Abdur-Rashid Sufi is not approved by Quran Foundation (2026-11-21).
+      expect(reciters.where((r) => r.source.toLowerCase().contains('sufi')), isEmpty);
     });
 
     test('release build with none confirmed shows no reciter', () {
-      expect(visibleReciters(releaseBuild: true), isEmpty);
       expect(visibleReciters(releaseBuild: true, all: const [_pendingA, _pendingC]), isEmpty);
     });
 
@@ -42,7 +45,6 @@ void main() {
       expect(() => resolveReciter('afasy', const []), returnsNormally);
       expect(resolveReciter('afasy', const []), isNull);
       expect(resolveReciter(null, const []), isNull);
-      expect(resolveReciter('afasy', visibleReciters(releaseBuild: true)), isNull);
     });
 
     test('picks the saved reciter when visible, else the first visible one', () {
@@ -50,6 +52,10 @@ void main() {
       expect(resolveReciter('b', visible)?.id, 'b');
       expect(resolveReciter('unknown', visible)?.id, 'a');
       expect(resolveReciter(null, visible)?.id, 'a');
+    });
+
+    test('release build plays the saved approved reciter', () {
+      expect(resolveReciter('husary', visibleReciters(releaseBuild: true))?.id, 'husary');
     });
   });
 }

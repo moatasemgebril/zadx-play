@@ -29,14 +29,18 @@ const muezzins = <Voice>[
 /// Reciters. [source] is the EveryAyah folder name.
 ///
 /// LICENCE: set `licenceConfirmed: true` on a reciter ONLY after written
-/// permission is on file. Today none is confirmed, so release builds show no
-/// recitation (the Quran text still works). Pre-launch blocker, see
-/// docs/STORE_CHECKLIST.md.
+/// permission is on file. 2026-11-21: Quran Foundation approved these four
+/// (all Hafs) in writing for our paid kids' app, delivered via the QF
+/// recitations APIs (see BACKLOG.md "Quran Foundation approval").
+/// PRE-LAUNCH BLOCKER: the approval covers QF's APIs, not EveryAyah URLs, so
+/// the audio source must move to the QF recitations API (no rehosting; device
+/// download allowed) before a store release. Abdur-Rashid Sufi is NOT approved
+/// and must not be added. See docs/STORE_CHECKLIST.md.
 const reciters = <Voice>[
-  Voice(id: 'afasy', name: Localized('مشاري العفاسي', 'Mishary Alafasy'), source: 'Alafasy_128kbps'),
-  Voice(id: 'basit', name: Localized('عبد الباسط عبد الصمد', 'Abdul Basit'), source: 'Abdul_Basit_Murattal_192kbps'),
-  Voice(id: 'husary', name: Localized('محمود خليل الحصري', 'Al-Husary'), source: 'Husary_128kbps'),
-  Voice(id: 'minshawi', name: Localized('محمد صديق المنشاوي', 'Al-Minshawi'), source: 'Minshawy_Murattal_128kbps'),
+  Voice(id: 'afasy', name: Localized('مشاري العفاسي', 'Mishary Alafasy'), source: 'Alafasy_128kbps', licenceConfirmed: true),
+  Voice(id: 'basit', name: Localized('عبد الباسط عبد الصمد', 'Abdul Basit'), source: 'Abdul_Basit_Murattal_192kbps', licenceConfirmed: true),
+  Voice(id: 'husary', name: Localized('محمود خليل الحصري', 'Al-Husary'), source: 'Husary_128kbps', licenceConfirmed: true),
+  Voice(id: 'minshawi', name: Localized('محمد صديق المنشاوي', 'Al-Minshawi'), source: 'Minshawy_Murattal_128kbps', licenceConfirmed: true),
 ];
 
 /// Reciters a screen may offer.
