@@ -2,6 +2,7 @@
 library;
 
 export 'art_shapes.dart';
+export 'exercise_figures.dart';
 export 'scene_palettes.dart';
 export 'scenes/prayer_sky.dart' show PrayerSkyPhase, prayerSkyPhaseFor;
 export 'scenes/tasks_scene.dart' show gardenBloomCount, gardenSlots;
