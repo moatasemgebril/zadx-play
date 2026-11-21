@@ -1,0 +1,45 @@
+# One-off helper: fetch the CC0 adhan recording from Wikimedia Commons, convert it to MP3
+# (iPhone Safari can't play OGG), loudness-normalise it, and push it to a branch for review.
+# Source: https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg  (CC0 1.0, author Adam-synagda, "own work", 2022)
+name: Fetch CC0 adhan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Download and convert
+        run: |
+          curl -fL -A "ZadXPlay/1.0 (https://github.com/moatasemgebril/zadx-play; zadxplay@gmail.com)" \
+            -o /tmp/adhan.ogg "https://upload.wikimedia.org/wikipedia/commons/b/b0/Beautiful_adhan.ogg"
+          ffprobe -hide_banner /tmp/adhan.ogg
+          mkdir -p assets/audio android/app/src/main/res/raw
+          # Full adhan for the app player
+          ffmpeg -y -hide_banner -i /tmp/adhan.ogg -af "loudnorm=I=-16:TP=-1.5:LRA=11" -ac 1 -ar 44100 -b:a 128k assets/audio/adhan_zadx.mp3
+          # Short (< 30 s) version for prayer-time notifications, gentle fade-out
+          ffmpeg -y -hide_banner -i /tmp/adhan.ogg -t 28 -af "loudnorm=I=-16:TP=-1.5:LRA=11,afade=t=out:st=25:d=3" -ac 1 -ar 44100 -b:a 128k android/app/src/main/res/raw/adhan_short.mp3
+          ls -la assets/audio android/app/src/main/res/raw
+          cat > assets/audio/LICENSE-adhan_zadx.txt <<'TXT'
+          adhan_zadx.mp3 and android/app/src/main/res/raw/adhan_short.mp3
+          Source: "Beautiful adhan.ogg", Wikimedia Commons
+          https://commons.wikimedia.org/wiki/File:Beautiful_adhan.ogg
+          Author: Adam-synagda (own work), 29 April 2022
+          Licence: Creative Commons CC0 1.0 Universal (public domain dedication) - no attribution required.
+          Changes: converted to MP3, loudness-normalised; short version trimmed to 28 s with fade-out.
+          TXT
+      - name: Push to branch assets/adhan-cc0
+        run: |
+          git config user.name "ZADX Team (Claude)"
+          git config user.email "noreply@anthropic.com"
+          git checkout -b assets/adhan-cc0
+          git add assets/audio android/app/src/main/res/raw
+          git commit -m "Add CC0 adhan recording (Wikimedia Commons, Adam-synagda) as MP3 + 28 s notification version"
+          git push -f origin assets/adhan-cc0
