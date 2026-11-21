@@ -50,6 +50,7 @@ class DeviceLockCard extends ConsumerWidget {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
     final allApps = s.lockMode == LockMode.allApps;
+    final tasksEnabled = ref.watch(lockTasksEnabledProvider);
 
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -60,9 +61,14 @@ class DeviceLockCard extends ConsumerWidget {
           value: allApps,
           onChanged: (v) => ctrl.setLockMode(v ? LockMode.allApps : LockMode.selectedGames),
         ),
-        Text(l10n.deviceLockDesc, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
-        // Plans without tasks (Free): a daily screen-time limit instead of earned minutes.
-        if (!ref.watch(lockTasksEnabledProvider)) ...[
+        Text(tasksEnabled ? l10n.deviceLockDesc : l10n.deviceLockDescFree,
+            style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+        // Plans without tasks (Free): a daily screen-time limit instead of earned minutes, and a
+        // prayer lock that opens again by itself after the prayer window.
+        if (!tasksEnabled) ...[
+          const SizedBox(height: 6),
+          Text(l10n.deviceLockFreePrayerNote(Fmt.digits(freePrayerLockWindow.inMinutes, lang)),
+              style: const TextStyle(fontSize: 14, color: AppColors.muted)),
           const SizedBox(height: 8),
           Text(l10n.deviceLockDailyLimit, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
@@ -118,7 +124,8 @@ class DeviceLockCard extends ConsumerWidget {
             value: s.pcAllowBrowsers,
             onChanged: ctrl.setPcAllowBrowsers,
           ),
-          Text(l10n.deviceLockMinutesNote, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+          if (tasksEnabled)
+            Text(l10n.deviceLockMinutesNote, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
         ],
       ]),
     );

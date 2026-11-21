@@ -2,9 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zadx/data/catalog/default_tasks.dart';
+import 'package:zadx/data/models/plan.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
 import 'package:zadx/features/tasks/wallet_controller.dart';
 import 'package:zadx/services/app_lock/app_lock_service.dart';
+import 'package:zadx/services/billing/subscription_service.dart';
+import 'package:zadx/services/family/family_repository.dart';
 
 /// Device-wide lock: docs/decisions/DEVICE-WIDE-LOCK.md
 void main() {
@@ -102,6 +105,7 @@ void main() {
         'mode': 'allApps',
         'allowedPackages': ['org.school.classroom'],
         'allowMessaging': false,
+        'prayerAutoEndMinutes': 0,
       });
     });
 
@@ -179,12 +183,15 @@ void main() {
   });
 
   group('plans without tasks (Free): prayer lock + daily limit', () {
-    WalletState wallet({int used = 0, bool prayerLock = false}) => WalletState(
+    final adhan = DateTime.utc(2026, 11, 21, 12);
+
+    WalletState wallet({int used = 0, bool prayerLock = false, DateTime? since}) => WalletState(
           day: '2026-11-21',
           tasks: defaultTasks,
           progress: const {},
           usedMinutes: used,
           prayerLock: prayerLock,
+          prayerLockSince: prayerLock ? (since ?? adhan) : null,
         );
 
     test('Free child is NOT locked all day just because there are no tasks', () {
@@ -202,9 +209,63 @@ void main() {
     });
 
     test('Free: prayer time still locks', () {
-      final s = lockStateFor(tasksEnabled: false, wallet: wallet(prayerLock: true), dailyLimitMinutes: 60);
+      final s = lockStateFor(
+          tasksEnabled: false, wallet: wallet(prayerLock: true), dailyLimitMinutes: 60, now: adhan.add(const Duration(minutes: 5)));
       expect(s.locked, isTrue);
       expect(s.reason, 'prayer');
+    });
+
+    test('Free: the prayer lock ends by itself after the prayer window (no "I prayed" approval)', () {
+      expect(freePrayerLockWindow, const Duration(minutes: 20));
+      final w = wallet(prayerLock: true);
+      final during = lockStateFor(
+          tasksEnabled: false, wallet: w, dailyLimitMinutes: 60, now: adhan.add(const Duration(minutes: 19, seconds: 59)));
+      expect(during.locked, isTrue);
+      final after = lockStateFor(tasksEnabled: false, wallet: w, dailyLimitMinutes: 60, now: adhan.add(freePrayerLockWindow));
+      expect(after.locked, isFalse);
+      expect(after.reason, 'none');
+    });
+
+    test('Free: after the prayer window the daily limit still applies', () {
+      final s = lockStateFor(
+          tasksEnabled: false, wallet: wallet(prayerLock: true, used: 60), dailyLimitMinutes: 60, now: adhan.add(const Duration(hours: 1)));
+      expect(s.locked, isTrue);
+      expect(s.reason, 'noTime');
+    });
+
+    test('paid plans keep the current rule: the prayer lock does not end by itself', () {
+      final s = lockStateFor(
+          tasksEnabled: true, wallet: wallet(prayerLock: true), dailyLimitMinutes: 60, now: adhan.add(const Duration(hours: 3)));
+      expect(s.locked, isTrue);
+      expect(s.reason, 'prayer');
+    });
+
+    test('the prayer lock start time is saved and synced', () {
+      final day = wallet(prayerLock: true).toFamilyDay();
+      expect(day.prayerLockSinceMs, adhan.millisecondsSinceEpoch);
+      final back = FamilyDay.fromJson(day.toJson());
+      expect(back.prayerLockSinceMs, adhan.millisecondsSinceEpoch);
+      expect(wallet().toFamilyDay().toJson().containsKey('prayerLockSinceMs'), isFalse);
+    });
+
+    test('Free policy tells native code when the prayer lock ends; paid policy does not', () {
+      const s = AppSettings();
+      expect(lockPolicyFrom(locked: true, reason: 'prayer', remainingMinutes: 0, settings: s).prayerAutoEndMinutes, 0);
+      final free = lockPolicyFrom(locked: true, reason: 'prayer', remainingMinutes: 0, settings: s, prayerAutoEndMinutes: 20);
+      expect(free.toMap()['prayerAutoEndMinutes'], 20);
+    });
+
+    test('tasks are enabled by the plan: Free no, Basic/Plus/trial yes', () {
+      bool tasksFor(Entitlement e) {
+        final c = ProviderContainer(overrides: [planEntitlementProvider.overrideWithValue(e)]);
+        addTearDown(c.dispose);
+        return c.read(lockTasksEnabledProvider);
+      }
+
+      expect(tasksFor(const Entitlement()), isFalse);
+      expect(tasksFor(const Entitlement(tier: PlanTier.basic)), isTrue);
+      expect(tasksFor(const Entitlement(tier: PlanTier.plus)), isTrue);
+      expect(tasksFor(const Entitlement(tier: PlanTier.plus, inTrial: true, trialDaysLeft: 3)), isTrue);
     });
 
     test('with tasks the old rule applies (no approved tasks -> locked)', () {

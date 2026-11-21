@@ -23,6 +23,9 @@ enum AppFeature {
   /// Quran reading + recitation with the approved reciters.
   quran,
 
+  /// Adhkar section (free since owner decision 2026-11-21).
+  adhkar,
+
   // ---- Basic (and Plus) ----
   /// Tasks, parent approval and the rewards wallet (play minutes).
   tasksRewards,
@@ -35,9 +38,6 @@ enum AppFeature {
 
   /// Light exercises with animated figures.
   exercises,
-
-  /// Adhkar section.
-  adhkar,
 
   /// Parent-made tasks that unlock games.
   customUnlockTasks,
@@ -59,12 +59,13 @@ enum AppFeature {
   weeklyReport,
 }
 
-/// Free: only the app lock, prayer times, adhan and Quran.
+/// Free: the app lock, prayer times, adhan, Quran and adhkar.
 const freeFeatures = <AppFeature>{
   AppFeature.appLock,
   AppFeature.prayerTimes,
   AppFeature.adhan,
   AppFeature.quran,
+  AppFeature.adhkar,
 };
 
 /// Basic: everything in Free + the core paid features.
@@ -74,7 +75,6 @@ const basicFeatures = <AppFeature>{
   AppFeature.games,
   AppFeature.eduGames,
   AppFeature.exercises,
-  AppFeature.adhkar,
   AppFeature.customUnlockTasks,
   AppFeature.multipleChildren,
   AppFeature.assistant,
@@ -126,7 +126,10 @@ class PlanPricing {
   final double monthly;
   final double yearly;
 
-  /// May become obsolete with the device-wide lock (feat/device-wide-lock).
+  /// Games the parent can pick for the Games screen and the legacy "selected games" lock mode.
+  /// In the default device-wide lock (`LockMode.allApps`) every non-allowed app is locked, so the
+  /// plan cards no longer promise "N games" (owner decision 2026-11-21); the field is kept for
+  /// the games picker.
   final int maxGames;
   final int maxChildren;
   final bool playStation;
@@ -185,13 +188,17 @@ PlanPricing planFor(PlanTier? tier) => switch (tier) {
 
 /// What the family currently has access to.
 class Entitlement {
-  const Entitlement({this.tier, this.inTrial = false, this.expiresAt, this.now});
+  const Entitlement({this.tier, this.inTrial = false, this.expiresAt, this.now, this.trialDaysLeft});
 
   /// The tier the store/server reported (`null` = Free). A trial is a Plus
   /// tier with [inTrial] set.
   final PlanTier? tier;
   final bool inTrial;
   final DateTime? expiresAt;
+
+  /// Whole days left in the on-device trial (1–7), or `null` when not in that trial.
+  /// Shown in the parent area only.
+  final int? trialDaysLeft;
 
   /// Clock override for tests.
   final DateTime Function()? now;

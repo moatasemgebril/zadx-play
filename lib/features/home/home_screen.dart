@@ -198,8 +198,6 @@ class _AdhanCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final lang = context.lang;
-    final s = ref.watch(settingsProvider);
     final player = ref.watch(playerProvider);
     final playing = player.kind == PlayerKind.adhan;
 
@@ -215,26 +213,8 @@ class _AdhanCard extends ConsumerWidget {
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(l10n.adhanTitle, style: Theme.of(context).textTheme.titleMedium),
-            Text(l10n.chooseMuezzin, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
           ]),
         ]),
-        const SizedBox(height: 12),
-        ChoiceGrid(
-          items: availableMuezzins().map((m) => m.id).toList(),
-          selected: resolveMuezzin(s.muezzinId).id,
-          columns: 2,
-          label: (id) => availableMuezzins().firstWhere((m) => m.id == id).name.of(lang),
-          onSelected: (id) {
-            ref.read(settingsProvider.notifier).setMuezzin(id);
-            // If the adhan is playing, restart it right away with the new voice.
-            ref.read(playerProvider.notifier).onMuezzinChanged();
-          },
-        ),
-        if (resolveMuezzin(s.muezzinId).credit case final credit?)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text('🎙 $credit', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-          ),
         const SizedBox(height: 12),
         if (!playing)
           FilledButton.icon(

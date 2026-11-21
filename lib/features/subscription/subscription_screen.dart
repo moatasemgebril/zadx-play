@@ -129,7 +129,9 @@ class _PlanCard extends ConsumerWidget {
       (l10n.featPrayer, has(AppFeature.prayerTimes) && has(AppFeature.adhan)),
       (l10n.featQuran, has(AppFeature.quran)),
       (l10n.featTasks, has(AppFeature.tasksRewards)),
-      (l10n.featGames, has(AppFeature.games) ? l10n.gamesN(Fmt.digits(plan.maxGames, lang)) : false),
+      // No "N games" here: with the device-wide lock every non-allowed app is locked
+      // (maxGames only limits the Games screen picker).
+      (l10n.featGames, has(AppFeature.tasksRewards)),
       (l10n.featEduGames, has(AppFeature.eduGames)),
       (l10n.featExercises, has(AppFeature.exercises)),
       (l10n.featAdhkar, has(AppFeature.adhkar)),
@@ -201,7 +203,7 @@ class _PlanCard extends ConsumerWidget {
               final ok = await service.buy(tier, period, referralCode: code);
               if (!ok && context.mounted) showToast(context, l10n.purchaseError);
             },
-            child: Text(l10n.startTrial),
+            child: Text(l10n.subscribeNow),
           ),
       ]),
     );

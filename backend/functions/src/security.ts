@@ -82,14 +82,14 @@ export function rateLimitKey(bucket: string, subject: string): string {
  * Free = no plan (or an expired one).
  */
 export const PLAN_FEATURES = {
-  free: ["appLock", "prayerTimes", "adhan", "quran"],
+  free: ["appLock", "prayerTimes", "adhan", "quran", "adhkar"],
   basic: [
-    "appLock", "prayerTimes", "adhan", "quran",
-    "tasksRewards", "games", "eduGames", "exercises", "adhkar", "customUnlockTasks", "multipleChildren", "assistant",
+    "appLock", "prayerTimes", "adhan", "quran", "adhkar",
+    "tasksRewards", "games", "eduGames", "exercises", "customUnlockTasks", "multipleChildren", "assistant",
   ],
   plus: [
-    "appLock", "prayerTimes", "adhan", "quran",
-    "tasksRewards", "games", "eduGames", "exercises", "adhkar", "customUnlockTasks", "multipleChildren", "assistant",
+    "appLock", "prayerTimes", "adhan", "quran", "adhkar",
+    "tasksRewards", "games", "eduGames", "exercises", "customUnlockTasks", "multipleChildren", "assistant",
     "consoleLinks", "unlimitedAssistant", "weeklyReport",
   ],
 } as const;

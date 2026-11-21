@@ -44,7 +44,7 @@ void main() {
   });
 
   testWidgets('the upgrade sheet asks for the parent PIN before showing plans', (tester) async {
-    await _pump(tester, const Entitlement(), AppFeature.adhkar);
+    await _pump(tester, const Entitlement(), AppFeature.exercises);
     await tester.tap(find.byKey(const Key('askParentButton')));
     await tester.pumpAndSettle();
     expect(find.byType(TextField), findsOneWidget); // PIN prompt

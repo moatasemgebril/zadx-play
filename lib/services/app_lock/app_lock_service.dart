@@ -10,10 +10,12 @@ import '../../core/platform.dart';
 
 import '../../data/catalog/games.dart';
 import '../../data/models/game.dart';
+import '../../data/models/plan.dart';
 import '../../features/prayer/prayer_calculator.dart';
 import '../../features/prayer/prayer_providers.dart';
 import '../../features/settings/settings_controller.dart';
 import '../../features/tasks/wallet_controller.dart';
+import '../billing/subscription_service.dart';
 import 'lock_rules.dart';
 
 export 'lock_rules.dart';
@@ -38,6 +40,7 @@ class LockPolicy {
     this.mode = LockMode.allApps,
     this.allowedPackages = const [],
     this.allowMessaging = true,
+    this.prayerAutoEndMinutes = 0,
   });
 
   final bool locked;
@@ -57,6 +60,10 @@ class LockPolicy {
   /// SMS + contacts apps stay open (contact with parents). Phone and emergency are always open.
   final bool allowMessaging;
 
+  /// Plans without tasks (Free): a prayer lock ends by itself this many minutes after it
+  /// started. 0 = it ends only when a parent approves "I prayed" (paid plans).
+  final int prayerAutoEndMinutes;
+
   Map<String, Object?> toMap() => {
         'locked': locked,
         'reason': reason,
@@ -65,6 +72,7 @@ class LockPolicy {
         'mode': mode.name,
         'allowedPackages': allowedPackages,
         'allowMessaging': allowMessaging,
+        'prayerAutoEndMinutes': prayerAutoEndMinutes,
       };
 
   @override
@@ -75,11 +83,12 @@ class LockPolicy {
       other.remainingMinutes == remainingMinutes &&
       other.mode == mode &&
       other.allowMessaging == allowMessaging &&
+      other.prayerAutoEndMinutes == prayerAutoEndMinutes &&
       listEquals(other.androidPackages, androidPackages) &&
       listEquals(other.allowedPackages, allowedPackages);
 
   @override
-  int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging,
+  int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes,
       Object.hashAll(androidPackages), Object.hashAll(allowedPackages));
 }
 
@@ -209,17 +218,31 @@ class AppLockService {
 
 final appLockServiceProvider = Provider<AppLockService>((_) => AppLockService());
 
-/// Whether the family's plan has tasks + earned minutes. Plans without tasks (Free) lock on
-/// prayer time + a parent-set daily limit only, so a Free child is never locked all day.
-/// TODO(plans PR #22): override/wire this to the entitlement (do not import plan.dart here).
-final lockTasksEnabledProvider = Provider<bool>((_) => true);
+/// Whether the family's plan has tasks + earned minutes (`hasFeature(tasksRewards)`: Basic,
+/// Plus and the 7-day trial). Plans without tasks (Free) lock on prayer time + a parent-set
+/// daily limit only, so a Free child is never locked all day.
+final lockTasksEnabledProvider = Provider<bool>(
+  (ref) => hasFeature(ref.watch(planEntitlementProvider), AppFeature.tasksRewards),
+);
+
+/// How long a prayer lock lasts on plans without tasks (Free), where there is no "I prayed"
+/// approval: the same 20-minute window after the adhan used for the play schedule
+/// ([AppConfig.playWindowAfterPrayerMinutes]).
+const freePrayerLockWindow = Duration(minutes: AppConfig.playWindowAfterPrayerMinutes);
 
 /// Lock state before it becomes a [LockPolicy] (pure, unit-tested).
 typedef LockState = ({bool locked, String reason, int remainingMinutes});
 
-/// * tasks enabled: unlocked = required tasks approved && !prayer lock && earned minutes left
-/// * tasks disabled (Free): unlocked = !prayer lock && used < [dailyLimitMinutes]
-LockState lockStateFor({required bool tasksEnabled, required WalletState wallet, required int dailyLimitMinutes}) {
+/// * tasks enabled: unlocked = required tasks approved && !prayer lock && earned minutes left.
+///   The prayer lock ends only when a parent approves "I prayed".
+/// * tasks disabled (Free): unlocked = !prayer lock && used < [dailyLimitMinutes]. The prayer
+///   lock ends by itself [freePrayerLockWindow] after it started ([now] is UTC wall time).
+LockState lockStateFor({
+  required bool tasksEnabled,
+  required WalletState wallet,
+  required int dailyLimitMinutes,
+  DateTime? now,
+}) {
   if (tasksEnabled) {
     return (
       locked: !wallet.gamesUnlocked,
@@ -228,25 +251,30 @@ LockState lockStateFor({required bool tasksEnabled, required WalletState wallet,
     );
   }
   final remaining = (dailyLimitMinutes - wallet.usedMinutes).clamp(0, 24 * 60);
-  if (wallet.prayerLock) return (locked: true, reason: 'prayer', remainingMinutes: remaining);
+  final prayerOver = wallet.prayerWindowOver(now ?? DateTime.now().toUtc(), freePrayerLockWindow);
+  if (wallet.prayerLock && !prayerOver) return (locked: true, reason: 'prayer', remainingMinutes: remaining);
   if (remaining <= 0) return (locked: true, reason: 'noTime', remainingMinutes: 0);
   return (locked: false, reason: 'none', remainingMinutes: remaining);
 }
 
-/// Derives the [LockPolicy] from the wallet + settings.
+/// Derives the [LockPolicy] from the wallet + settings + plan.
 final lockPolicyProvider = Provider<LockPolicy>((ref) {
+  ref.watch(clockProvider); // re-check every minute (Free prayer window)
   final wallet = ref.watch(walletProvider);
   final settings = ref.watch(settingsProvider);
+  final tasksEnabled = ref.watch(lockTasksEnabledProvider);
   final state = lockStateFor(
-    tasksEnabled: ref.watch(lockTasksEnabledProvider),
+    tasksEnabled: tasksEnabled,
     wallet: wallet,
     dailyLimitMinutes: settings.dailyLimitMinutes,
+    now: DateTime.now().toUtc(),
   );
   return lockPolicyFrom(
     locked: state.locked,
     reason: state.reason,
     remainingMinutes: state.remainingMinutes,
     settings: settings,
+    prayerAutoEndMinutes: tasksEnabled ? 0 : freePrayerLockWindow.inMinutes,
   );
 });
 
@@ -256,6 +284,7 @@ LockPolicy lockPolicyFrom({
   required String reason,
   required int remainingMinutes,
   required AppSettings settings,
+  int prayerAutoEndMinutes = 0,
 }) {
   final packages = controlledGames
       .where((g) => settings.controlledGameIds.contains(g.id))
@@ -270,6 +299,7 @@ LockPolicy lockPolicyFrom({
     mode: settings.lockMode,
     allowedPackages: settings.allowedApps.toList()..sort(),
     allowMessaging: settings.allowMessaging,
+    prayerAutoEndMinutes: prayerAutoEndMinutes,
   );
 }
 
@@ -282,6 +312,14 @@ Prayer _currentPrayer(Ref ref) {
 /// Keep alive from the app root: pushes every policy change to native code and
 /// turns native "session started" events into minute deductions.
 final lockCoordinatorProvider = Provider<void>((ref) {
+  // Free: end the prayer lock in the wallet once its window is over, so every screen and the
+  // parent devices agree (on all platforms, also where Zad X has no native blocker).
+  ref.listen<AsyncValue<DateTime>>(clockProvider, (_, __) {
+    if (!ref.read(lockTasksEnabledProvider)) {
+      ref.read(walletProvider.notifier).endPrayerLockIfOver(DateTime.now().toUtc(), freePrayerLockWindow);
+    }
+  }); // not fireImmediately: providers must not change other providers while building
+
   if (!AppPlatform.canLockGames) return; // Windows uses Zad X Guard; web/macOS have no blocker
   final service = ref.watch(appLockServiceProvider);
 

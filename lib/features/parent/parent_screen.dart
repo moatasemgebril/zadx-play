@@ -21,6 +21,7 @@ import '../settings/sound_settings_card.dart';
 import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
 import 'children_card.dart';
+import 'credits_card.dart';
 import 'device_lock_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
@@ -58,6 +59,8 @@ class ParentScreen extends ConsumerWidget {
           const _SettingsCard(),
           const SizedBox(height: 12),
           const SoundSettingsCard(),
+          const SizedBox(height: 12),
+          const CreditsCard(),
         ]),
       ),
     );
@@ -85,6 +88,15 @@ class _PlanCard extends ConsumerWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(l10n.yourPlan, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
             Text(l10n.currentPlan(planName), style: const TextStyle(color: Colors.white, fontSize: 15)),
+            // Remaining trial days are shown here, in the PIN-protected parent area only.
+            if (ent.inTrial && ent.trialDaysLeft != null) ...[
+              Text(
+                l10n.trialDaysLeft(ent.trialDaysLeft!, Fmt.digits(ent.trialDaysLeft!, context.lang)),
+                key: const Key('trialDaysLeft'),
+                style: const TextStyle(color: AppColors.yellow, fontSize: 15, fontWeight: FontWeight.w800),
+              ),
+              Text(l10n.trialEndsNote, style: const TextStyle(color: Colors.white, fontSize: 14)),
+            ],
           ]),
         ),
         FilledButton(
