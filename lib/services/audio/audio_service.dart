@@ -62,7 +62,7 @@ class PlayerController extends Notifier<ZadPlayerState> {
 
   Future<void> playAdhan() async {
     final id = ref.read(settingsProvider).muezzinId;
-    final voice = muezzins.firstWhere((v) => v.id == id, orElse: () => muezzins.first);
+    final voice = resolveMuezzin(id);
     state = const ZadPlayerState(kind: PlayerKind.adhan, loading: true);
     try {
       // iPhone Safari only allows audio that starts inside the tap itself: start
