@@ -52,3 +52,13 @@ steps that truly need his accounts, signature or money.
 - Apps registered: Android `com.zadx.app`, iOS `com.zadx.app`, Web "Zad X Play Web" (no Hosting).
 - TODO (team): set the iOS bundle identifier to `com.zadx.app` in ios/scripts/add_native_files.rb (flutter create defaults to `com.zadx.zadx`); run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart; deploy backend/firestore.rules (free via `firebase deploy --only firestore:rules`).
 - Cloud Functions need the Blaze plan (card required). Owner wants zero cost: keep the app working without Functions where possible (Firestore rules + client logic), and list Blaze as an owner decision.
+
+## Quran Foundation approval (2026-11-21, written reply from basit@quran.com)
+- APPROVED: commercial kids' app with subscription may use Quran Foundation APIs, content stays inside the app (no selling/redistribution).
+- Reciters approved via QF recitations APIs (all Hafs): Alafasy, Abdul Basit (murattal), Al-Husary, Al-Minshawi (murattal). Set their licence flag to confirmed.
+- NOT available: Abdur-Rashid Sufi (QuranicAudio ID 109) — REMOVE from the app (P1).
+- No rehosting on our servers/CDN (max 1 week cache on our servers). Users MAY download recitations to their own device for offline listening.
+- Production credentials: build/test in pre-live in the QF Developer Console, then request production access there (no separate review).
+- Attribution required: "Quran data provided by Quran Foundation" + credit each reciter. Adapt the children's section of QF's privacy packet.
+- Optional: Quran ID sign-in → listing in the Quran App Store (quran.com/apps).
+- Refs: https://api-docs.quran.foundation/legal/developer-terms/#31-acceptable-use · https://api-docs.quran.foundation/docs/tutorials/faq#what-attribution-or-copyright-information-should-i-show · https://api-docs.quran.foundation/legal/developer-privacy/
