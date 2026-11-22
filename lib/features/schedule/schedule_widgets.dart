@@ -101,10 +101,15 @@ class ScheduleSettingsCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lang = context.lang;
     final schedules = ref.watch(scheduleProvider);
+    final zone = ref.watch(scheduleTimeZoneProvider);
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(KidsText.schedulesTitle.of(lang), style: Theme.of(context).textTheme.titleMedium),
         Text(KidsText.schedulesNote.of(lang), style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+        if (zone != null) ...[
+          const SizedBox(height: 4),
+          Text(KidsText.zoneNote(zone).of(lang), style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+        ],
         for (final s in schedules) ...[
           const Divider(height: 24),
           _ScheduleEditor(schedule: s),
@@ -123,6 +128,9 @@ class _ScheduleEditor extends ConsumerWidget {
     final lang = context.lang;
     final ctrl = ref.read(scheduleProvider.notifier);
     final s = schedule;
+    // The week starts where the phone's locale says (Sunday in the US, Monday in most of Europe).
+    final device = WidgetsBinding.instance.platformDispatcher.locale;
+    final week = weekdayOrder(firstWeekdayFor(device.languageCode, device.countryCode));
 
     Future<void> pick({required bool start}) async {
       final m = start ? s.startMinute : s.endMinute;
@@ -161,7 +169,7 @@ class _ScheduleEditor extends ConsumerWidget {
         Text(KidsText.days.of(lang), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         Wrap(spacing: 4, runSpacing: 4, children: [
-          for (var d = DateTime.monday; d <= DateTime.sunday; d++)
+          for (final d in week)
             FilterChip(
               label: Text(KidsText.weekdays[d - 1].of(lang), style: const TextStyle(fontSize: 14)),
               selected: s.weekdays.contains(d),

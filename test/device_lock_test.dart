@@ -118,6 +118,7 @@ void main() {
         'schedules': <Object>[],
         'baseLocked': false,
         'baseReason': 'none',
+        'scheduleTimeZone': null,
       });
     });
 

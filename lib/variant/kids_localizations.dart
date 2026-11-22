@@ -34,7 +34,7 @@ class KidsLocalizationsEn extends AppLocalizationsEn with KidsL10nOverrides {
   KidsLocalizationsEn() : super('en');
 }
 
-/// One override per key of [kidsRewrites] and [islamicOnlyL10nKeys]
+/// One override per key of [kidsRewrites], [islamicOnlyL10nKeys] and [kidsHiddenL10nKeys]
 /// (test/kids_variant_test.dart checks that none is missing). Generated from the ARB metadata;
 /// keep the parameter names identical to the ARB placeholders.
 mixin KidsL10nOverrides on AppLocalizations {
@@ -113,6 +113,33 @@ mixin KidsL10nOverrides on AppLocalizations {
 
   @override
   String get eduRoundDone => _text('eduRoundDone');
+
+  @override
+  String get lockedKidBody => _text('lockedKidBody');
+
+  @override
+  String get pairNote => _text('pairNote');
+
+  @override
+  String get psScheduleNote => _text('psScheduleNote');
+
+  @override
+  String get msScheduleNote => _text('msScheduleNote');
+
+  @override
+  String get formOfAddress => _text('formOfAddress');
+
+  @override
+  String get addressNotSet => _text('addressNotSet');
+
+  @override
+  String get addressBoy => _text('addressBoy');
+
+  @override
+  String get addressGirl => _text('addressGirl');
+
+  @override
+  String get downloadWindows => _text('downloadWindows');
 
   @override
   String get tabQuran => _text('tabQuran');

@@ -1,7 +1,10 @@
 // Zad X Kids scheduled locks (study / bedtime / reading). Mirrors LockRulesTest.kt on Android.
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:zadx/data/catalog/default_tasks.dart';
-import 'package:zadx/features/schedule/scheduled_lock.dart';
+import 'package:zadx/features/schedule/schedule_controller.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
 import 'package:zadx/features/tasks/wallet_controller.dart';
 import 'package:zadx/services/app_lock/app_lock_service.dart';
@@ -10,6 +13,9 @@ import 'package:zadx/services/app_lock/app_lock_service.dart';
 DateTime at(int day, int hour, [int minute = 0]) => DateTime(2026, 11, day, hour, minute);
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  tzdata.initializeTimeZones();
+
   const bedtime = ScheduledLock(kind: ScheduleKind.bedtime, enabled: true, startMinute: 21 * 60, endMinute: 7 * 60);
   const study = ScheduledLock(
     kind: ScheduleKind.study,
@@ -109,6 +115,67 @@ void main() {
       ]);
       final other = lockPolicyFrom(locked: false, reason: 'none', remainingMinutes: 5, settings: const AppSettings(), schedules: [bedtime]);
       expect(p == other, isFalse);
+    });
+  });
+
+  group('clock and time zone tamper (child safety)', () {
+    // 2026-11-23 20:00 UTC = Monday 22:00 in Cairo, 12:00 in Los Angeles, 15:00 in New York.
+    final instant = DateTime.utc(2026, 11, 23, 20);
+
+    test("schedules are read in the parent's saved time zone, not the phone's", () {
+      final cairo = scheduleLocalTime('Africa/Cairo', instant);
+      expect(cairo.hour, 22);
+      expect(cairo.weekday, DateTime.monday);
+      expect(bedtime.activeAt(cairo), isTrue);
+      // Switching the phone to Los Angeles (noon there) does not open bedtime: the saved zone wins.
+      expect(bedtime.activeAt(scheduleLocalTime('America/Los_Angeles', instant)), isFalse);
+      expect(activeScheduledLock([bedtime, study], scheduleLocalTime('Africa/Cairo', instant))!.kind, ScheduleKind.bedtime);
+    });
+
+    test('unknown or missing zone falls back to the phone zone', () {
+      expect(scheduleLocalTime(null, instant), instant.toLocal());
+      expect(scheduleLocalTime('Mars/Olympus', instant), instant.toLocal());
+    });
+
+    test('the policy carries the parent zone to native code', () {
+      final p = lockPolicyFrom(
+        locked: true,
+        reason: 'bedtime',
+        remainingMinutes: 5,
+        settings: const AppSettings(),
+        schedules: [bedtime],
+        scheduleTimeZone: 'America/New_York',
+      );
+      expect(p.toMap()['scheduleTimeZone'], 'America/New_York');
+      final other = lockPolicyFrom(locked: true, reason: 'bedtime', remainingMinutes: 5, settings: const AppSettings(), schedules: [bedtime]);
+      expect(p == other, isFalse);
+    });
+
+    test('a clock changed by hand is reported to the parent as tamper', () {
+      final s = ProtectionStatus.fromMap({'platform': 'android', 'serviceEverEnabled': true, 'accessibility': true, 'clockChanged': true});
+      expect(protectionTamperReasons(s, uninstallGuard: false), ['clock_changed']);
+      final ok = ProtectionStatus.fromMap({'platform': 'android', 'serviceEverEnabled': true, 'accessibility': true});
+      expect(protectionTamperReasons(ok, uninstallGuard: false), isEmpty);
+    });
+
+    test('saving a schedule records the parent zone and turns the Settings guard back on', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = await SharedPreferences.getInstance();
+      final c = ProviderContainer(overrides: [
+        sharedPrefsProvider.overrideWithValue(prefs),
+        deviceTimeZoneReaderProvider.overrideWithValue(() async => 'Europe/London'),
+      ]);
+      addTearDown(c.dispose);
+      c.read(settingsProvider.notifier).setLockDeviceSettings(false);
+      c.read(scheduleProvider.notifier).save(study.copyWith(enabled: true));
+      expect(c.read(settingsProvider).lockDeviceSettings, isTrue, reason: 'the clock lives in Settings');
+      await Future<void>.delayed(Duration.zero);
+      expect(c.read(scheduleTimeZoneProvider), 'Europe/London');
+      expect(prefs.getString(ScheduleTimeZone.prefsKey), 'Europe/London');
+      // Turning a schedule OFF leaves the parent's Settings choice alone.
+      c.read(settingsProvider.notifier).setLockDeviceSettings(false);
+      c.read(scheduleProvider.notifier).save(study.copyWith(enabled: false));
+      expect(c.read(settingsProvider).lockDeviceSettings, isFalse);
     });
   });
 }

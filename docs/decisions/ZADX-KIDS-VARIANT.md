@@ -155,8 +155,18 @@ CI (`.github/workflows/zadx-ci.yml`, light PR job): after the Zad X Play steps i
 4. **Tree-shaking proof** (P2): add a weekly `flutter build apk --release --dart-define=ZADX_VARIANT=kids` job and a symbol check of `libapp.so`. Debug APKs contain the whole Dart kernel, so the Islamic code still exists (unreachable) in the debug Kids APK; the Islamic **assets** are already removed.
 5. **Native leftovers**: the Kotlin `PrayerLockReceiver` class and its Arabic block-screen strings are compiled into the Kids APK but never triggered (Kids never schedules prayer alarms, never sends reason `prayer`). A later cleanup can move them behind a resource flag.
 6. **Cross-app pairing**: both apps share the Firebase project, so a Zad X Play phone could join a Zad X Kids family. Settings now carry `variant: kids`; the backend could refuse mixed pairing (owner decision 8.6).
-7. Small copy polish: the PlayStation/Microsoft notes ("enter these times once…") refer to the prayer play windows, which Kids does not show.
-8. **Week starts** (P2, owner decision 8.1): the default study days are Sun–Thu (`schoolDays`); for the US / Europe Mon–Fri is the usual school week.
+7. ~~Small copy polish: the PlayStation/Microsoft notes~~ **Done 2026-11-22**: neutral Kids rewrites (`psScheduleNote`, `msScheduleNote`, `pairNote`); Zad X Guard / Windows and the Arabic form-of-address setting are hidden in Kids (`kidsHiddenL10nKeys`).
+8. ~~**Week starts**~~ **Done 2026-11-22**: Kids study days default to Mon–Fri (`schoolDaysFor`), Play keeps Sun–Thu; the schedule day chips start on the phone locale's first weekday (Sunday in the US).
+9. iOS enforces the parent time zone only while Zad X runs (no DeviceActivity schedules yet, gap 2); the clock cross-check below is Android-only.
+
+## 7b. Review fixes 2026-11-22
+
+* **Clock / time zone tamper (child safety).** Schedules are evaluated in the IANA time zone the parent saved them in (`scheduleTimeZoneProvider`, sent to Android as `scheduleTimeZone`), never the phone's current zone. Android cross-checks the wall clock against `SystemClock.elapsedRealtime` since the last check (`LockRules.trustedClock`, tolerance 2 min, small steps add up, network time with `AUTO_TIME` on is trusted). A manual jump keeps the trusted time (bedtime stays on, and a schedule active by the moved clock also locks) and is reported as tamper reason `clock_changed`. `ClockChangeReceiver` (TIME_SET / TIMEZONE_CHANGED, added by `integrate_native.py`) re-checks at once and tells Flutter, which reports to the parent. Turning a schedule on switches the Settings guard back on (the clock lives in Settings). Limitation: the report reaches the parent when Zad X runs (start / resume / the receiver while Flutter is alive); the lock itself never depends on that.
+* **Separate entitlements per app.** `verifyPurchase` stores each app's plan under `plans.<app>` (`play` | `kids`); only a Play purchase also writes the legacy top-level `plan / planExpiresAt / inTrial` (+ `planApp: "play"`), so an older Play build can never see a Kids plan. The assistant uses `planForRequest(family, variant)` (the client's variant only narrows), the Windows Guard only the Play plan. The app reads its own app's plan (`parseFamilyEntitlement(app:)`). `plans` / `planApp` are server-only in firestore.rules.
+* **Referral deferral** uses the product id Google verified (stored in `private/billing.productId`), so yearly subscribers are deferred on the right product.
+* **`kids_variant_prepare.py --apply`** refuses unless `CI=true`, or the git tree is clean and `--yes` is given.
+* **US English.** Kids-visible English is US English: ARB keys via `kidsRewrites`, catalog / story text via `kidsUsEnglish` (lib/variant/us_english.dart) applied by `Localized.of` in the Kids build; Play's British text is untouched.
+* **Forbidden-word test.** Arabic words now match as whole words with the prefixes و ف ب ل ك ال (no false hits such as "بسمة" / "المكسورة"); tasks, game tags, praise and the parent notifications a Kids family can receive are scanned too. Kids families never get the adhan push (`parentNotificationBody`).
 
 ## 8. Open owner decisions
 

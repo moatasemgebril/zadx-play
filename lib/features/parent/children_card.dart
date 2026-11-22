@@ -363,22 +363,25 @@ class _ChildEditorDialogState extends State<_ChildEditorDialog> {
                 ),
               ),
           ]),
-          const SizedBox(height: 12),
-          // Optional: only used to choose أحسنتَ / أحسنتِ in praise messages.
-          Text(l10n.formOfAddress, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final (value, label) in <(FormOfAddress?, String)>[
-              (null, l10n.addressNotSet),
-              (FormOfAddress.masculine, l10n.addressBoy),
-              (FormOfAddress.feminine, l10n.addressGirl),
-            ])
-              ChoiceChip(
-                label: Text(label),
-                selected: _address == value,
-                onSelected: (_) => setState(() => _address = value),
-              ),
-          ]),
+          // Optional: only used to choose أحسنتَ / أحسنتِ in praise messages. Not offered in Zad X
+          // Kids (English-first, Western market): its praise stays neutral.
+          if (!kIsKids) ...[
+            const SizedBox(height: 12),
+            Text(l10n.formOfAddress, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final (value, label) in <(FormOfAddress?, String)>[
+                (null, l10n.addressNotSet),
+                (FormOfAddress.masculine, l10n.addressBoy),
+                (FormOfAddress.feminine, l10n.addressGirl),
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _address == value,
+                  onSelected: (_) => setState(() => _address = value),
+                ),
+            ]),
+          ],
         ]),
       ),
       actions: [

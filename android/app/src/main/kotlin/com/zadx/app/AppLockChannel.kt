@@ -83,6 +83,7 @@ object AppLockChannel {
                         baseLocked = call.argument<Boolean>("baseLocked") ?: (call.argument<Boolean>("locked") ?: true),
                         baseReason = call.argument<String>("baseReason") ?: reason,
                         schedules = scheduleWindows(call.argument<List<Any?>>("schedules")),
+                        scheduleTimeZone = call.argument<String>("scheduleTimeZone"),
                     )
                     // Flutter is the source of truth for the prayer lock once it is running; the native
                     // auto-end timer (Free) stays anchored to when this lock started (elapsed time).
@@ -151,11 +152,15 @@ object AppLockChannel {
                     result.success(null)
                 }
 
+                // IANA id of the phone's time zone, stored with the schedules when the parent saves them.
+                "deviceTimeZone" -> result.success(LockStore.deviceTimeZone())
+
                 "protectionStatus" -> {
                     val service = isAccessibilityEnabled(context)
                     if (service) LockStore.markServiceEnabled(context)
                     val admin = ZadXDeviceAdminReceiver.isActive(context)
                     if (admin) LockStore.markAdminEnabled(context, true)
+                    val clockChanged = LockStore.clockChanged(context)
                     result.success(
                         mapOf(
                             "platform" to "android",
@@ -166,12 +171,14 @@ object AppLockChannel {
                             "settingsLock" to LockStore.settingsLock(context),
                             "uninstallGuard" to LockStore.uninstallGuard(context),
                             "windowSeconds" to LockStore.parentWindowSecondsLeft(context),
+                            "clockChanged" to clockChanged,
                             "tamper" to LockRules.tamperReasons(
                                 serviceEverEnabled = LockStore.serviceEverEnabled(context),
                                 serviceEnabled = service,
                                 uninstallGuard = LockStore.uninstallGuard(context),
                                 adminEverEnabled = LockStore.adminEverEnabled(context),
                                 adminActive = admin,
+                                clockChanged = clockChanged,
                             ),
                         ),
                     )

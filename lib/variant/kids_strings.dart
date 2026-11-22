@@ -7,8 +7,12 @@
 ///   Islamic-only screens (Quran, prayer, adhan, adhkar, mosque, prophets) that do not exist in the
 ///   Kids build; the empty string is a second safety net.
 ///
+/// * every key in [kidsHiddenL10nKeys] with an empty string too: settings Zad X Kids does not
+///   offer (Arabic form of address, Zad X Guard for Windows); their widgets are hidden in Kids.
+///
 /// test/kids_variant_test.dart applies both to the ARB files and fails if any religious word
-/// (tools/kids_forbidden_words.json) is left, so a new religious ARB string must be added here.
+/// (tools/kids_forbidden_words.json) or British English word (us_english.dart) is left, so a new
+/// religious or British ARB string must be added here. Zad X Kids English is US English.
 library;
 
 import '../core/localized.dart';
@@ -46,6 +50,11 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'lockDisclosureBody':
         "Zad X will see which app is open on this phone (only the app's name, never what is on the screen) so it can lock apps until tasks are done and during the times you schedule. Phone and emergency calls are never locked. Nothing about the apps used leaves this phone.\n\nOn the next screen, turn on \"Zad X\" in Accessibility settings.",
     'eduRoundDone': 'Great job! Round complete!',
+    // US English + no Zad X Guard / prayer play windows (Western market, 2026-11-22).
+    'lockedKidBody': 'Ask a parent or grown-up to open it for you',
+    'pairNote': "Open Zad X on your child's phone or tablet and enter this code.",
+    'psScheduleNote': "Set your child's play time limits once in the PlayStation Family app.",
+    'msScheduleNote': "Set your child's screen time limits once in Microsoft Family Safety.",
   },
   'ar': {
     'greet': 'أهلاً يا بطل!',
@@ -76,6 +85,10 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'lockDisclosureBody':
         'Zad X هيعرف أنهي تطبيق مفتوح على التليفون ده (اسم التطبيق بس، عمره ما بيقرا اللي على الشاشة) عشان يقفل التطبيقات لحد ما المهام تخلص وفي المواعيد اللي انت بتحددها. التليفون ومكالمات الطوارئ عمرهم ما بيتقفلوا. ومفيش أي معلومة عن التطبيقات بتخرج من التليفون.\n\nفي الصفحة الجاية، فعّل "Zad X" في إعدادات تسهيل الاستخدام.',
     'eduRoundDone': 'برافو! خلّصت الجولة',
+    'lockedKidBody': 'اطلب من بابا أو ماما يفتحوه لك',
+    'pairNote': 'افتح Zad X على تليفون أو تابلت طفلك واكتب الكود ده.',
+    'psScheduleNote': 'حدد وقت اللعب لطفلك مرة واحدة في تطبيق PlayStation Family.',
+    'msScheduleNote': 'حدد حدود وقت الشاشة لطفلك مرة واحدة في Microsoft Family Safety.',
   },
 };
 
@@ -106,9 +119,16 @@ const Set<String> islamicOnlyL10nKeys = {
   'prophetsDidYouKnow', 'prophetsRef', 'parentReviewNote',
 };
 
+/// ARB keys of settings Zad X Kids does not offer: the "How should Arabic praise address your
+/// child?" choice (Kids targets English-speaking families) and Zad X Guard for Windows (it computes
+/// prayer locks; not in Kids v1). Empty in the Kids build; their widgets are hidden there.
+const Set<String> kidsHiddenL10nKeys = {
+  'formOfAddress', 'addressNotSet', 'addressBoy', 'addressGirl', 'downloadWindows',
+};
+
 /// The Kids text for [key] in [lang], or null when the shared ARB text is used.
 String? kidsText(String lang, String key) {
-  if (islamicOnlyL10nKeys.contains(key)) return '';
+  if (islamicOnlyL10nKeys.contains(key) || kidsHiddenL10nKeys.contains(key)) return '';
   return (kidsRewrites[lang] ?? kidsRewrites['en']!)[key];
 }
 
@@ -140,7 +160,14 @@ abstract final class KidsText {
   static const lockBedtime = Localized('وقت النوم — نوم الهنا! التطبيقات هتتفتح الصبح', 'Bedtime — sleep well! Apps open in the morning');
   static const lockReading = Localized('وقت القراية — هات كتاب أو قصة!', 'Reading time — grab a book or a story!');
 
-  /// Monday first (DateTime.monday == 1).
+  /// Schedules card: the time zone the schedules follow ([zone] = IANA id, e.g. America/New_York).
+  static Localized zoneNote(String zone) => Localized(
+        'المواعيد ماشية بتوقيت $zone (المكان اللي حفظتها فيه). تغيير ساعة أو توقيت الجهاز مش بيغيّرها، ولو اتغيّر بنبلّغك.',
+        "Times follow the $zone time zone (where you saved them). Changing the phone's clock or time zone does not move them, and you are alerted if it happens.",
+      );
+
+  /// Monday first (DateTime.monday == 1). Shown in the order of the phone's locale (Sunday first
+  /// in the US): see `weekdayOrder` / `firstWeekdayFor` in scheduled_lock.dart.
   static const weekdays = [
     Localized('إثنين', 'Mon'),
     Localized('ثلاثاء', 'Tue'),

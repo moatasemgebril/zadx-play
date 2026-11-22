@@ -21,7 +21,7 @@ import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
   HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, heartbeatAction, hexDigestEquals,
-  isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
+  familyPlanFor, isPairingCode, parentNotificationBody, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, planForRequest, protectionAlertText, rateLimitDecision,
   rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
 // Purchase ownership (verifyPurchase) + parent codes (redeemPairingCode).
@@ -136,11 +136,12 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
   const family = await familyOf(uid);
   // The assistant is for parents: paired child devices may not use it (child-safety).
   if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
-  const plan = family.get("plan");
-  if (!planAllows(plan, family.get("planExpiresAt"), Date.now(), "assistant")) {
+  // Only the plan of the calling app counts (a Kids plan never unlocks Zad X Play and vice versa).
+  const { plan, planExpiresAt } = planForRequest(family.data(), req.data?.variant);
+  if (!planAllows(plan, planExpiresAt, Date.now(), "assistant")) {
     throw new HttpsError("permission-denied", "subscription_required");
   }
-  const dailyLimit = planAllows(plan, family.get("planExpiresAt"), Date.now(), "unlimitedAssistant")
+  const dailyLimit = planAllows(plan, planExpiresAt, Date.now(), "unlimitedAssistant")
     ? PLUS_DAILY_QUESTIONS
     : BASIC_DAILY_QUESTIONS;
   const day = new Date().toISOString().slice(0, 10);
@@ -197,12 +198,9 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
 
   const ar = (family.get("language") ?? "ar") === "ar";
   const title = "Zad X";
-  const body =
-    type === "adhan"
-      ? ar
-        ? "وقت الصلاة — لو ابنك بيلعب على البلايستيشن أو الإكس بوكس، اقفله من التطبيق الرسمي"
-        : "Prayer time — pause PlayStation or Xbox from the official app if your child is playing"
-      : ar ? "فيه مهمة مستنية موافقتك" : "A task is waiting for your approval";
+  // Zad X Kids families never get the adhan push (no religious content).
+  const body = parentNotificationBody(type, ar, settings.variant);
+  if (!body) return { sent: 0 };
 
   const res = await getMessaging().sendEachForMulticast({
     tokens,
@@ -238,6 +236,7 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
 
   let expiresAt: string | null = null;
   let inTrial = false;
+  let verifiedProductId: string | null = null;
 
   if (platform === "android") {
     const publisher = await androidPublisher();
@@ -248,6 +247,7 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
     const lineInfo = productInfo(line?.productId);
     if (!line || !lineInfo) throw new HttpsError("failed-precondition", "Unknown product.");
     tier = lineInfo.tier;
+    verifiedProductId = line.productId ?? null;
     expiresAt = line?.expiryTime ?? null;
     inTrial = Boolean(line?.offerDetails?.offerTags?.includes("trial") || sub.data.subscriptionState === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD");
     if (sub.data.subscriptionState !== "SUBSCRIPTION_STATE_ACTIVE" && sub.data.subscriptionState !== "SUBSCRIPTION_STATE_IN_GRACE_PERIOD") {
@@ -284,10 +284,21 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
     // retries and sees the other family as the owner.
     if (owner.exists) tx.set(purchaseRef, ownership);
     else tx.create(purchaseRef, ownership);
-    tx.set(family.ref, { plan: tier, planExpiresAt: expiresAt, inTrial, store: platform, purchaseToken: FieldValue.delete() }, { merge: true });
-    // storeApp (play | kids) sits next to the token in the server-only billing doc: referral
-    // deferrals need the app's package + product id. Firestore rules are unchanged.
-    tx.set(family.ref.collection("private").doc("billing"), { purchaseToken: verificationData, storeApp: app }, { merge: true });
+    // Separate entitlements per app: each app's plan lives under plans.<app>. Only a Zad X Play
+    // purchase also writes the legacy top-level plan fields (read by clients older than Zad X Kids),
+    // so a Kids purchase can never unlock an older Zad X Play build. planApp marks whose plan that is.
+    const appPlan = { plan: tier, planExpiresAt: expiresAt, inTrial };
+    tx.set(family.ref, {
+      plans: { [app]: appPlan },
+      ...(app === "play" ? { ...appPlan, planApp: "play" } : {}),
+      store: platform,
+      purchaseToken: FieldValue.delete(),
+    }, { merge: true });
+    // storeApp (play | kids) and the product id Google verified sit next to the token in the
+    // server-only billing doc: referral deferrals need the app's package + exact product id.
+    tx.set(family.ref.collection("private").doc("billing"), {
+      purchaseToken: verificationData, storeApp: app, productId: verifiedProductId,
+    }, { merge: true });
   });
 
   // Record the referral now; the referrer is credited only after the friend's first PAID period.
@@ -441,13 +452,19 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
       const billing = await referrerRef.collection("private").doc("billing").get();
       // The referrer's own app (families that subscribed before Zad X Kids existed are Zad X Play).
       const referrerApp = billing.get("storeApp") === "kids" ? "kids" : "play";
-      const productId = productIdFor(referrer.get("plan"), referrerApp);
-      const current = new Date(referrer.get("planExpiresAt"));
+      const referrerPlan = familyPlanFor(referrer.data(), referrerApp);
+      // The exact product Google verified (monthly or yearly); older billing docs fall back to monthly.
+      const productId = productIdFor(referrerPlan.plan, referrerApp, billing.get("productId"));
+      const current = new Date(String(referrerPlan.planExpiresAt));
+      if (!productId || !Number.isFinite(current.getTime())) {
+        res.status(200).send();
+        return;
+      }
       const desired = new Date(current);
       desired.setMonth(desired.getMonth() + addMonths);
       await publisher.purchases.subscriptions.defer({
         packageName: ANDROID_PACKAGES[referrerApp],
-        subscriptionId: productId!,
+        subscriptionId: productId,
         token: billing.get("purchaseToken") ?? referrer.get("purchaseToken"),
         requestBody: {
           deferralInfo: {
@@ -456,7 +473,11 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
           },
         },
       });
-      await referrerRef.set({ planExpiresAt: desired.toISOString() }, { merge: true });
+      const extended = { plan: referrerPlan.plan, planExpiresAt: desired.toISOString(), inTrial: referrerPlan.inTrial === true };
+      await referrerRef.set({
+        plans: { [referrerApp]: extended },
+        ...(referrerApp === "play" ? { planExpiresAt: extended.planExpiresAt } : {}),
+      }, { merge: true });
     }
     // TODO(ios): for App Store subscribers, send a one-time offer code for `addMonths` free months.
     res.status(200).send();
@@ -699,7 +720,8 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
     const requiredDone = dayDoc.get("requiredDone") ?? false;
     const prayerLock = dayDoc.get("prayerLock") ?? false;
     const remaining = Math.max(0, earned - used);
-    const plan = family.get("plan");
+    // Zad X Guard (Windows) is part of Zad X Play: only the Play plan counts.
+    const playPlan = familyPlanFor(family.data(), "play");
     res.json({
       day,
       locked: !(requiredDone && !prayerLock && remaining > 0),
@@ -710,7 +732,7 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
       // social apps (+ browsers unless allowed); it never blocks every process.
       mode: settings.lockMode === "selectedGames" ? "selectedGames" : "allApps",
       allowBrowsers: settings.pcAllowBrowsers === true,
-      planActive: plan === "plus" || family.get("inTrial") === true,
+      planActive: playPlan.plan === "plus" || playPlan.inTrial === true,
       language: settings.language ?? "ar",
       prayer: {
         lat: settings.lat, lng: settings.lng, timeZone,

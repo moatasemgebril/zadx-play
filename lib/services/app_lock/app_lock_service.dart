@@ -47,6 +47,7 @@ class LockPolicy {
     this.schedules = const [],
     this.baseLocked,
     this.baseReason,
+    this.scheduleTimeZone,
   });
 
   final bool locked;
@@ -85,6 +86,10 @@ class LockPolicy {
   final bool? baseLocked;
   final String? baseReason;
 
+  /// Zad X Kids: IANA time zone the parent saved the schedules in. Native code reads the schedules
+  /// in this zone (and at a clock cross-checked with elapsed time), never the phone's current zone.
+  final String? scheduleTimeZone;
+
   Map<String, Object?> toMap() => {
         'locked': locked,
         'reason': reason,
@@ -98,6 +103,7 @@ class LockPolicy {
         'schedules': [for (final s in schedules) s.toNative()],
         'baseLocked': baseLocked ?? locked,
         'baseReason': baseReason ?? reason,
+        'scheduleTimeZone': scheduleTimeZone,
       };
 
   @override
@@ -114,12 +120,13 @@ class LockPolicy {
       listEquals(other.allowedPackages, allowedPackages) &&
       listEquals(other.schedules, schedules) &&
       (other.baseLocked ?? other.locked) == (baseLocked ?? locked) &&
-      (other.baseReason ?? other.reason) == (baseReason ?? reason);
+      (other.baseReason ?? other.reason) == (baseReason ?? reason) &&
+      other.scheduleTimeZone == scheduleTimeZone;
 
   @override
   int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes, prayerLockSinceMs,
       Object.hashAll(androidPackages), Object.hashAll(allowedPackages), Object.hashAll(schedules), baseLocked ?? locked,
-      baseReason ?? reason);
+      baseReason ?? reason, scheduleTimeZone);
 }
 
 /// An installed app shown in the parent's allow-list editor (Android only; never uploaded).
@@ -216,6 +223,17 @@ class AppLockService {
 
   Future<void> removeDeviceAdmin() => _channel.invokeMethod('removeDeviceAdmin');
 
+  /// IANA id of the phone's time zone (Android / iOS), or null where Zad X has no native lock.
+  Future<String?> deviceTimeZone() async {
+    if (!AppPlatform.canLockGames) return null;
+    try {
+      return await _channel.invokeMethod<String>('deviceTimeZone');
+    } catch (e) {
+      debugPrint('deviceTimeZone failed: $e');
+      return null;
+    }
+  }
+
   Future<ProtectionStatus> protectionStatus() async {
     if (!AppPlatform.canLockGames) return ProtectionStatus.none;
     return ProtectionStatus.fromMap(await _channel.invokeMethod<Object?>('protectionStatus'));
@@ -247,6 +265,11 @@ class AppLockService {
 }
 
 final appLockServiceProvider = Provider<AppLockService>((_) => AppLockService());
+
+/// Bumped when native code reports that the phone's time / time zone was changed by hand while
+/// schedules are on (`clock_changed` event); the protection monitor then reports to the parent.
+/// (One listener on the native event channel only: a second one would replace the first.)
+final clockChangedTickProvider = StateProvider<int>((_) => 0);
 
 /// Whether the family's plan has tasks + earned minutes (`hasFeature(tasksRewards)`: Basic,
 /// Plus and the 7-day trial). Plans without tasks (Free) lock on prayer time + a parent-set
@@ -320,6 +343,7 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
     schedules: kIsKids ? ref.watch(scheduleProvider) : const [],
     baseLocked: base.locked,
     baseReason: base.reason,
+    scheduleTimeZone: kIsKids ? ref.watch(scheduleTimeZoneProvider) : null,
   );
 });
 
@@ -334,6 +358,7 @@ LockPolicy lockPolicyFrom({
   List<ScheduledLock> schedules = const [],
   bool? baseLocked,
   String? baseReason,
+  String? scheduleTimeZone,
 }) {
   final packages = controlledGames
       .where((g) => settings.controlledGameIds.contains(g.id))
@@ -353,6 +378,7 @@ LockPolicy lockPolicyFrom({
     schedules: [for (final s in schedules) if (s.enabled && s.durationMinutes > 0) s],
     baseLocked: baseLocked,
     baseReason: baseReason,
+    scheduleTimeZone: scheduleTimeZone,
   );
 }
 
@@ -408,6 +434,8 @@ final lockCoordinatorProvider = Provider<void>((ref) {
           final cap = ref.read(settingsProvider).dailyLimitMinutes;
           wallet.addUsedMinutes(cap, cap: cap);
         }
+      case 'clock_changed':
+        ref.read(clockChangedTickProvider.notifier).state++;
       case 'prayer_lock':
         // A native prayer alarm fired (possibly while Flutter was closed). Never in Zad X Kids.
         if (!kIsKids && !ref.read(walletProvider).prayerLock) wallet.startPrayerLock(_currentPrayer(ref));

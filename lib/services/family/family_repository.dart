@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_variant.dart';
 import '../../data/models/child_profile.dart';
 import 'firestore_family_repository.dart';
 import '../../data/models/plan.dart';
@@ -53,22 +54,44 @@ class FamilyDay {
       );
 }
 
+/// The store app of this build ('play' | 'kids'); each app only uses its own family plan.
+const String currentStoreApp = kIsKids ? 'kids' : 'play';
+
+/// The plan fields of [app] on a family doc (mirror of `familyPlanFor` in backend security.ts):
+/// `plans.<app>`, else the legacy top-level plan when `planApp` says it is [app] (no `planApp` =
+/// a Zad X Play plan bought before Zad X Kids existed). Anything else: no plan (Free).
+Map<String, Object?> familyPlanFieldsFor(Map<String, dynamic> data, String app) {
+  final plans = data['plans'];
+  if (plans is Map && plans[app] is Map) {
+    final e = plans[app] as Map;
+    return {'plan': e['plan'], 'planExpiresAt': e['planExpiresAt'], 'inTrial': e['inTrial']};
+  }
+  final owner = data['planApp'] == 'kids' ? 'kids' : 'play';
+  if (owner != app) return const {};
+  return {'plan': data['plan'], 'planExpiresAt': data['planExpiresAt'], 'inTrial': data['inTrial']};
+}
+
 /// The plan `verifyPurchase` (backend/functions/src/index.ts) stores on families/{id}:
-/// `plan` ('basic' | 'plus'), `planExpiresAt` (ISO-8601 string), `inTrial` (bool).
-/// These fields are server-only (firestore.rules) and readable by every family member,
-/// so a child device gets the plan the parent paid for on another phone.
+/// `plans.<app>` = {`plan` ('basic' | 'plus'), `planExpiresAt` (ISO-8601 string), `inTrial` (bool)}
+/// plus the legacy top-level fields for Zad X Play. These fields are server-only (firestore.rules)
+/// and readable by every family member, so a child device gets the plan the parent paid for on
+/// another phone.
+///
+/// Separate entitlements per app: a Zad X Kids purchase never unlocks Zad X Play and vice versa
+/// ([app], default: this build).
 ///
 /// Fails closed: an unknown plan, or a plan without a readable expiry, is Free.
-Entitlement parseFamilyEntitlement(Map<String, dynamic> data, {DateTime Function()? now}) {
-  final tier = parsePlanTier(data['plan']);
-  final raw = data['planExpiresAt'];
+Entitlement parseFamilyEntitlement(Map<String, dynamic> data, {DateTime Function()? now, String app = currentStoreApp}) {
+  final fields = familyPlanFieldsFor(data, app);
+  final tier = parsePlanTier(fields['plan']);
+  final raw = fields['planExpiresAt'];
   final expiresAt = switch (raw) {
     String s => DateTime.tryParse(s)?.toUtc(),
     DateTime d => d.toUtc(),
     _ => null,
   };
   if (tier == null || expiresAt == null) return Entitlement(now: now);
-  return Entitlement(tier: tier, expiresAt: expiresAt, inTrial: data['inTrial'] == true, now: now);
+  return Entitlement(tier: tier, expiresAt: expiresAt, inTrial: fields['inTrial'] == true, now: now);
 }
 
 /// Syncs a child's day between the child device and the parent device(s).

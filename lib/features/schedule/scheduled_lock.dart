@@ -1,4 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:timezone/timezone.dart' as tz;
+
+import '../../core/app_variant.dart';
 
 /// Neutral scheduled locks of Zad X Kids (they replace the prayer lock of Zad X Play).
 /// Decision record: docs/decisions/ZADX-KIDS-VARIANT.md.
@@ -33,7 +36,7 @@ const Set<int> everyDay = {
   DateTime.sunday,
 };
 
-/// Sunday–Thursday: the school week in Egypt and most Arab countries (the parent can change it).
+/// Sunday–Thursday: the school week in Egypt and most Arab countries (Zad X Play).
 const Set<int> schoolDays = {
   DateTime.sunday,
   DateTime.monday,
@@ -41,6 +44,33 @@ const Set<int> schoolDays = {
   DateTime.wednesday,
   DateTime.thursday,
 };
+
+/// Monday–Friday: the school week in the US and Europe (Zad X Kids, Western market).
+const Set<int> westernSchoolDays = {
+  DateTime.monday,
+  DateTime.tuesday,
+  DateTime.wednesday,
+  DateTime.thursday,
+  DateTime.friday,
+};
+
+/// Default study days of each app (the parent can change them).
+Set<int> schoolDaysFor(AppVariant variant) => variant == AppVariant.kids ? westernSchoolDays : schoolDays;
+
+/// Local time used to evaluate the schedules: [utcNow] read in the time zone the parent saved the
+/// schedules in ([parentTimeZone], an IANA id). Changing the phone's time zone therefore cannot move
+/// bedtime. Falls back to the phone's own zone when no (valid) id is known.
+DateTime scheduleLocalTime(String? parentTimeZone, [DateTime? utcNow]) {
+  final now = utcNow ?? DateTime.now();
+  if (parentTimeZone != null && parentTimeZone.isNotEmpty) {
+    try {
+      return tz.TZDateTime.from(now, tz.getLocation(parentTimeZone));
+    } catch (_) {
+      // Unknown id or time zone data not loaded: use the phone's zone.
+    }
+  }
+  return now.toLocal();
+}
 
 /// One lock window in local device time. [startMinute]/[endMinute] are minutes after midnight;
 /// when `endMinute <= startMinute` the window crosses midnight (bedtime 21:00 → 07:00).
@@ -135,13 +165,43 @@ class ScheduledLock {
   int get hashCode => Object.hash(kind, enabled, startMinute, endMinute, Object.hashAllUnordered(weekdays));
 }
 
-/// Starter schedules: bedtime on (21:00 → 07:00 every night), study (Sun–Thu 16:00–18:00) and
-/// reading (19:00–19:30 daily) off until the parent turns them on.
-const defaultSchedules = <ScheduledLock>[
-  ScheduledLock(kind: ScheduleKind.bedtime, enabled: true, startMinute: 21 * 60, endMinute: 7 * 60),
-  ScheduledLock(kind: ScheduleKind.study, startMinute: 16 * 60, endMinute: 18 * 60, weekdays: schoolDays),
-  ScheduledLock(kind: ScheduleKind.reading, startMinute: 19 * 60, endMinute: 19 * 60 + 30),
-];
+/// Starter schedules: bedtime on (21:00 → 07:00 every night), study (16:00–18:00 on school days:
+/// Mon–Fri in Zad X Kids, Sun–Thu in Zad X Play) and reading (19:00–19:30 daily) off until the
+/// parent turns them on.
+List<ScheduledLock> defaultSchedulesFor(AppVariant variant) => [
+      const ScheduledLock(kind: ScheduleKind.bedtime, enabled: true, startMinute: 21 * 60, endMinute: 7 * 60),
+      ScheduledLock(kind: ScheduleKind.study, startMinute: 16 * 60, endMinute: 18 * 60, weekdays: schoolDaysFor(variant)),
+      const ScheduledLock(kind: ScheduleKind.reading, startMinute: 19 * 60, endMinute: 19 * 60 + 30),
+    ];
+
+/// The starter schedules of this build.
+final List<ScheduledLock> defaultSchedules = List.unmodifiable(defaultSchedulesFor(appVariant));
+
+// CLDR week data (supplemental weekData "firstDay"): regions whose week starts on Sunday / Saturday.
+const _sundayFirst = {
+  'AG', 'AS', 'BD', 'BR', 'BS', 'BT', 'BW', 'BZ', 'CA', 'CN', 'CO', 'DM', 'DO', 'ET', 'GT', 'GU', 'HK', 'HN', //
+  'ID', 'IL', 'IN', 'JM', 'JP', 'KE', 'KH', 'KR', 'LA', 'MH', 'MM', 'MO', 'MT', 'MX', 'MZ', 'NI', 'NP', 'PA', //
+  'PE', 'PH', 'PK', 'PR', 'PT', 'PY', 'SA', 'SG', 'SV', 'TH', 'TT', 'TW', 'UM', 'US', 'VE', 'VI', 'WS', 'YE', //
+  'ZA', 'ZW',
+};
+const _saturdayFirst = {'AE', 'AF', 'BH', 'DJ', 'DZ', 'EG', 'IQ', 'IR', 'JO', 'KW', 'LY', 'OM', 'QA', 'SD', 'SY'};
+
+/// ISO weekday (DateTime.monday..sunday) the week starts on for the phone's locale: Sunday in the
+/// US, Monday in most of Europe, Saturday in Egypt. Without a region: English → Sunday (US),
+/// Arabic → Saturday, anything else → Monday.
+int firstWeekdayFor(String languageCode, [String? countryCode]) {
+  final region = countryCode?.toUpperCase();
+  if (region != null && region.isNotEmpty) {
+    if (_sundayFirst.contains(region)) return DateTime.sunday;
+    if (_saturdayFirst.contains(region)) return DateTime.saturday;
+    if (region == 'MV') return DateTime.friday;
+    return DateTime.monday;
+  }
+  return switch (languageCode) { 'en' => DateTime.sunday, 'ar' => DateTime.saturday, _ => DateTime.monday };
+}
+
+/// The seven ISO weekdays starting at [first].
+List<int> weekdayOrder(int first) => [for (var i = 0; i < 7; i++) (first - 1 + i) % 7 + 1];
 
 /// The window locking the device at [local], or null. Bedtime wins over study, study over reading.
 ScheduledLock? activeScheduledLock(Iterable<ScheduledLock> schedules, DateTime local) {

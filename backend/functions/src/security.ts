@@ -166,12 +166,76 @@ export function verifiedLine<T extends { productId?: string | null }>(app: Store
   return null;
 }
 
-/** The product id to use for [tier] in [app] (referral deferrals). */
-export function productIdFor(tier: unknown, app: StoreApp): string | null {
+/**
+ * The product id for a referral deferral: the one Google verified for this purchase (stored in the
+ * server-only billing doc) when it is one of OUR products of [app]; otherwise the monthly product of
+ * [tier] (families that subscribed before the verified id was stored). Deferring with the wrong
+ * product id (monthly instead of yearly) fails at Google.
+ */
+export function productIdFor(tier: unknown, app: StoreApp, verifiedProductId?: unknown): string | null {
+  const verified = productInfo(verifiedProductId);
+  if (verified && verified.app === app) return verifiedProductId as string;
   for (const [id, info] of Object.entries(PRODUCTS)) {
     if (info.app === app && info.tier === tier) return id;
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Separate entitlements per app (owner-safe default, 2026-11-22): a Zad X Kids purchase never
+// unlocks Zad X Play and the other way round. verifyPurchase stores each app's plan under
+// `plans.<app>` and also the legacy top-level `plan / planExpiresAt / inTrial` with `planApp`.
+// A family doc without `planApp` predates Zad X Kids: its plan is a Zad X Play plan.
+// ---------------------------------------------------------------------------
+
+/** The app a stored plan belongs to (missing / unknown = Zad X Play). */
+export function planAppOf(raw: unknown): StoreApp {
+  return raw === "kids" ? "kids" : "play";
+}
+
+/**
+ * The app a client says it is ("kids" | "play"; the app's variant name "islamic" = play), or null when
+ * it does not say. Only ever used to NARROW what a family plan unlocks, never to widen it: the server
+ * cannot prove which app is calling.
+ */
+export function requestingAppOf(raw: unknown): StoreApp | null {
+  if (raw === "kids") return "kids";
+  if (raw === "play" || raw === "islamic") return "play";
+  return null;
+}
+
+export interface AppPlan {
+  plan: unknown;
+  planExpiresAt: unknown;
+  inTrial: unknown;
+}
+
+/**
+ * The plan of [app] on a family doc: `plans.<app>`, else the legacy top-level plan when it belongs to
+ * [app]. Anything else is Free (null plan).
+ */
+export function familyPlanFor(family: Record<string, unknown> | undefined, app: StoreApp): AppPlan {
+  const free: AppPlan = { plan: null, planExpiresAt: null, inTrial: false };
+  if (!family) return free;
+  const plans = family.plans;
+  if (plans && typeof plans === "object" && !Array.isArray(plans)) {
+    const entry = (plans as Record<string, unknown>)[app];
+    if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+      const e = entry as Record<string, unknown>;
+      return { plan: e.plan ?? null, planExpiresAt: e.planExpiresAt ?? null, inTrial: e.inTrial === true };
+    }
+  }
+  if (planAppOf(family.planApp) !== app) return free;
+  return { plan: family.plan ?? null, planExpiresAt: family.planExpiresAt ?? null, inTrial: family.inTrial === true };
+}
+
+/**
+ * The plan a request may use. The requesting app (client-supplied) only narrows: with no app given
+ * the call is treated as Zad X Play (every client older than Zad X Kids), so a Kids plan never
+ * unlocks anything for a caller that does not say it is Kids, and a Play plan never unlocks Kids.
+ */
+export function planForRequest(family: Record<string, unknown> | undefined, requesting: unknown): AppPlan {
+  return familyPlanFor(family, requestingAppOf(requesting) ?? "play");
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +321,21 @@ export function assistantVariant(value: unknown): "islamic" | "kids" {
 
 export const NOTIFY_TYPES: readonly string[] = ["task_submitted", "adhan"];
 
+/**
+ * Push text for a parent notification, or null when it must not be sent. A Zad X Kids family
+ * (settings.variant "kids") never gets the adhan notification: it has no religious content.
+ */
+export function parentNotificationBody(type: string, ar: boolean, familyVariant: unknown): string | null {
+  if (type === "adhan") {
+    if (familyVariant === "kids") return null;
+    return ar
+      ? "وقت الصلاة — لو ابنك بيلعب على البلايستيشن أو الإكس بوكس، اقفله من التطبيق الرسمي"
+      : "Prayer time — pause PlayStation or Xbox from the official app if your child is playing";
+  }
+  if (type === "task_submitted") return ar ? "فيه مهمة مستنية موافقتك" : "A task is waiting for your approval";
+  return null;
+}
+
 /** FCM data must be string → string; we allow a few short, non-reserved keys only. */
 export function sanitiseNotifyData(raw: unknown): Record<string, string> {
   const out: Record<string, string> = {};
@@ -275,7 +354,7 @@ export function sanitiseNotifyData(raw: unknown): Record<string, string> {
 // ---------------------------------------------------------------------------
 
 /** Why a child device's protection is off. Anything else from a client is dropped. */
-export const TAMPER_REASONS: readonly string[] = ["accessibility_off", "device_admin_off", "screen_time_off"];
+export const TAMPER_REASONS: readonly string[] = ["accessibility_off", "device_admin_off", "screen_time_off", "clock_changed"];
 
 /** A device that has not reported for this long gets one "not checking in" alert. */
 export const HEARTBEAT_STALE_MS = 24 * 60 * 60_000;
@@ -311,8 +390,8 @@ export function needsStaleAlert(lastSeenMs: unknown, staleAlerted: unknown, nowM
 export function protectionAlertText(kind: "tamper" | "stale", ar: boolean): string {
   if (kind === "tamper") {
     return ar
-      ? "تنبيه: حماية Zad X اتقفلت على جهاز طفلك (إمكانية الوصول أو منع المسح أو Screen Time). افتح Zad X على الجهاز ده وشغّلها تاني."
-      : "Alert: Zad X protection was turned off on your child's device (accessibility, delete protection or Screen Time). Open Zad X on that device to turn it back on.";
+      ? "تنبيه: حماية Zad X اتقفلت أو اتغيّرت على جهاز طفلك (إمكانية الوصول أو منع المسح أو Screen Time أو ساعة الجهاز). افتح Zad X على الجهاز ده واتأكد إنها شغّالة."
+      : "Alert: Zad X protection was turned off or changed on your child's device (accessibility, delete protection, Screen Time or the device clock). Open Zad X on that device to check it.";
   }
   return ar
     ? "جهاز طفلك ما اتواصلش مع Zad X من أكتر من يوم. لو الجهاز كان مقفول تجاهل الرسالة، غير كده اتأكد إن الحماية لسه شغّالة."

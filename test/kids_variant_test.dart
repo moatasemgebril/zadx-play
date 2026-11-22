@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:zadx/core/app_config.dart';
 import 'package:zadx/core/app_variant.dart';
+import 'package:zadx/core/localized.dart';
 import 'package:zadx/data/catalog/default_tasks.dart';
 import 'package:zadx/data/catalog/games.dart';
 import 'package:zadx/data/catalog/praise.dart';
@@ -20,6 +21,7 @@ import 'package:zadx/features/schedule/scheduled_lock.dart';
 import 'package:zadx/router.dart';
 import 'package:zadx/variant/kids_localizations.dart';
 import 'package:zadx/variant/kids_strings.dart';
+import 'package:zadx/variant/us_english.dart';
 
 /// The single forbidden-word list (also used by the backend test for the assistant prompt).
 final Map<String, List<String>> _words = () {
@@ -30,12 +32,27 @@ final Map<String, List<String>> _words = () {
   };
 }();
 
-/// Religious words found in [text] (English: whole words, any case; Arabic: anywhere).
+/// Arabic letters and diacritics (word characters for the Arabic whole-word match).
+const _arLetter = r'[\u0621-\u063A\u0640-\u065F\u0670-\u06D3\u06FA-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDF9\uFE70-\uFEFC]';
+
+/// Whole-word pattern for an Arabic entry: optional attached prefixes و/ف, then ب/ل/ك, then the
+/// article ال (or لل = ل + ال). An entry that itself starts with ال must keep an article.
+RegExp _arabicWord(String w) {
+  final hasArticle = w.startsWith('ال') && w.length > 3;
+  final base = RegExp.escape(hasArticle ? w.substring(2) : w);
+  final prefix = hasArticle ? '[وف]?(?:[بك]?ال|لل)' : '[وف]?(?:[بك]?ال|لل|[بلك])?';
+  return RegExp('(?<!$_arLetter)$prefix$base(?!$_arLetter)');
+}
+
+final Map<String, RegExp> _arPatterns = {for (final w in _words['ar']!) w: _arabicWord(w)};
+
+/// Religious words found in [text]. English: whole words, any case. Arabic: whole words with the
+/// attached prefixes و ف ب ل ك ال (so "بسمة" / "المكسورة" are not "بسم" / "سورة").
 List<String> religiousWordsIn(String text) => [
       for (final w in _words['en']!)
         if (RegExp("(?<![A-Za-z'])${RegExp.escape(w)}(?![A-Za-z'])", caseSensitive: false).hasMatch(text)) w,
-      for (final w in _words['ar']!)
-        if (text.contains(w)) w,
+      for (final e in _arPatterns.entries)
+        if (e.value.hasMatch(text)) e.key,
     ];
 
 Map<String, String> _arb(String lang) {
@@ -68,11 +85,33 @@ void main() {
   test('the forbidden-word check really finds religious words', () {
     expect(religiousWordsIn('Hear the Adhan'), contains('adhan'));
     expect(religiousWordsIn('MashaAllah, well done!'), containsAll(['mashaallah']));
-    expect(religiousWordsIn('يلا نبدأ يومنا بالصلاة'), contains('الصلا'));
+    expect(religiousWordsIn('يلا نبدأ يومنا بالصلاة'), contains('صلاة'));
     expect(religiousWordsIn('حروف القرآن'), contains('قرآن'));
+    expect(religiousWordsIn('وبالقرآن نتعلم'), contains('قرآن'));
+    expect(religiousWordsIn('رايح للمسجد'), contains('مسجد'));
+    expect(religiousWordsIn('والله برافو'), contains('الله'));
+    expect(religiousWordsIn('بسم الله'), containsAll(['بسم', 'الله']));
+    expect(religiousWordsIn('صلاتك أهم'), contains('صلاتك'));
     // Everyday words stay allowed.
     expect(religiousWordsIn('Bedtime — tap Display, a fast prayerless task'), isEmpty);
     expect(religiousWordsIn('تنبيه: خلّص جزء من الواجب'), isEmpty);
+    // Whole words only: no false hits inside longer words.
+    expect(religiousWordsIn('بسمة حلوة'), isEmpty); // "smile", not "بسم"
+    expect(religiousWordsIn('اللعبة المكسورة'), isEmpty); // "the broken toy", not "سورة"
+    expect(religiousWordsIn('صورة الشمس'), isEmpty);
+    expect(religiousWordsIn('أنا سعيد'), isEmpty);
+  });
+
+  test('US English check finds British words and fixes them', () {
+    expect(britishWordsIn('Ask your mum or dad'), isNotEmpty);
+    expect(kidsUsEnglish('Ask your mum or dad to open it for you'), 'Ask a parent or grown-up to open it for you');
+    expect(kidsUsEnglish('Mum loves this colour'), 'Mom loves this color');
+    expect(kidsUsEnglish('At break time, before the end of term'), 'At recess, before the end of the school year');
+    expect(kidsUsEnglish('My favourite book'), 'My favorite book');
+    expect(kidsUsEnglish('A long-term plan with terms'), 'A long-term plan with terms');
+    expect(kidsUsEnglish('Museum'), 'Museum'); // "mum" only as a whole word
+    expect(britishWordsIn('Ask a parent or grown-up'), isEmpty);
+    expect(const Localized('', 'Tidy your room').enKids, 'Clean your room');
   });
 
   group('Kids strings (ARB + kids_strings.dart)', () {
@@ -86,6 +125,37 @@ void main() {
         expect(bad, isEmpty, reason: 'Add these keys to kidsRewrites or islamicOnlyL10nKeys in lib/variant/kids_strings.dart');
       });
     }
+
+    test('Kids English is US English (no British word in any Kids-visible English string)', () {
+      final strings = _kidsStrings('en');
+      final bad = {
+        for (final e in strings.entries)
+          if (britishWordsIn(e.value).isNotEmpty) e.key: britishWordsIn(e.value),
+      };
+      expect(bad, isEmpty, reason: 'Add a US English rewrite to kidsRewrites[\'en\'] (lib/variant/kids_strings.dart)');
+    });
+
+    test('settings Kids does not offer are empty: Arabic form of address, Zad X Guard for Windows', () {
+      final en = kidsLocalizationsFor(const Locale('en'));
+      expect(en.formOfAddress, isEmpty);
+      expect(en.addressBoy, isEmpty);
+      expect(en.addressGirl, isEmpty);
+      expect(en.downloadWindows, isEmpty);
+      for (final lang in const ['ar', 'en']) {
+        final s = _kidsStrings(lang);
+        for (final key in const ['pairNote', 'psScheduleNote', 'msScheduleNote', 'faq6A']) {
+          expect(s[key]!.toLowerCase(), isNot(contains('guard')), reason: '$lang $key');
+          expect(s[key], isNot(contains('PC')), reason: '$lang $key');
+        }
+        // The console notes no longer refer to the prayer play windows ("enter these times").
+        expect(s['psScheduleNote'], isNot(equals(_arb(lang)['psScheduleNote'])));
+        expect(s['msScheduleNote'], isNot(equals(_arb(lang)['msScheduleNote'])));
+      }
+      final arbKeys = _arb('en').keys.toSet();
+      for (final k in kidsHiddenL10nKeys) {
+        expect(arbKeys, contains(k));
+      }
+    });
 
     test('rewrites exist in both languages, match ARB keys and keep the placeholders', () {
       expect(kidsRewrites['en']!.keys.toSet(), kidsRewrites['ar']!.keys.toSet());
@@ -106,7 +176,7 @@ void main() {
 
     test('KidsLocalizations overrides every rewritten and Islamic-only key', () {
       final src = File('lib/variant/kids_localizations.dart').readAsStringSync();
-      for (final k in {...kidsRewrites['en']!.keys, ...islamicOnlyL10nKeys}) {
+      for (final k in {...kidsRewrites['en']!.keys, ...islamicOnlyL10nKeys, ...kidsHiddenL10nKeys}) {
         expect(RegExp('(get $k =>|String $k\\()').hasMatch(src), isTrue, reason: 'missing override for $k');
       }
     });
@@ -130,10 +200,12 @@ void main() {
         KidsText.bedtime, KidsText.bedtimeNote, KidsText.reading, KidsText.readingNote, KidsText.from, KidsText.to,
         KidsText.days, KidsText.todayTitle, KidsText.off, KidsText.lockedNow, KidsText.childScheduleLocked,
         KidsText.lockStudy, KidsText.lockBedtime, KidsText.lockReading, ...KidsText.weekdays,
+        KidsText.zoneNote('America/New_York'),
       ];
       for (final t in texts) {
         _expectNeutral('KidsText', t.ar);
         _expectNeutral('KidsText', t.en);
+        expect(britishWordsIn(t.en), isEmpty, reason: t.en);
       }
     });
   });
@@ -174,6 +246,7 @@ void main() {
         _expectNeutral('praise', p.masculine);
         _expectNeutral('praise', p.feminine);
         _expectNeutral('praise', p.en);
+        expect(britishWordsIn(p.en), isEmpty, reason: p.en);
         expect(p.masculine, isNot(p.feminine), reason: 'Arabic praise must follow the child\'s form of address');
       }
     });
@@ -184,7 +257,30 @@ void main() {
       expect(tasks.any((t) => t.id == 'homework' && t.required), isTrue);
       for (final t in tasks) {
         _expectNeutral('task ${t.id}', '${t.title.ar} ${t.title.en} ${t.subtitle.ar} ${t.subtitle.en}');
+        // What Kids shows in English is US English.
+        expect(britishWordsIn('${t.title.enKids} ${t.subtitle.enKids}'), isEmpty, reason: t.id);
       }
+    });
+
+    test('rewards and game tags (games the parent can lock) are neutral', () {
+      for (final g in controlledGames) {
+        _expectNeutral('game ${g.id}', '${g.name} ${g.tag.ar} ${g.tag.en}');
+        expect(britishWordsIn(g.tag.enKids), isEmpty, reason: g.id);
+      }
+      for (final t in starterTasksFor(AppVariant.kids)) {
+        expect(t.rewardMinutes, greaterThan(0), reason: 'every Kids task rewards screen time');
+      }
+    });
+
+    test('notifications a Kids family can get are neutral (backend texts)', () {
+      final ts = File('backend/functions/src/security.ts').readAsStringSync();
+      final body = RegExp(r'export function parentNotificationBody[\s\S]*?\n}').firstMatch(ts)![0]!;
+      // Everything after the adhan branch (which returns null for Kids) is what Kids can receive.
+      final kidsPart = body.substring(body.indexOf('type === "task_submitted"'));
+      _expectNeutral('task notification', kidsPart);
+      expect(body, contains('if (familyVariant === "kids") return null;'));
+      final alert = RegExp(r'export function protectionAlertText[\s\S]*?\n}').firstMatch(ts)![0]!;
+      _expectNeutral('protection alert', alert);
     });
 
     test('learning games: none in Kids (no prophets, no mosque, no Arabic Letters)', () {
@@ -194,6 +290,25 @@ void main() {
     test('schedules replace prayer locks', () {
       expect(ScheduleKind.values.map((k) => k.name), containsAll(['bedtime', 'study', 'reading']));
       expect(defaultSchedules.firstWhere((s) => s.kind == ScheduleKind.bedtime).crossesMidnight, isTrue);
+    });
+
+    test('Western school week: Kids studies Monday–Friday, Play keeps Sunday–Thursday', () {
+      ScheduledLock study(AppVariant v) => defaultSchedulesFor(v).firstWhere((s) => s.kind == ScheduleKind.study);
+      expect(study(AppVariant.kids).weekdays, {DateTime.monday, DateTime.tuesday, DateTime.wednesday, DateTime.thursday, DateTime.friday});
+      expect(study(AppVariant.islamic).weekdays, schoolDays);
+      expect(schoolDays, contains(DateTime.sunday));
+      expect(defaultSchedules, defaultSchedulesFor(appVariant));
+    });
+
+    test('the week starts on the phone locale (Sunday in the US)', () {
+      expect(firstWeekdayFor('en', 'US'), DateTime.sunday);
+      expect(firstWeekdayFor('en', 'GB'), DateTime.monday);
+      expect(firstWeekdayFor('de', 'DE'), DateTime.monday);
+      expect(firstWeekdayFor('ar', 'EG'), DateTime.saturday);
+      expect(firstWeekdayFor('en'), DateTime.sunday);
+      expect(weekdayOrder(DateTime.sunday), [7, 1, 2, 3, 4, 5, 6]);
+      expect(weekdayOrder(DateTime.monday), [1, 2, 3, 4, 5, 6, 7]);
+      expect(weekdayOrder(DateTime.saturday), [6, 7, 1, 2, 3, 4, 5]);
     });
   });
 

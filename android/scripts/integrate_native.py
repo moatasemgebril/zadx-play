@@ -97,7 +97,7 @@ def merge_manifest() -> None:
     a = re.sub(r"<!--.*?-->", "", additions.read_text(), flags=re.S)
     if "AppBlockerService" in m:
         # Already merged by an older version of this script: add receivers introduced later.
-        for name in ("ZadXDeviceAdminReceiver",):
+        for name in ("ZadXDeviceAdminReceiver", "ClockChangeReceiver"):
             if name not in m:
                 block = re.search(r"\s*<receiver\s+android:name=\"\.%s\".*?</receiver>" % name, a, re.S)
                 if block:
