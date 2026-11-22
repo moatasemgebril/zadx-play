@@ -14,6 +14,7 @@ import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
+import '../../services/family/children_controller.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../settings/settings_controller.dart';
@@ -141,7 +142,7 @@ class _LockBanner extends StatelessWidget {
     final l10n = context.l10n;
     if (wallet.gamesUnlocked) {
       return Banner2(
-        text: l10n.gamesOpen(Fmt.digits(wallet.remainingMinutes, context.lang)),
+        text: l10n.gamesOpen(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, context.lang)),
         bg: AppColors.mintSoft,
         fg: AppColors.mintText,
         icon: Icons.lock_open_rounded,
@@ -165,6 +166,8 @@ class _PrayerLockCard extends ConsumerWidget {
     final wallet = ref.watch(walletProvider);
     final prayerName = wallet.lockedPrayer == null ? '' : l10n.prayerName(wallet.lockedPrayer!);
     final submitted = wallet.pending.any((t) => t.kind == TaskKind.prayer);
+    // Gender-aware wording from the child's form of address (unset = masculine/neutral form).
+    final form = ref.watch(childrenProvider).active.address?.name ?? 'other';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -173,14 +176,14 @@ class _PrayerLockCard extends ConsumerWidget {
         const Icon(Icons.nightlight_round, color: Colors.white, size: 38),
         const SizedBox(height: 6),
         Text(l10n.prayerNow(prayerName), textAlign: TextAlign.center, style: AppTheme.display(24, color: Colors.white)),
-        Text(l10n.prayerSub, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
+        Text(l10n.prayerSub(form), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
         const SizedBox(height: 12),
         if (!submitted)
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.yellow, foregroundColor: AppColors.ink),
             onPressed: () {
               ref.read(walletProvider.notifier).markPrayed();
-              showPraiseDialog(context, ref, note: l10n.waitParent);
+              showPraiseDialog(context, ref, note: '${l10n.waitParent}\n${l10n.prayerIkhlas}');
             },
             child: Text(l10n.iPrayed),
           )

@@ -36,7 +36,7 @@ class AppShell extends ConsumerWidget {
       (ZadIconKind.parent, l10n.tabParent),
     ];
     void go(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
-    final header = _Header(remaining: l10n.minutesLeft(Fmt.digits(wallet.remainingMinutes, context.lang)));
+    final header = _Header(remaining: l10n.minutesLeft(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, context.lang)));
 
     return LayoutBuilder(builder: (context, constraints) {
       // Tablets, laptops, desktops and the web: side rail + centered content.

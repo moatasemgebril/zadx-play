@@ -47,6 +47,9 @@ class _AdhkarViewState extends ConsumerState<AdhkarView> {
       if (_section != AdhkarSection.salawat) ...[
         Banner2(text: qulsReminder.of(lang), bg: AppColors.purpleSoft, fg: AppColors.purpleDark, icon: Icons.menu_book_rounded),
         const SizedBox(height: 10),
+      ] else ...[
+        Banner2(text: salawatReminder.of(lang), bg: AppColors.purpleSoft, fg: AppColors.purpleDark, icon: Icons.favorite_rounded),
+        const SizedBox(height: 10),
       ],
       if (done) ...[
         Banner2(text: l10n.sectionDone, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.celebration_rounded),
@@ -87,6 +90,12 @@ class _DhikrCard extends StatelessWidget {
       border: complete ? Border.all(color: AppColors.mint, width: 3) : null,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(dhikr.text, textDirection: TextDirection.rtl, style: AppTheme.quran(21)),
+        if (dhikr.note != null)
+          Text(
+            dhikr.note!.of(lang),
+            textDirection: lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+            style: const TextStyle(fontSize: 14, color: AppColors.purpleDark),
+          ),
         const SizedBox(height: 4),
         Text(
           dhikr.sourceOf(lang),
@@ -100,7 +109,7 @@ class _DhikrCard extends StatelessWidget {
           Expanded(
             child: Text(
               // "0 / 1" rather than "0 / 1 times" (EN) or "٠ / ١ مرات" (AR): the plural word is wrong for 1.
-              '${Fmt.digits(count, lang)} / ${dhikr.times == 1 ? Fmt.digits(1, lang) : l10n.dhikrTimes(Fmt.digits(dhikr.times, lang))}',
+              '${Fmt.digits(count, lang)} / ${dhikr.times == 1 ? Fmt.digits(1, lang) : l10n.dhikrTimes(dhikr.times, Fmt.digits(dhikr.times, lang))}',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.purpleDark),
             ),
           ),

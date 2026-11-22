@@ -75,7 +75,7 @@ class DeviceLockCard extends ConsumerWidget {
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final m in const [30, 60, 90, 120, 180])
               ChoiceChip(
-                label: Text(l10n.deviceLockMinutes(Fmt.digits(m, lang)), style: const TextStyle(fontSize: 15)),
+                label: Text(l10n.deviceLockMinutes(m, Fmt.digits(m, lang)), style: const TextStyle(fontSize: 15)),
                 selected: s.dailyLimitMinutes == m,
                 onSelected: (_) => ctrl.setDailyLimitMinutes(m),
               ),
