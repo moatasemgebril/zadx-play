@@ -174,6 +174,26 @@ minutes and never touch `WalletController`, so the game-time lock can't be bypas
 Sound/haptic hooks: override `eduGameHooksProvider` (`onCorrect`, `onWrong`, `onRoundComplete`,
 `onPartBuilt`; no-ops by default).
 
+## Launch splash (owner request 2026-11-22)
+`lib/features/splash/launch_splash.dart`. `main()` calls `LaunchSplash.show()` first, runs the existing
+start-up work while it plays, then hands the app to `splash.complete(...)`; the app is built under the
+splash, which fades out once both the reveal (1.3 s + 0.3 s exit) and the app are ready. Reduced motion
+(`MediaQuery.disableAnimations`) → no animation, 0.5 s hold, no fade. Wordmark "Zad X" is always Latin/LTR,
+default platform font (no font download). Native splash colour `#0A225E` (Android `zadx_splash_bg`,
+`values*/styles.xml`; iOS `LaunchScreen.storyboard`) = `AppColors.navy`, so there is no white flash.
+
+## Reading homework (owner request 2026-11-22)
+Task kind `reading` (`TaskDefinition.readingMode` story | paperBook, `readingLevel`, `readingMinutes`).
+Parent → *Reading homework* card switches the tasks `reading_story` / `reading_book` on per child and
+picks the level (5–7, 8–10, 11–12) or minutes (10/15/20). The child opens `/reading/:taskId`:
+- **Story:** original offline stories in `lib/data/catalog/reading_stories.dart` (general/ethical themes
+  only: no Quran, hadith or rulings, so no scholar review; a test enforces it), then 2–3 multiple-choice
+  questions; a wrong answer just asks to try again.
+- **Paper book:** calm countdown with pause; "Send to my parent" appears only when time is up.
+Both end with `WalletController.submit` → `pending`; the reward is earned only when the parent approves
+(same PIN-protected approvals as every task). Gated by `AppFeature.tasksRewards` (Basic/Plus), like the
+rest of tasks. No network, microphone, camera or new permissions.
+
 ## Localization
 ARB files in `lib/l10n` (Arabic is the template). Add `fr`, `tr`, `ur`, `id` by creating
 `app_<code>.arb` and moving the code from `upcomingLanguages` to `supportedLanguages`.

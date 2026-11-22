@@ -9,6 +9,7 @@ import 'app.dart';
 import 'core/app_variant.dart';
 import 'core/platform.dart';
 import 'features/settings/settings_controller.dart';
+import 'features/splash/launch_splash.dart';
 import 'services/billing/subscription_service.dart';
 import 'services/family/family_repository.dart';
 import 'services/family/firestore_family_repository.dart';
@@ -16,6 +17,8 @@ import 'services/notifications/prayer_notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Brand splash first; the start-up work below runs while it plays (features/splash/).
+  final splash = LaunchSplash.show();
   tzdata.initializeTimeZones();
 
   final prefs = await SharedPreferences.getInstance();
@@ -55,5 +58,5 @@ Future<void> main() async {
     container.read(subscriptionServiceProvider).init().catchError((Object e) => debugPrint('IAP init: $e'));
   }
 
-  runApp(UncontrolledProviderScope(container: container, child: const ZadXApp()));
+  splash.complete(UncontrolledProviderScope(container: container, child: const ZadXApp()));
 }

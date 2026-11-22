@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
@@ -7,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/family_task.dart';
 import '../../data/models/plan.dart';
+import '../../router.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../subscription/paid_feature_gate.dart';
@@ -119,10 +121,15 @@ class _TaskCard extends ConsumerWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
               onPressed: () {
+                // Reading homework is handed in from its own screen (story + questions, or timer).
+                if (task.isReading) {
+                  context.push(Routes.reading(task.id));
+                  return;
+                }
                 ref.read(walletProvider.notifier).submit(task.id);
                 showPraiseDialog(context, ref, note: l10n.toastSent(task.title.of(lang)));
               },
-              child: Text(l10n.doneBtn),
+              child: Text(task.isReading ? l10n.readingStartBtn : l10n.doneBtn),
             ),
           TaskStatus.pending => Banner2(text: l10n.pendingApproval, bg: AppColors.pendingBg, fg: AppColors.pendingText),
           TaskStatus.done => Banner2(text: l10n.completed, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.check_rounded),

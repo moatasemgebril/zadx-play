@@ -17,6 +17,7 @@ import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
+import '../reading/reading_setup_card.dart';
 import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../settings/sound_settings_card.dart';
@@ -46,6 +47,8 @@ class ParentScreen extends ConsumerWidget {
           const ChildrenCard(),
           const SizedBox(height: 12),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),
+          const SizedBox(height: 12),
+          const PaidFeatureGate(feature: AppFeature.tasksRewards, child: ReadingSetupCard()),
           const SizedBox(height: 12),
           const DevicesCard(),
           const SizedBox(height: 12),

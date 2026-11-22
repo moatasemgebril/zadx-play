@@ -10,6 +10,7 @@ import 'features/help/help_screen.dart';
 import 'features/home/home_screen.dart';
 import 'features/parent/parent_screen.dart';
 import 'features/quran/quran_screen.dart';
+import 'features/reading/reading_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/app_shell.dart';
 import 'data/models/plan.dart';
@@ -39,6 +40,10 @@ abstract class Routes {
 
   /// Every route that exists only in Zad X Play: the Islamic ones + the Arabic Letters game.
   static const playOnly = {...islamicOnly, eduLetters};
+
+  /// Reading homework (story + questions, or paper-book timer) for one task. In both apps.
+  static const readingPattern = '/reading/:taskId';
+  static String reading(String taskId) => '/reading/${Uri.encodeComponent(taskId)}';
 }
 
 /// The bottom-bar tabs, in order. The shell branches in [appRoutes] follow this list.
@@ -86,6 +91,16 @@ List<RouteBase> appRoutes({AppVariant variant = appVariant, GlobalKey<NavigatorS
     GoRoute(parentNavigatorKey: key, path: Routes.settings, builder: (_, __) => const SettingsScreen()),
     GoRoute(parentNavigatorKey: key, path: Routes.help, builder: (_, __) => const HelpScreen()),
     GoRoute(parentNavigatorKey: key, path: Routes.subscription, builder: (_, __) => const SubscriptionScreen()),
+    // Reading homework: in both apps (stories are not religious).
+    GoRoute(
+      parentNavigatorKey: key,
+      path: Routes.readingPattern,
+      builder: (_, state) => PaidFeatureGate(
+        feature: AppFeature.tasksRewards,
+        fullScreen: true,
+        child: ReadingTaskScreen(taskId: state.pathParameters['taskId'] ?? ''),
+      ),
+    ),
     if (!kIsKids && variant == AppVariant.islamic) ...[
       GoRoute(parentNavigatorKey: key, path: Routes.eduLetters, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: LettersGameScreen())),
       GoRoute(parentNavigatorKey: key, path: Routes.eduProphets, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: ProphetsGameScreen())),
