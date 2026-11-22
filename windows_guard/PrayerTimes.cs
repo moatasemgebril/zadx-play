@@ -10,8 +10,17 @@ public static class PrayerTimes
     private static double Deg(double r) => r * 180 / Math.PI;
     private static double FixAngle(double a) => (a % 360 + 360) % 360;
 
-    /// <summary>Latitude from which an absent rule (older app) means "twilightAngle", as in the app.</summary>
+    /// <summary>Latitude from which an absent rule (older app) means "relativeEstimation45", as in the app.</summary>
     public const double HighLatitudeAutoFromDegrees = 48.0;
+
+    private static double AngleTimeAt((double Decl, double Eqt) s, double angle, double atLat, bool beforeNoon)
+    {
+        var x = (-Math.Sin(Rad(angle)) - Math.Sin(Rad(s.Decl)) * Math.Sin(Rad(atLat))) /
+                (Math.Cos(Rad(s.Decl)) * Math.Cos(Rad(atLat)));
+        if (x < -1 || x > 1) return double.NaN;
+        var t = Deg(Math.Acos(x)) / 15;
+        return 12 - s.Eqt + (beforeNoon ? -t : t);
+    }
 
     private static (double Decl, double Eqt) SunPosition(double jd)
     {
@@ -28,8 +37,9 @@ public static class PrayerTimes
         return (decl, eqt);
     }
 
-    /// <param name="highLatRule">"middleOfTheNight", "seventhOfTheNight", "twilightAngle", or
-    /// null/"none" for no rule. Same definitions as the app (adhan library HighLatitudeRule).</param>
+    /// <param name="highLatRule">"relativeEstimation45", "angle12", "middleOfTheNight", "seventhOfTheNight",
+    /// "twilightAngle", or null/"none" for no rule. Same definitions as the app
+    /// (lib/features/prayer/prayer_calculator.dart).</param>
     public static double[] Compute(DateOnly date, double lat, double lng, double utcOffsetHours,
         double fajrAngle, double? ishaAngle, int? ishaMinutes, int asrFactor, string? highLatRule = null)
     {
@@ -39,14 +49,8 @@ public static class PrayerTimes
         var sun = SunPosition(jd);
         var noon = 12 - sun.Eqt;
 
-        double AngleTimeFor((double Decl, double Eqt) s, double angle, bool beforeNoon)
-        {
-            var x = (-Math.Sin(Rad(angle)) - Math.Sin(Rad(s.Decl)) * Math.Sin(Rad(lat))) /
-                    (Math.Cos(Rad(s.Decl)) * Math.Cos(Rad(lat)));
-            if (x < -1 || x > 1) return double.NaN;
-            var t = Deg(Math.Acos(x)) / 15;
-            return 12 - s.Eqt + (beforeNoon ? -t : t);
-        }
+        double AngleTimeFor((double Decl, double Eqt) s, double angle, bool beforeNoon) =>
+            AngleTimeAt(s, angle, lat, beforeNoon);
 
         double AngleTime(double angle, bool beforeNoon) => AngleTimeFor(sun, angle, beforeNoon);
 
@@ -64,7 +68,33 @@ public static class PrayerTimes
             "twilightAngle" => (fajrAngle / 60, (ishaAngle ?? 0) / 60),
             _ => null,
         };
-        if (portions is { } portion)
+        if (highLatRule is "relativeEstimation45" or "angle12")
+        {
+            // ECFR: only on a day without the sign (the method's angle is not reached).
+            var sunrise = AngleTime(0.833, true);
+            var nextSun = SunPosition(jd + 1);
+            var night = 24 + AngleTimeFor(nextSun, 0.833, true) - maghrib;
+            if (!double.IsNaN(sunrise) && !double.IsNaN(night) && night > 0)
+            {
+                var refLat = lat < 0 ? -45.0 : 45.0;
+                var m45 = AngleTimeAt(sun, 0.833, refLat, false);
+                var sr45 = AngleTimeAt(sun, 0.833, refLat, true);
+                var night45 = 24 + AngleTimeAt(nextSun, 0.833, refLat, true) - m45;
+                var fajrShare = (sr45 - AngleTimeAt(sun, fajrAngle, refLat, true)) / night45;
+                var ishaShare = (AngleTimeAt(sun, ishaAngle ?? 17, refLat, false) - m45) / night45;
+                if (double.IsNaN(fajr))
+                {
+                    if (highLatRule == "angle12") fajr = AngleTime(12, true);
+                    if (double.IsNaN(fajr)) fajr = sunrise - fajrShare * night;
+                }
+                if (ishaMinutes is null && double.IsNaN(isha))
+                {
+                    if (highLatRule == "angle12") isha = AngleTime(12, false);
+                    if (double.IsNaN(isha)) isha = maghrib + ishaShare * night;
+                }
+            }
+        }
+        else if (portions is { } portion)
         {
             var (fajrPortion, ishaPortion) = portion;
             var sunrise = AngleTime(0.833, true);
@@ -91,7 +121,7 @@ public static class PrayerTimes
     public static string? EffectiveHighLatRule(PrayerSettings p) =>
         p.HighLatRule switch
         {
-            null => p.Lat is double lat && Math.Abs(lat) >= HighLatitudeAutoFromDegrees ? "twilightAngle" : null,
+            null => p.Lat is double lat && Math.Abs(lat) >= HighLatitudeAutoFromDegrees ? "relativeEstimation45" : null,
             "none" => null,
             var rule => rule,
         };

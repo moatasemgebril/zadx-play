@@ -8,6 +8,7 @@ import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/catalog/games.dart';
+import '../../data/models/child_profile.dart';
 import '../../data/models/plan.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
@@ -45,6 +46,8 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
+          // Zad X Play only: Zad X Kids has no prayer tasks or prayer lock.
+          if (!kIsKids) const _PrayerPauseCard(),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),
           const SizedBox(height: 12),
           const DevicesCard(),
@@ -166,6 +169,42 @@ class _ApprovalsCard extends ConsumerWidget {
             ]),
           ),
       ]),
+    );
+  }
+}
+
+/// Parent only (inside [ParentGate]): "excused" for the active child, today only. Shown for
+/// children addressed as a girl or not set. Pauses prayer tasks and the prayer lock; no reason
+/// is shown to the child or siblings, nothing goes to the family log, stars are not touched.
+/// Sources: docs/decisions/PRAYER-TIMES-ACCURACY.md (Dar al-Ifta 7711, Ibn Baz 13476).
+class _PrayerPauseCard extends ConsumerWidget {
+  const _PrayerPauseCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final children = ref.watch(childrenProvider);
+    if (children.active.address == FormOfAddress.masculine) return const SizedBox.shrink();
+    final paused = ref.watch(walletProvider.select((w) => w.prayerPaused));
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ZadCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (children.children.length > 1)
+            Text(l10n.viewingChild(childDisplayName(children.active, l10n)),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.purpleDark)),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.prayerPauseTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            subtitle: Text(l10n.prayerPauseHelp, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+            value: paused,
+            onChanged: (v) {
+              // Synced family: only a parent device may change it (the rules refuse a child device).
+              if (!ref.read(walletProvider.notifier).setPrayerPaused(v)) showToast(context, l10n.approveOnParentPhone);
+            },
+          ),
+        ]),
+      ),
     );
   }
 }

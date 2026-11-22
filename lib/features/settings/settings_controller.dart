@@ -65,7 +65,7 @@ class AppSettings {
   final String methodId;
   final int asrFactor;
 
-  /// High-latitude rule for Fajr/Isha (pending scholar review). See [HighLatitudeSetting].
+  /// High-latitude rule for Fajr/Isha (ECFR, see docs/decisions/PRAYER-TIMES-ACCURACY.md). See [HighLatitudeSetting].
   final HighLatitudeSetting highLatitude;
   final String muezzinId;
   final String reciterId;

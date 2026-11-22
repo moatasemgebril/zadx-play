@@ -388,6 +388,12 @@ Prayer _currentPrayer(Ref ref) {
   return Prayer.values[(next.index - 1 + Prayer.values.length) % Prayer.values.length];
 }
 
+/// Today's prayer times and whether prayer is paused (excused) for the active child.
+final _prayerAlarmInputProvider = Provider<({PrayerTimes times, bool paused})>((ref) => (
+      times: ref.watch(prayerTimesProvider),
+      paused: ref.watch(walletProvider.select((w) => w.prayerPaused)),
+    ));
+
 /// Keep alive from the app root: pushes every policy change to native code and
 /// turns native "session started" events into minute deductions.
 final lockCoordinatorProvider = Provider<void>((ref) {
@@ -446,15 +452,19 @@ final lockCoordinatorProvider = Provider<void>((ref) {
   // Zad X Kids: the schedules travel inside the policy and native code enforces them itself.
   if (kIsKids) return;
 
-  // Native alarms re-lock games at every adhan even when Zad X is closed.
-  ref.listen<PrayerTimes>(prayerTimesProvider, (_, times) {
+  // Native alarms re-lock games at every adhan even when Zad X is closed. Excused today (a
+  // parent paused prayer tasks for this child): no alarms, so no prayer lock at all.
+  ref.listen<({PrayerTimes times, bool paused})>(_prayerAlarmInputProvider, (_, v) {
+    final times = v.times;
     final now = ref.read(cityNowProvider);
     final day = DateTime.utc(now.local.year, now.local.month, now.local.day);
-    final instants = [
-      for (final p in Prayer.values)
-        if (times.of(p).isFinite)
-          day.add(Duration(minutes: ((times.of(p) - now.utcOffsetHours) * 60).round())),
-    ].where((t) => t.isAfter(DateTime.now().toUtc())).toList();
+    final instants = v.paused
+        ? <DateTime>[]
+        : [
+            for (final p in Prayer.values)
+              if (times.of(p).isFinite)
+                day.add(Duration(minutes: ((times.of(p) - now.utcOffsetHours) * 60).round())),
+          ].where((t) => t.isAfter(DateTime.now().toUtc())).toList();
     if (ref.read(settingsProvider).lockAtAdhan) {
       service.schedulePrayerLocks(instants).catchError((Object e) => debugPrint('schedule failed: $e'));
     }

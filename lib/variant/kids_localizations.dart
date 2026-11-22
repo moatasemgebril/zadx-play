@@ -184,7 +184,19 @@ mixin KidsL10nOverrides on AppLocalizations {
   String prayerNow(String name) => _fill('prayerNow', {'name': name});
 
   @override
-  String get prayerSub => _text('prayerSub');
+  String prayerSub(String form) => _text('prayerSub');
+
+  @override
+  String get prayerIkhlas => _text('prayerIkhlas');
+
+  @override
+  String get prayerPauseTitle => _text('prayerPauseTitle');
+
+  @override
+  String get prayerPauseHelp => _text('prayerPauseHelp');
+
+  @override
+  String get otherTasksOpenToday => _text('otherTasksOpenToday');
 
   @override
   String get iPrayed => _text('iPrayed');
@@ -200,6 +212,9 @@ mixin KidsL10nOverrides on AppLocalizations {
 
   @override
   String get chooseReciter => _text('chooseReciter');
+
+  @override
+  String get quranRiwaya => _text('quranRiwaya');
 
   @override
   String ayatCount(int count, String n) => _fill('ayatCount', {'n': n});
@@ -307,7 +322,16 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get highLatitudeHelp => _text('highLatitudeHelp');
 
   @override
-  String get pendingScholarReview => _text('pendingScholarReview');
+  String get highLatitudeRelative45 => _text('highLatitudeRelative45');
+
+  @override
+  String get highLatitudeAngle12 => _text('highLatitudeAngle12');
+
+  @override
+  String get highLatitudeSource => _text('highLatitudeSource');
+
+  @override
+  String get ishaCombineNote => _text('ishaCombineNote');
 
   @override
   String get featPrayer => _text('featPrayer');

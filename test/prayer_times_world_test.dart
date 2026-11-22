@@ -347,22 +347,24 @@ void main() {
       expect(raw[Prayer.isha.index].isNaN, isTrue);
     });
 
-    test('default setting: twilight angle from 48° latitude, no rule below', () {
+    test('default setting: relative estimation from 45° at 48° latitude and above, no rule below', () {
       expect(HighLatitudeSetting.parse(null), HighLatitudeSetting.auto);
       expect(HighLatitudeSetting.parse('nonsense'), HighLatitudeSetting.auto);
       for (final v in HighLatitudeSetting.values) {
         expect(HighLatitudeSetting.parse(v.name), v);
       }
       const auto = HighLatitudeSetting.auto;
-      expect(resolveHighLatitudeRule(auto, 51.5074), HighLatitudeRule.twilightAngle); // London
-      expect(resolveHighLatitudeRule(auto, 48.0), HighLatitudeRule.twilightAngle);
-      expect(resolveHighLatitudeRule(auto, -48.0), HighLatitudeRule.twilightAngle);
+      expect(resolveHighLatitudeRule(auto, 51.5074), HighLatitudeRule.relativeEstimation45); // London
+      expect(resolveHighLatitudeRule(auto, 48.0), HighLatitudeRule.relativeEstimation45);
+      expect(resolveHighLatitudeRule(auto, -48.0), HighLatitudeRule.relativeEstimation45);
       expect(resolveHighLatitudeRule(auto, 47.99), isNull);
       expect(resolveHighLatitudeRule(auto, 30.0444), isNull); // Cairo
       // An explicit parent choice applies at any latitude.
       expect(resolveHighLatitudeRule(HighLatitudeSetting.middleOfTheNight, 30), HighLatitudeRule.middleOfTheNight);
       expect(resolveHighLatitudeRule(HighLatitudeSetting.seventhOfTheNight, 30), HighLatitudeRule.seventhOfTheNight);
       expect(resolveHighLatitudeRule(HighLatitudeSetting.twilightAngle, 30), HighLatitudeRule.twilightAngle);
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.relativeEstimation45, 30), HighLatitudeRule.relativeEstimation45);
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.angle12, 30), HighLatitudeRule.angle12);
     });
 
     test('Fajr and Isha exist on every day of the year in every catalog city (default setting)', () {
@@ -393,7 +395,12 @@ void main() {
       DateTime.utc(2026, 12, 21),
     ];
 
-    for (final rule in HighLatitudeRule.values) {
+    const portionRules = [
+      HighLatitudeRule.middleOfTheNight,
+      HighLatitudeRule.seventhOfTheNight,
+      HighLatitudeRule.twilightAngle,
+    ];
+    for (final rule in portionRules) {
       test('${rule.name}: London (21 Jun), Oslo, Reykjavik have Fajr/Isha, in order, by the night-portion definition', () {
         final problems = <String>[];
         for (final c in hlCases) {
@@ -401,7 +408,7 @@ void main() {
           final (fajrPortion, ishaPortion) = switch (rule) {
             HighLatitudeRule.middleOfTheNight => (1 / 2, 1 / 2),
             HighLatitudeRule.seventhOfTheNight => (1 / 7, 1 / 7),
-            HighLatitudeRule.twilightAngle => (c.method.fajrAngle / 60, c.method.ishaAngle! / 60),
+            _ => (c.method.fajrAngle / 60, c.method.ishaAngle! / 60),
           };
           for (final date in hlDates) {
             final where = '$c ${_d(date)}';
@@ -458,11 +465,22 @@ void main() {
             }
             final names = plan.map((s) => s.prayer.name).toList();
             // Fajr is always scheduled (both days start after `now` = local midnight, or Fajr is
-            // within the first day); an Isha may only be left out when it is not before the next Fajr.
+            // within the first day). Isha is NEVER dropped (owner decision 2026-11-22, ECFR 3/3):
+            // when it is at/after the next Fajr only its adhan sound is skipped, and a silent Isha
+            // reminder follows Maghrib (combining is permitted when Isha's sign is absent).
             if (plan.where((s) => s.prayer == Prayer.fajr).isEmpty) problems.add('$where: no Fajr adhan: $names');
-            final ishas = plan.where((s) => s.prayer == Prayer.isha).length;
-            if (rule != HighLatitudeRule.middleOfTheNight && ishas != 2) problems.add('$where: $ishas Isha adhans: $names');
-            if (plan.length < 10 - (2 - ishas)) problems.add('$where: only ${plan.length} adhans in 2 days: $names');
+            final ishas = plan.where((s) => s.prayer == Prayer.isha).toList();
+            if (ishas.length != 2) problems.add('$where: ${ishas.length} Isha slots: $names');
+            if (plan.length < 10) problems.add('$where: only ${plan.length} slots in 2 days: $names');
+            if (plan.any((s) => s.prayer != Prayer.isha && !s.sound)) problems.add('$where: a silent non-Isha slot');
+            for (final s in plan.where((s) => !s.sound)) {
+              final i = plan.indexOf(s);
+              if (rule != HighLatitudeRule.middleOfTheNight) problems.add('$where: silent Isha with ${rule.name}');
+              if (i == 0 || plan[i - 1].prayer != Prayer.maghrib) problems.add('$where: silent Isha not right after Maghrib');
+              if (i > 0 && s.when.difference(plan[i - 1].when) != const Duration(minutes: 1)) {
+                problems.add('$where: silent Isha not one minute after Maghrib');
+              }
+            }
             for (var i = 0; i + 1 < plan.length; i++) {
               if (plan[i].prayer == Prayer.isha && plan[i + 1].prayer == Prayer.fajr) {
                 if (!plan[i + 1].when.isAfter(plan[i].when)) problems.add('$where: Isha adhan not before next Fajr');
@@ -473,6 +491,155 @@ void main() {
         expect(problems, isEmpty, reason: problems.take(30).join('\n'));
       });
     }
+
+    // ECFR resolution 41 (2/12) / MWL Fiqh Academy: relative estimation from latitude 45°, and the
+    // 12° option. Owner decision 2026-11-22 (docs/decisions/PRAYER-TIMES-ACCURACY.md).
+    final ecfrCases = [
+      for (final c in [
+        WorldCase.catalog('london'),
+        WorldCase.catalog('paris'),
+        WorldCase.catalog('berlin'),
+        worldCases.firstWhere((c) => c.city.id == 'test-oslo'),
+        worldCases.firstWhere((c) => c.city.id == 'test-reykjavik'),
+      ]) ...[
+        c,
+        // Every city also with MWL 18/17 and Egypt 19.5/17.5 (Paris' own method is UOIF 12/12).
+        WorldCase(c.city, 'mwl', inCatalog: false),
+        WorldCase(c.city, 'egypt', inCatalog: false),
+      ],
+    ];
+    final ecfrDates = [
+      DateTime.utc(2026, 5, 20),
+      DateTime.utc(2026, 6, 21),
+      DateTime.utc(2026, 7, 10),
+      DateTime.utc(2026, 12, 21),
+    ];
+
+    for (final rule in const [HighLatitudeRule.relativeEstimation45, HighLatitudeRule.angle12]) {
+      test('${rule.name}: London, Paris, Berlin, Oslo, Reykjavik — finite, ordered, Isha before the next Fajr', () {
+        final problems = <String>[];
+        for (final c in ecfrCases) {
+          for (final date in ecfrDates) {
+            final where = '$c ${_d(date)}';
+            final app = appUtcMinutes(c, date, highLatitudeRule: rule);
+            final next = appUtcMinutes(c, DateTime.utc(date.year, date.month, date.day + 1), highLatitudeRule: rule);
+            final plain = appUtcMinutes(c, date);
+            final ref = referenceFor(c, date);
+            if (app.any((v) => !v.isFinite) || next.any((v) => !v.isFinite)) {
+              problems.add('$where: missing/invalid time $app');
+              continue;
+            }
+            for (var k = 1; k < app.length; k++) {
+              if (!(app[k] > app[k - 1])) problems.add('$where: ${Prayer.values[k]} not after ${Prayer.values[k - 1]}');
+            }
+            if (!(app[Prayer.fajr.index] < ref.sunrise!)) problems.add('$where: Fajr not before sunrise');
+            if (!(app[Prayer.isha.index] > app[Prayer.maghrib.index])) problems.add('$where: Isha not after Maghrib');
+            if (!(next[Prayer.fajr.index] + 1440 > app[Prayer.isha.index])) {
+              problems.add('$where: Isha ${_hm(app[Prayer.isha.index])} not before next Fajr ${_hm(next[Prayer.fajr.index])}');
+            }
+            // A real Fajr/Isha (the sign exists) is never replaced; the other prayers never change.
+            for (final p in Prayer.values) {
+              if (plain[p.index].isFinite && app[p.index] != plain[p.index]) problems.add('$where: $p changed by the rule');
+            }
+          }
+        }
+        expect(problems, isEmpty, reason: problems.take(30).join('\n'));
+      });
+    }
+
+    test('relativeEstimation45: a missing Fajr/Isha is the 45° share of the local night (independent reference)', () {
+      final problems = <String>[];
+      var checked = 0;
+      for (final c in ecfrCases) {
+        final tol = c.toleranceMinutes + 2;
+        for (final date in ecfrDates) {
+          final where = '$c ${_d(date)}';
+          final plain = appUtcMinutes(c, date);
+          final app = appUtcMinutes(c, date, highLatitudeRule: HighLatitudeRule.relativeEstimation45);
+          final nextDay = DateTime.utc(date.year, date.month, date.day + 1);
+          // Same longitude, same date, same method angles, at latitude 45° (same hemisphere).
+          final at45 = WorldCase(
+            City(id: 'test-45', countryId: '', name: const Localized('45', '45'), lat: 45, lng: c.city.lng, timeZone: 'UTC'),
+            c.methodId,
+            inCatalog: false,
+          );
+          final r45 = referenceFor(at45, date);
+          final r45next = referenceFor(at45, nextDay);
+          final night45 = r45next.sunrise! + 1440 - r45.maghrib!;
+          final fajrShare = (r45.sunrise! - r45.fajr!) / night45;
+          final ishaShare = (r45.isha! - r45.maghrib!) / night45;
+          final ref = referenceFor(c, date);
+          final night = referenceFor(c, nextDay).sunrise! + 1440 - ref.maghrib!;
+          if (plain[Prayer.fajr.index].isNaN) {
+            checked++;
+            final expected = ref.sunrise! - fajrShare * night;
+            if ((app[Prayer.fajr.index] - expected).abs() > tol) {
+              problems.add('$where: Fajr ${_hm(app[Prayer.fajr.index])}, expected ${_hm(expected)}');
+            }
+          }
+          if (plain[Prayer.isha.index].isNaN) {
+            checked++;
+            final expected = ref.maghrib! + ishaShare * night;
+            if ((app[Prayer.isha.index] - expected).abs() > tol) {
+              problems.add('$where: Isha ${_hm(app[Prayer.isha.index])}, expected ${_hm(expected)}');
+            }
+          }
+        }
+      }
+      expect(checked, greaterThan(10), reason: 'summer dates without Fajr/Isha must be covered');
+      expect(problems, isEmpty, reason: problems.take(30).join('\n'));
+    });
+
+    test('angle12: where the method angle is missing but 12° is reached, Fajr/Isha are at 12°', () {
+      final london = WorldCase.catalog('london'); // MWL 18/17: no Fajr/Isha on 21 June
+      final date = DateTime.utc(2026, 6, 21);
+      final app = appUtcMinutes(london, date, highLatitudeRule: HighLatitudeRule.angle12);
+      final at12 = referenceFor(WorldCase(london.city, 'france', inCatalog: false), date); // UOIF = 12/12
+      expect(app[Prayer.fajr.index], closeTo(at12.fajr!, london.toleranceMinutes));
+      expect(app[Prayer.isha.index], closeTo(at12.isha!, london.toleranceMinutes));
+    });
+
+    test('automatic = relative estimation in London; Paris (48.9°) too; no rule in Cairo', () {
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.auto, WorldCase.catalog('paris').city.lat),
+          HighLatitudeRule.relativeEstimation45);
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.auto, WorldCase.catalog('cairo').city.lat), isNull);
+    });
+
+    test('the Isha at/after the next Fajr is flagged for the parent note (middle of the night, Oslo, July)', () {
+      final c = worldCases.firstWhere((c) => c.city.id == 'test-oslo');
+      final loc = tz.getLocation(c.city.timeZone);
+      var flagged = 0;
+      for (var i = 0; i < 31; i++) {
+        final d = DateTime.utc(2026, 7, 1 + i);
+        final hit = ishaReachesNextFajr(
+          location: loc,
+          year: d.year,
+          month: d.month,
+          day: d.day,
+          lat: c.city.lat,
+          lng: c.city.lng,
+          method: c.method,
+          highLatitudeRule: HighLatitudeRule.middleOfTheNight,
+        );
+        if (hit) flagged++;
+        // Never with the ECFR relative estimation.
+        expect(
+          ishaReachesNextFajr(
+            location: loc,
+            year: d.year,
+            month: d.month,
+            day: d.day,
+            lat: c.city.lat,
+            lng: c.city.lng,
+            method: c.method,
+            highLatitudeRule: HighLatitudeRule.relativeEstimation45,
+          ),
+          isFalse,
+          reason: _d(d),
+        );
+      }
+      expect(flagged, greaterThan(0));
+    });
 
     test('a fixed-interval Isha (Umm al-Qura) is never moved by a rule; only Fajr is bounded', () {
       // Makkah's method used in London on 21 June (e.g. a family that keeps Umm al-Qura abroad).
