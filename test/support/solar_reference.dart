@@ -51,12 +51,12 @@ class SolarReference {
     final obliq = meanObliq + 0.00256 * math.cos(_rad(omega));
     final decl = _deg(math.asin(math.sin(_rad(obliq)) * math.sin(_rad(apparentLong))));
     final y = math.pow(math.tan(_rad(obliq / 2)), 2).toDouble();
-    final eot = 4 *
-        _deg(y * math.sin(2 * _rad(l0)) -
-            2 * ecc * math.sin(_rad(m)) +
-            4 * ecc * y * math.sin(_rad(m)) * math.cos(2 * _rad(l0)) -
-            0.5 * y * y * math.sin(4 * _rad(l0)) -
-            1.25 * ecc * ecc * math.sin(2 * _rad(m)));
+    final eotRadians = y * math.sin(2 * _rad(l0)) -
+        2 * ecc * math.sin(_rad(m)) +
+        4 * ecc * y * math.sin(_rad(m)) * math.cos(2 * _rad(l0)) -
+        0.5 * y * y * math.sin(4 * _rad(l0)) -
+        1.25 * ecc * ecc * math.sin(2 * _rad(m));
+    final eot = 4 * _deg(eotRadians);
     return (decl: decl, eotMinutes: eot);
   }
 
@@ -73,8 +73,8 @@ class SolarReference {
     required double angle,
   }) {
     final decl = sun(_jd0(year, month, day) + 0.5 - lng / 360).decl;
-    final lowest = _deg(math.asin(math.sin(_rad(lat)) * math.sin(_rad(decl)) -
-        math.cos(_rad(lat)) * math.cos(_rad(decl))));
+    final sinLowest = math.sin(_rad(lat)) * math.sin(_rad(decl)) - math.cos(_rad(lat)) * math.cos(_rad(decl));
+    final lowest = _deg(math.asin(sinLowest));
     return -lowest - angle;
   }
 
