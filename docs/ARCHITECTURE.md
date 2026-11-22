@@ -58,6 +58,34 @@ Pairing (`lib/services/family/pairing_service.dart`, Cloud Functions `createPair
 All devices share `families/{id}/children/{childId}/days/{yyyy-MM-dd}`; the phone also writes the
 derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
 
+### Family plan & restore on a new phone (fix/family-entitlement-restore)
+- **Plan on every family device.** `verifyPurchase` writes `plan`, `planExpiresAt` (ISO string),
+  `inTrial`, `store` on `families/{id}` (server-only fields, readable by every member, child
+  devices included). `FamilyRepository.watchEntitlement()` streams them (server-confirmed
+  snapshots only, never the offline cache; local mode emits nothing). `planEntitlementProvider`
+  takes the highest active tier of this device's own verified purchase and the family doc, then
+  the `EntitlementCache` grace (7 days offline, clock-rollback safe), then the device trial, then
+  Free. Every new server answer (including "expired") is recorded in the cache once, by
+  `entitlementRecorderProvider`.
+- **The raw store token is server-only.** Ownership lives in `purchases/{sha256(token)}` →
+  `familyId` (first attach uses a transaction with `create()`, so two racing first purchases
+  cannot both win); the raw token (for referral deferrals) in `families/{id}/private/billing`.
+  Both are closed to clients in firestore.rules. Existing family docs are migrated once with
+  `backend/functions/scripts/migrate-purchase-tokens.js` (run at deploy, see backend/README.md).
+- **Restore on a new phone = link it from an existing parent phone.** The store token is a
+  bearer secret (`restorePurchases()` gives it to any device on that store account, a child's
+  tablet included), so it never grants membership or the plan: a token held by another family
+  makes `verifyPurchase` fail with `purchase_in_other_family`, and the subscription screen
+  (behind the parent PIN) explains: on the other parent phone open Parent → Link devices →
+  "Add a parent phone", then enter the code here. `createPairingCode` target `parent` is
+  accepted only from a parent member (not `childDevices`), same 6 digits / 10 min / single use,
+  plus 5 parent codes per family per day. Redeeming it adds the phone to `members` and the
+  server-only `parentDevices` map; the phone's own family must be an untouched fresh install and
+  is deleted (otherwise `parent_link_family_in_use`, so no data is abandoned); a child-bound
+  device is refused (`child_device`). Existing parent phones get a push. The app saves
+  `family.id`, switches `familyIdProvider` and re-runs the store restore, which now attaches.
+  Removing a linked device is still open (BACKLOG P1-3).
+
 ## Platforms
 | Platform | Game locking | Everything else |
 |---|---|---|

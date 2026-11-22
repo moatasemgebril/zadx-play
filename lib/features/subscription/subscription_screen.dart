@@ -14,6 +14,7 @@ import '../../services/billing/subscription_service.dart';
 import '../../services/referral/referral_service.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../parent/devices_card.dart' show JoinFamilyCard;
 import '../parent/parent_gate.dart';
 
 final _billingProvider = StateProvider<BillingPeriod>((_) => BillingPeriod.yearly);
@@ -63,6 +64,14 @@ class SubscriptionScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             Text(l10n.pricesNote, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
             TextButton(onPressed: () => ref.read(subscriptionServiceProvider).restore(), child: Text(l10n.restorePurchases)),
+            // The store subscription belongs to another Zad X family (e.g. a new phone): it is
+            // never joined automatically; the parent links this phone with a parent code.
+            if (ref.watch(purchaseInOtherFamilyProvider).valueOrNull ?? false) ...[
+              const SizedBox(height: 6),
+              Banner2(text: l10n.purchaseOtherFamily, bg: const Color(0xFFFFF4D6), fg: AppColors.pendingText),
+              const SizedBox(height: 8),
+              const JoinFamilyCard(),
+            ],
           ]),
         ),
       ),

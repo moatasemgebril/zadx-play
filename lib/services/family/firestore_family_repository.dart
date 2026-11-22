@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/backend.dart';
 import '../../data/models/child_profile.dart';
 import 'family_repository.dart';
+import '../../data/models/plan.dart';
 
 /// Firestore layout (see backend/firestore.rules):
 ///
@@ -34,6 +35,21 @@ class FirestoreFamilyRepository implements FamilyRepository {
         .snapshots(includeMetadataChanges: false)
         .where((s) => s.exists && !s.metadata.hasPendingWrites)
         .map((s) => FamilyDay.fromJson(s.data()!));
+  }
+
+  @override
+  Stream<Entitlement> watchEntitlement() {
+    return _db
+        .doc('families/$familyId')
+        .snapshots(includeMetadataChanges: true)
+        // Server-confirmed only: a cached snapshot must not refresh the offline grace.
+        .where((s) => s.exists && !s.metadata.isFromCache)
+        .map((s) {
+      final data = Map<String, dynamic>.from(s.data()!);
+      final expiry = data['planExpiresAt'];
+      if (expiry is Timestamp) data['planExpiresAt'] = expiry.toDate();
+      return parseFamilyEntitlement(data);
+    });
   }
 
   @override

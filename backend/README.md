@@ -18,12 +18,27 @@ families/{familyId}
   members: [uid]            parents + paired child devices
   parentTokens: [fcmToken]
   language, settings{notifyOnTasks, notifyOnAdhan}
-  plan, planExpiresAt, inTrial, store, purchaseToken      (functions only)
+  plan, planExpiresAt, inTrial, store                    (functions only; every member reads them)
+  private/billing { purchaseToken }                      (functions only, no client access)
   referralCode, referredBy, referralPaid, referrals{year}  (functions only)
   children/{childId}/days/{yyyy-MM-dd}   tasks progress, usedMinutes, prayerLock
   assistantUsage/{yyyy-MM-dd}            Basic plan daily AI quota
 referralCodes/{CODE} → familyId
+purchases/{sha256(store token)} → familyId, store   (functions only: one purchase = one family)
 ```
+
+`parentDevices: {uid: linkedAt}` on the family doc records phones linked with a parent code (functions only).
+
+## One-off migration: purchase tokens (run before/at the deploy of fix/family-entitlement-restore)
+Older family docs may still hold the raw `purchaseToken`, which every member (child devices
+included) can read. Right before or together with that deploy, run once against the Zad X project:
+```
+cd backend/functions && npm run build
+GOOGLE_APPLICATION_CREDENTIALS=<admin key, never committed> node scripts/migrate-purchase-tokens.js           # dry run
+GOOGLE_APPLICATION_CREDENTIALS=<admin key, never committed> node scripts/migrate-purchase-tokens.js --apply
+```
+It moves each token to `purchases/{sha256}` + `families/{id}/private/billing` and deletes the field
+(idempotent). Exit code 2 = a token already owned by another family: left unchanged, check by hand.
 
 ## Store webhooks
 - **Google Play**: Play Console → Monetization setup → Real-time developer notifications →

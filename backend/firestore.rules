@@ -9,7 +9,7 @@ service cloud.firestore {
     // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
     function serverOnlyFamilyKeys() {
       return ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
-              'referralPaid', 'referralCode', 'members', 'childDevices', 'createdAt'];
+              'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
     function validDay(day) {
@@ -51,6 +51,9 @@ service cloud.firestore {
     // -----------------------------------------------------------------------
 
     match /families/{familyId} {
+      // Every member reads the family doc, child devices included: that is how a child device
+      // gets the plan the parent paid for (plan, planExpiresAt, inTrial, store). Those fields stay
+      // server-only (serverOnlyFamilyKeys). The raw store token is NOT on this doc (private/billing).
       allow read: if signedIn() && request.auth.uid in resource.data.members;
       // A new family has exactly one member (the creator) and no entitlement / referral fields.
       allow create: if signedIn()
@@ -60,6 +63,8 @@ service cloud.firestore {
       // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
+        // parentDevices {uid: linkedAt}: written only by redeemPairingCode (parent code).
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['parentDevices'])
         && (!('settings' in request.resource.data) || request.resource.data.settings is map)
         // Multi-child: child devices may only sync `settings`.
         && (isParent(familyId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings']));
@@ -85,6 +90,16 @@ service cloud.firestore {
         allow read: if isMember(familyId);
         allow write: if false;
       }
+
+      // private/billing = { purchaseToken } (raw store token): Cloud Functions only.
+      match /private/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // purchases/{sha256(store token)} = { familyId, store } (verifyPurchase ownership): Cloud Functions only.
+    match /purchases/{tokenHash} {
+      allow read, write: if false;
     }
 
     match /pairingCodes/{code} {

@@ -9,6 +9,7 @@ import '../../core/app_config.dart';
 import '../../core/backend.dart';
 import '../../data/models/plan.dart';
 import '../../features/prayer/prayer_providers.dart';
+import '../family/family_repository.dart';
 import 'entitlement_cache.dart';
 import 'trial_clock.dart';
 
@@ -25,6 +26,20 @@ class SubscriptionService {
   final InAppPurchase _iap;
   final FirebaseFunctions? _functions;
   final _entitlement = StreamController<Entitlement>.broadcast();
+  final _otherFamily = StreamController<bool>.broadcast();
+  bool _inOtherFamily = false;
+
+  /// True after `verifyPurchase` refused this store subscription because it belongs to another
+  /// Zad X family (e.g. restore on a new phone). The server never joins or unlocks the family
+  /// for it; the parent links this phone with a parent code from an existing parent phone.
+  bool get inOtherFamily => _inOtherFamily;
+  Stream<bool> get inOtherFamilyStream => _otherFamily.stream;
+
+  void _setInOtherFamily(bool value) {
+    if (_inOtherFamily == value) return;
+    _inOtherFamily = value;
+    _otherFamily.add(value);
+  }
   StreamSubscription<List<PurchaseDetails>>? _sub;
   Map<String, ProductDetails> _products = {};
   String? _pendingReferralCode;
@@ -81,6 +96,7 @@ class SubscriptionService {
             'referralCode': _pendingReferralCode,
           });
           final data = Map<String, dynamic>.from(result.data as Map);
+          _setInOtherFamily(false);
           final ent = Entitlement(
             // Unknown or missing tier = Free, never silently Basic.
             tier: parsePlanTier(data['tier']),
@@ -89,6 +105,9 @@ class SubscriptionService {
           );
           _latest = ent;
           _entitlement.add(ent);
+        } on FirebaseFunctionsException catch (e) {
+          if (isPurchaseInOtherFamily(e.message)) _setInOtherFamily(true);
+          debugPrint('verifyPurchase failed: ${e.code}');
         } catch (e) {
           debugPrint('verifyPurchase failed: $e');
         }
@@ -100,8 +119,14 @@ class SubscriptionService {
   void dispose() {
     _sub?.cancel();
     _entitlement.close();
+    _otherFamily.close();
   }
 }
+
+/// `verifyPurchase` error message when the store subscription belongs to another family.
+const purchaseInOtherFamilyCode = 'purchase_in_other_family';
+
+bool isPurchaseInOtherFamily(String? message) => message == purchaseInOtherFamilyCode;
 
 final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
   final s = SubscriptionService();
@@ -109,28 +134,58 @@ final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
   return s;
 });
 
-/// The latest plan the store + `verifyPurchase` confirmed in this session (`null` until then).
-/// Every confirmation is written to the [EntitlementCache] (offline grace).
-final storeEntitlementProvider = StreamProvider<Entitlement?>((ref) async* {
-  final cache = ref.watch(entitlementCacheProvider);
+/// True when this phone's store subscription belongs to another Zad X family: the
+/// subscription screen then explains how to link this phone as a parent phone.
+final purchaseInOtherFamilyProvider = StreamProvider<bool>((ref) async* {
   final service = ref.watch(subscriptionServiceProvider);
-  final latest = service.latest;
-  if (latest != null) await cache.recordVerified(latest.effectiveTier);
-  yield latest;
-  await for (final e in service.entitlementStream) {
-    await cache.recordVerified(e.effectiveTier);
-    yield e;
-  }
+  yield service.inOtherFamily;
+  yield* service.inOtherFamilyStream;
+});
+
+/// The latest plan the store + `verifyPurchase` confirmed in this session (`null` until then).
+final storeEntitlementProvider = StreamProvider<Entitlement?>((ref) async* {
+  final service = ref.watch(subscriptionServiceProvider);
+  yield service.latest;
+  yield* service.entitlementStream;
+});
+
+/// The plan stored on this device's family doc by `verifyPurchase` (bought on any family phone),
+/// server-confirmed snapshots only. Never emits without Firebase or a family (local mode).
+final familyEntitlementProvider = StreamProvider<Entitlement?>(
+  (ref) => ref.watch(familyRepositoryProvider).watchEntitlement(),
+);
+
+/// Best server-confirmed answer of this session: highest active tier among this device's
+/// purchase and the family doc (`null` until one of them answers).
+final verifiedEntitlementProvider = Provider<Entitlement?>(
+  (ref) => bestVerifiedEntitlement(
+    ref.watch(storeEntitlementProvider).valueOrNull,
+    ref.watch(familyEntitlementProvider).valueOrNull,
+  ),
+);
+
+/// Writes every new server confirmation to the [EntitlementCache] (7-day offline grace,
+/// clock-rollback safe). Only fires when the confirmation changes, never on the minute tick,
+/// so keeping the app open offline cannot stretch the grace.
+final entitlementRecorderProvider = Provider<void>((ref) {
+  final cache = ref.watch(entitlementCacheProvider);
+  ref.listen<Entitlement?>(verifiedEntitlementProvider, (previous, next) {
+    if (next != null && !identical(previous, next)) unawaited(cache.recordVerified(next.effectiveTier));
+  }, fireImmediately: true);
 });
 
 /// Current plan, available synchronously (no loading state, so the lock never flashes open
 /// while the plan loads). Re-evaluated every minute so the 7-day trial and the offline grace
-/// end on time. Order: verified paid plan > cached paid plan (grace) > trial > Free.
+/// end on time. Order: verified paid plan (this device or family doc, highest) > cached paid
+/// plan (grace) > trial > Free.
 /// Free features (lock, prayer times, adhan, Quran, adhkar) never depend on this value.
 final planEntitlementProvider = Provider<Entitlement>((ref) {
   ref.watch(clockProvider);
+  ref.watch(entitlementRecorderProvider);
+  ref.watch(verifiedEntitlementProvider); // runs the recorder before the cache is read
   return resolveEntitlement(
     store: ref.watch(storeEntitlementProvider).valueOrNull,
+    family: ref.watch(familyEntitlementProvider).valueOrNull,
     cachedTier: ref.watch(entitlementCacheProvider).effectiveTier(),
     trial: ref.watch(trialClockProvider).status(),
   );
