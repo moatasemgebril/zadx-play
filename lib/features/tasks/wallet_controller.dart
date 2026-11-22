@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/app_variant.dart';
 import '../../data/catalog/default_tasks.dart';
 import '../../data/models/child_profile.dart';
 import '../../data/models/family_task.dart';
@@ -127,12 +128,15 @@ class WalletController extends Notifier<WalletState> {
     _remoteSub = repo.watchDay(_childId, today).listen(_applyRemote);
     ref.onDispose(() => _remoteSub?.cancel());
 
-    // Lock games automatically when a new prayer time starts.
-    ref.listen<Prayer>(nextPrayerProvider, (previous, next) {
-      if (previous != null && previous != next && ref.read(settingsProvider).lockAtAdhan) {
-        startPrayerLock(previous);
-      }
-    });
+    // Lock games automatically when a new prayer time starts (Zad X Play only: Zad X Kids has
+    // no prayer lock, its schedules are enforced by lockPolicyProvider + native code).
+    if (!kIsKids) {
+      ref.listen<Prayer>(nextPrayerProvider, (previous, next) {
+        if (previous != null && previous != next && ref.read(settingsProvider).lockAtAdhan) {
+          startPrayerLock(previous);
+        }
+      });
+    }
 
     return restored;
   }
@@ -263,7 +267,7 @@ class WalletController extends Notifier<WalletState> {
     final raw = prefs.getString(ChildStorage.walletKey(childId));
     final tasksRaw = prefs.getString(ChildStorage.tasksKey(childId));
     final tasks = tasksRaw == null
-        ? defaultTasks
+        ? starterTasks
         : (jsonDecode(tasksRaw) as List).map((e) => TaskDefinition.fromJson(e as Map<String, dynamic>)).toList();
     if (raw != null) {
       final j = jsonDecode(raw) as Map<String, dynamic>;

@@ -37,6 +37,10 @@ class BlockActivity : Activity() {
                 arabic -> "وقت الصلاة\nالألعاب مقفولة لحد ما تصلي"
                 else -> "Prayer time\nGames are locked until you pray"
             }
+            // Zad X Kids schedules (docs/decisions/ZADX-KIDS-VARIANT.md).
+            "bedtime" -> if (arabic) "وقت النوم\nنوم الهنا! التطبيقات هتتفتح الصبح" else "Bedtime\nSleep well! Apps open in the morning"
+            "study" -> if (arabic) "وقت المذاكرة\nالتطبيقات هتتفتح لما الوقت يخلص" else "Study time\nApps open again when it is over"
+            "reading" -> if (arabic) "وقت القراية\nهات كتاب أو قصة!" else "Reading time\nGrab a book or a story!"
             "noTime" -> if (arabic) "خلص وقتك النهارده\nاعمل مهمة تكسب وقت" else "Out of time today\nDo a task to earn more"
             else -> when {
                 allApps && arabic -> "خلّص مهامك الأول\nوبعدها التطبيق يتفتح"

@@ -1,0 +1,25 @@
+{
+  "_about": "Religious words that must never appear in Zad X Kids text (owner decision 2026-11-22, docs/decisions/ZADX-KIDS-VARIANT.md). The ONLY copy of the list: used by test/kids_variant_test.dart (ARB strings, brand/store config, praise, tasks, schedules) and backend/functions/test/security.test.js (assistant prompt). English entries match whole words, case-insensitive. Arabic entries match anywhere in the text (Arabic attaches prefixes such as al-, wa-, bi-). Words left out on purpose because they are also everyday words: 'جزء' (part), 'عيد' (inside 'سعيد'/'بعيد'), 'نبي' (inside 'تنبيه'), 'ذكر' (inside 'تذكير'), 'سنة' (year), 'جامع', 'حديث' (inside 'تحديث'), 'قارئ' (reader).",
+  "en": [
+    "quran", "qur'an", "koran", "surah", "surahs", "ayah", "ayat", "verse", "verses",
+    "prayer", "prayers", "pray", "prays", "prayed", "praying", "salah", "salat", "salawat",
+    "adhan", "azan", "athan", "muezzin", "adhkar", "dhikr", "dua",
+    "mosque", "mosques", "masjid", "kaaba", "minaret",
+    "allah", "islam", "islamic", "muslim", "muslims", "prophet", "prophets",
+    "ramadan", "eid", "hadith", "sunnah", "wudu", "jannah",
+    "fajr", "dhuhr", "asr", "maghrib", "isha", "juz",
+    "mashaallah", "masha'allah", "inshaallah", "insha'allah", "subhanallah", "alhamdulillah", "bismillah",
+    "assalamu", "alaikum", "sheikh", "imam", "halal", "haram", "reciter", "reciters", "recitation", "tajweed"
+  ],
+  "ar": [
+    "قرآن", "القران", "سورة", "آية", "آيات",
+    "صلاة", "الصلا", "صلوات", "تصلي", "يصلي", "صليت", "صلّي", "اتوض", "توضأ", "وضوء", "سجادة",
+    "أذان", "اذان", "الآذان", "مؤذن", "أذكار", "اذكار", "الذكر", "دعاء",
+    "مسجد", "مساجد", "كعبة", "مئذنة", "هلال",
+    "الله", "إسلام", "اسلام", "مسلم", "النبي", "أنبياء", "الأنبياء", "رسول", "ﷺ",
+    "رمضان", "العيد", "الجنة", "ملائكة",
+    "الفجر", "الظهر", "العصر", "المغرب", "العشاء", "جزء عم",
+    "جزاك", "بارك", "تبارك", "سبحان", "الحمد", "بسم", "السلام عليكم", "ماشاء", "ما شاء", "إن شاء", "ان شاء",
+    "شيخ", "إمام", "حلال", "حرام", "تلاوة", "ترتيل", "تجويد", "مقرئ"
+  ]
+}

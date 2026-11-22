@@ -11,6 +11,10 @@
 - **No secrets in the app:** AI and store verification run in Cloud Functions.
 - **No hand-typed Quran:** surah metadata only; text comes from Quran.com and is cached.
 - **Offline-first:** the child side works without internet; Firebase syncs, it is never required (see "Offline-first" below).
+- **Two apps, one codebase:** `--dart-define=ZADX_VARIANT=kids` builds **Zad X Kids** (`com.zadx.kids`), a
+  version with nothing religious; the default build is **Zad X Play**. The switch is the compile-time
+  constant `kIsKids` (lib/core/app_variant.dart), so Kids-excluded code is removed, not hidden. See
+  "Variants" below and docs/decisions/ZADX-KIDS-VARIANT.md.
 
 ## Flow of a day
 ```
@@ -120,6 +124,22 @@ fails if the two differ. Free = no store purchase (`Entitlement.effectiveTier ==
 
 Free features never need login, network or purchase. Paid screens show a kid-safe
 "ask a parent" card; the upgrade sheet and the plans screen sit behind the parent PIN.
+
+## Variants: Zad X Play / Zad X Kids (owner decision 2026-11-22)
+Decision record: docs/decisions/ZADX-KIDS-VARIANT.md.
+
+| | Zad X Play (default) | Zad X Kids (`ZADX_VARIANT=kids`) |
+|---|---|---|
+| App id / store name | `com.zadx.app`, Zad X Play | `com.zadx.kids`, Zad X Kids |
+| Islamic features (Quran, prayer times, adhan, adhkar, mosque + prophets games, Islamic praise) | ✓ | none: no route, tab, plan feature, notification or string |
+| Time locks | prayer lock at each adhan | study / bedtime / reading schedules (`lib/features/schedule/`, enforced natively on Android) |
+| Products | `zadx_*` | `zadx_kids_*` (same tiers, same server verification) |
+
+Where the switch lives: `AppConfig` (brand/products), `featuresOf`/`hasFeature` (plans),
+`appRoutes`/`shellTabsFor` (routing), `KidsLocalizationsDelegate` (strings), `starterTasks`,
+`activePraisePhrases`, `activeZadGames`, `BrandLogo`. Guard rail: `test/kids_variant_test.dart`
+with the single word list `tools/kids_forbidden_words.json`. CI builds both APKs
+(`zadx-android-apk`, `zadx-kids-android-apk`).
 
 ## Multiple children
 Free = 1 child, Basic = up to 2, Plus = up to 5 (`PlanPricing.maxChildren`).

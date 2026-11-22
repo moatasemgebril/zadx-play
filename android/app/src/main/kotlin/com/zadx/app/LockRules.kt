@@ -242,4 +242,53 @@ object LockRules {
         val age = nowElapsed - ownForegroundAtElapsed
         return fromZadX && age in 0..PLAY_SHEET_WINDOW_MS
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Zad X Kids schedules (docs/decisions/ZADX-KIDS-VARIANT.md). Mirrors `ScheduledLock.activeAt` /
+    // `activeScheduledLock` in lib/features/schedule/scheduled_lock.dart: keep both in sync.
+    // ---------------------------------------------------------------------------------------------
+
+    /** Schedule kinds by priority (the first active one is the lock reason). */
+    val SCHEDULE_KINDS: List<String> = listOf("bedtime", "study", "reading")
+
+    /**
+     * One lock window in local time. [start]/[end] = minutes after midnight; `end < start` crosses
+     * midnight. [days] = ISO weekdays (1 = Monday … 7 = Sunday) on which the window STARTS.
+     */
+    data class ScheduleWindow(val kind: String, val start: Int, val end: Int, val days: Set<Int>)
+
+    /** ISO weekday (1 = Monday … 7 = Sunday) from `Calendar.DAY_OF_WEEK` (1 = Sunday … 7 = Saturday). */
+    fun isoWeekday(calendarDayOfWeek: Int): Int = ((calendarDayOfWeek + 5) % 7) + 1
+
+    fun scheduleActive(w: ScheduleWindow, minuteOfDay: Int, isoWeekday: Int): Boolean {
+        if (w.kind !in SCHEDULE_KINDS || w.start == w.end || w.days.isEmpty()) return false
+        val yesterday = if (isoWeekday == 1) 7 else isoWeekday - 1
+        return if (w.end > w.start) {
+            isoWeekday in w.days && minuteOfDay >= w.start && minuteOfDay < w.end
+        } else {
+            (isoWeekday in w.days && minuteOfDay >= w.start) || (yesterday in w.days && minuteOfDay < w.end)
+        }
+    }
+
+    /** The kind of the schedule locking the device now (bedtime > study > reading), or null. */
+    fun activeSchedule(windows: List<ScheduleWindow>, minuteOfDay: Int, isoWeekday: Int): String? =
+        windows.filter { scheduleActive(it, minuteOfDay, isoWeekday) }
+            .minByOrNull { SCHEDULE_KINDS.indexOf(it.kind) }
+            ?.kind
+
+    /** Compact storage form: "kind,start,end,1.2.3;kind,…". */
+    fun encodeSchedules(windows: List<ScheduleWindow>): String =
+        windows.joinToString(";") { "${it.kind},${it.start},${it.end},${it.days.sorted().joinToString(".")}" }
+
+    /** Inverse of [encodeSchedules]; malformed entries are dropped. */
+    fun decodeSchedules(encoded: String?): List<ScheduleWindow> =
+        (encoded ?: "").split(";").mapNotNull { entry ->
+            val parts = entry.split(",")
+            if (parts.size != 4) return@mapNotNull null
+            val start = parts[1].toIntOrNull() ?: return@mapNotNull null
+            val end = parts[2].toIntOrNull() ?: return@mapNotNull null
+            if (parts[0] !in SCHEDULE_KINDS || start !in 0 until 24 * 60 || end !in 0 until 24 * 60) return@mapNotNull null
+            val days = parts[3].split(".").mapNotNull { it.toIntOrNull() }.filter { it in 1..7 }.toSet()
+            ScheduleWindow(parts[0], start, end, days)
+        }
 }

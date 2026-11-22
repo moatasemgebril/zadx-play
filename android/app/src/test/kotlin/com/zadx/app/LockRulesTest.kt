@@ -222,4 +222,50 @@ class PlaySheetExemptTest {
             LockRules.isControlled("com.roblox.client", own, LockRules.MODE_SELECTED_GAMES, setOf("com.roblox.client"), emptySet(), emptySet()),
         )
     }
+
+    // ---- Zad X Kids schedules (mirror of test/schedule_test.dart) ----
+
+    private val bedtime = LockRules.ScheduleWindow("bedtime", 21 * 60, 7 * 60, (1..7).toSet())
+    private val study = LockRules.ScheduleWindow("study", 16 * 60, 18 * 60, setOf(7, 1, 2, 3, 4)) // Sun-Thu
+    private val reading = LockRules.ScheduleWindow("reading", 17 * 60 + 30, 18 * 60 + 30, (1..7).toSet())
+
+    @Test
+    fun isoWeekdayFromCalendar() {
+        assertEquals(7, LockRules.isoWeekday(1)) // Calendar.SUNDAY
+        assertEquals(1, LockRules.isoWeekday(2)) // Calendar.MONDAY
+        assertEquals(6, LockRules.isoWeekday(7)) // Calendar.SATURDAY
+    }
+
+    @Test
+    fun bedtimeLocksAtNightAndOpensInTheMorning() {
+        assertFalse(LockRules.scheduleActive(bedtime, 20 * 60 + 59, 1))
+        assertTrue(LockRules.scheduleActive(bedtime, 21 * 60, 1))
+        assertTrue(LockRules.scheduleActive(bedtime, 0, 2))
+        assertTrue(LockRules.scheduleActive(bedtime, 6 * 60 + 59, 2))
+        assertFalse(LockRules.scheduleActive(bedtime, 7 * 60, 2))
+        val fridayOnly = bedtime.copy(days = setOf(5))
+        assertTrue(LockRules.scheduleActive(fridayOnly, 6 * 60, 6)) // Saturday morning = Friday's night
+        assertFalse(LockRules.scheduleActive(fridayOnly, 22 * 60, 6))
+        assertFalse(LockRules.scheduleActive(fridayOnly, 6 * 60, 5))
+    }
+
+    @Test
+    fun studyOnSchoolDaysOnlyAndPriority() {
+        assertTrue(LockRules.scheduleActive(study, 16 * 60, 1))
+        assertFalse(LockRules.scheduleActive(study, 18 * 60, 1))
+        assertFalse(LockRules.scheduleActive(study, 16 * 60 + 30, 5)) // Friday
+        assertEquals("study", LockRules.activeSchedule(listOf(reading, study, bedtime), 17 * 60 + 45, 1))
+        assertEquals("reading", LockRules.activeSchedule(listOf(reading, study), 17 * 60 + 45, 5))
+        assertEquals(null, LockRules.activeSchedule(listOf(reading, study, bedtime), 12 * 60, 1))
+        assertFalse(LockRules.scheduleActive(study.copy(end = study.start), 16 * 60, 1))
+        assertFalse(LockRules.scheduleActive(bedtime.copy(kind = "prayer"), 22 * 60, 1))
+    }
+
+    @Test
+    fun schedulesSurviveStorage() {
+        val all = listOf(bedtime, study, reading)
+        assertEquals(all, LockRules.decodeSchedules(LockRules.encodeSchedules(all)))
+        assertEquals(emptyList<LockRules.ScheduleWindow>(), LockRules.decodeSchedules(null))
+        assertEquals(emptyList<LockRules.ScheduleWindow>(), LockRules.decodeSchedules("prayer,1,2,1;bedtime,x,2,1;study,1,9999,1"))
+    }
 }

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/app_variant.dart';
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -113,7 +114,8 @@ class _LettersGameScreenState extends ConsumerState<LettersGameScreen> {
             total: _questions.length,
             onPlayAgain: () => _start(_level),
             onBack: () => setState(() => _phase = _Phase.levels),
-            onBuild: () => context.pushReplacement(Routes.eduMasjid),
+            // The mosque builder exists in Zad X Play only.
+            onBuild: kIsKids ? null : () => context.pushReplacement(Routes.eduMasjid),
           ),
       },
     );

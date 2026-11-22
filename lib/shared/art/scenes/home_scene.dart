@@ -1,12 +1,17 @@
 import 'package:flutter/widgets.dart';
 
+import '../../../core/app_variant.dart';
 import '../art_shapes.dart';
 import '../scene_palettes.dart';
 import 'scene_common.dart';
 
 /// Home: a friendly sunrise sky over a little town with a mosque.
+/// Zad X Kids draws the same town without the mosque ([withMosque] false).
 class HomeStaticPainter extends CustomPainter {
-  const HomeStaticPainter();
+  const HomeStaticPainter({this.withMosque = !kIsKids});
+
+  /// Draw the mosque (dome, minaret, crescents). Never in Zad X Kids.
+  final bool withMosque;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -42,7 +47,7 @@ class HomeStaticPainter extends CustomPainter {
       final hw = (34 + (i % 3) * 6) * u;
       final hh = heights[i % heights.length] * u;
       // Leave room for the mosque.
-      if ((x + hw / 2 - mosqueX).abs() > 60 * u) {
+      if (!withMosque || (x + hw / 2 - mosqueX).abs() > 60 * u) {
         final body = Rect.fromLTWH(x, ground - hh, hw, hh + 20 * u);
         canvas.drawRRect(RRect.fromRectAndRadius(body, Radius.circular(8 * u)), fill(houses[i % houses.length]));
         final win = Rect.fromLTWH(x + hw * 0.32, ground - hh + 12 * u, hw * 0.36, 14 * u);
@@ -51,6 +56,8 @@ class HomeStaticPainter extends CustomPainter {
       x += hw + 8 * u;
       i++;
     }
+
+    if (!withMosque) return;
 
     // Mosque: main hall, dome, one minaret, crescents. Architecture only.
     final hallW = 92 * u;
@@ -88,7 +95,7 @@ class HomeStaticPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(HomeStaticPainter oldDelegate) => false;
+  bool shouldRepaint(HomeStaticPainter oldDelegate) => oldDelegate.withMosque != withMosque;
 }
 
 /// Home motion: slow drifting clouds and a softly breathing sun glow.

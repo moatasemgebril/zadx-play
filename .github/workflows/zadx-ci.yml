@@ -107,6 +107,8 @@ jobs:
         run: flutter analyze --no-fatal-infos
       - name: Unit tests
         run: flutter test --coverage
+      - name: Zad X Kids tests (ZADX_VARIANT=kids constants)
+        run: flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/schedule_test.dart
       - name: Build Android APK (debug, installable for testing)
         run: flutter build apk --debug
       - name: Kotlin rule tests (LockRules - device lock + protection)
@@ -129,6 +131,28 @@ jobs:
         with:
           name: coverage
           path: coverage/lcov.info
+          retention-days: 7
+      # ---- Zad X Kids (docs/decisions/ZADX-KIDS-VARIANT.md) ----
+      # Kept LAST in this job on purpose: it deletes the Islamic assets from this checkout and
+      # re-patches the Android shell to com.zadx.kids. Incremental Gradle build (~1-2 min).
+      - name: Build Zad X Kids APK (debug, com.zadx.kids)
+        run: |
+          python3 tools/kids_variant_prepare.py --apply
+          python3 android/scripts/integrate_native.py --variant kids
+          flutter build apk --debug --dart-define=ZADX_VARIANT=kids
+          mkdir -p build/kids && cp build/app/outputs/flutter-apk/app-debug.apk build/kids/zadx-kids-debug.apk
+      - name: Check the Kids APK (app id, no adhan audio, no Islamic logo)
+        run: |
+          AAPT="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/aapt"
+          "$AAPT" dump badging build/kids/zadx-kids-debug.apk | grep -E "^package: name='com.zadx.kids'"
+          "$AAPT" dump badging build/kids/zadx-kids-debug.apk | grep -E "^application-label:'Zad X Kids'"
+          if unzip -l build/kids/zadx-kids-debug.apk | grep -i -E "adhan|zadx_logo"; then
+            echo "Islamic assets found in the Kids APK"; exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zadx-kids-android-apk
+          path: build/kids/zadx-kids-debug.apk
           retention-days: 7
 
   # 2) Run the app on an Android emulator (smoke test: installs + launches + 300 taps)

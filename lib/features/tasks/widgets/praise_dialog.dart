@@ -10,7 +10,7 @@ import '../../../services/family/children_controller.dart';
 /// One picker per app session so the same phrase never shows twice in a row.
 final praisePickerProvider = Provider<PraisePicker>((ref) => PraisePicker());
 
-/// Shown when the child completes a task: an Islamic praise phrase in the
+/// Shown when the child completes a task: a praise phrase (Islamic in Zad X Play, neutral in Zad X Kids) in the
 /// child's form of address, plus [note] (e.g. "sent for approval"). No sound.
 Future<void> showPraiseDialog(BuildContext context, WidgetRef ref, {required String note}) {
   final l10n = context.l10n;

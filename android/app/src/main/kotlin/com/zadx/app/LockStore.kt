@@ -25,10 +25,18 @@ object LockStore {
         allowedPackages: List<String> = emptyList(),
         allowMessaging: Boolean = true,
         prayerAutoEndMinutes: Int = 0,
+        baseLocked: Boolean = locked,
+        baseReason: String = reason,
+        schedules: List<LockRules.ScheduleWindow> = emptyList(),
     ) {
         prefs(ctx).edit()
             .putBoolean("locked", locked)
             .putString("reason", reason)
+            // Zad X Kids: the lock state without the schedules + the schedules themselves, so a
+            // bedtime / study / reading window starts and ends on time even when Flutter is closed.
+            .putBoolean("baseLocked", baseLocked)
+            .putString("baseReason", baseReason)
+            .putString("schedules", LockRules.encodeSchedules(schedules))
             .putStringSet("packages", packages.toSet())
             .putInt("remaining", remainingMinutes)
             .putString("mode", mode)
@@ -66,12 +74,28 @@ object LockStore {
     fun controlledPackages(ctx: Context): Set<String> =
         prefs(ctx).getStringSet("packages", emptySet())!!
 
+    /** Zad X Kids: the schedule locking the device right now (device local time), or null. */
+    fun activeSchedule(ctx: Context): String? {
+        val windows = LockRules.decodeSchedules(prefs(ctx).getString("schedules", null))
+        if (windows.isEmpty()) return null
+        val now = java.util.Calendar.getInstance()
+        val minute = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+        return LockRules.activeSchedule(windows, minute, LockRules.isoWeekday(now.get(java.util.Calendar.DAY_OF_WEEK)))
+    }
+
+    /** Lock state without the schedules (older policies only have locked / reason). */
+    private fun baseLocked(p: SharedPreferences): Boolean = p.getBoolean("baseLocked", p.getBoolean("locked", true))
+
+    private fun baseReason(p: SharedPreferences): String =
+        p.getString("baseReason", null) ?: p.getString("reason", "requiredTasks")!!
+
     /** True when a controlled app must be blocked right now. */
     fun shouldBlock(ctx: Context): Boolean {
+        if (activeSchedule(ctx) != null) return true
         val p = prefs(ctx)
         return LockRules.shouldBlock(
-            locked = p.getBoolean("locked", true),
-            reason = p.getString("reason", "requiredTasks")!!,
+            locked = baseLocked(p),
+            reason = baseReason(p),
             prayerLock = p.getBoolean("prayerLock", false),
             remainingMinutes = p.getInt("remaining", 0),
             prayerOver = prayerOver(ctx),
@@ -79,8 +103,9 @@ object LockStore {
     }
 
     fun reason(ctx: Context): String {
+        activeSchedule(ctx)?.let { return it }
         val p = prefs(ctx)
-        val stored = p.getString("reason", "requiredTasks")!!
+        val stored = baseReason(p)
         val prayerActive = (p.getBoolean("prayerLock", false) || stored == "prayer") && !prayerOver(ctx)
         return when {
             prayerActive -> "prayer"

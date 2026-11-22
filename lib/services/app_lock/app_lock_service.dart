@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_config.dart';
+import '../../core/app_variant.dart';
 import '../../core/platform.dart';
 
 import '../../data/catalog/games.dart';
@@ -13,6 +14,7 @@ import '../../data/models/game.dart';
 import '../../data/models/plan.dart';
 import '../../features/prayer/prayer_calculator.dart';
 import '../../features/prayer/prayer_providers.dart';
+import '../../features/schedule/schedule_controller.dart';
 import '../../features/settings/settings_controller.dart';
 import '../../features/tasks/wallet_controller.dart';
 import '../billing/subscription_service.dart';
@@ -42,10 +44,15 @@ class LockPolicy {
     this.allowMessaging = true,
     this.prayerAutoEndMinutes = 0,
     this.prayerLockSinceMs,
+    this.schedules = const [],
+    this.baseLocked,
+    this.baseReason,
   });
 
   final bool locked;
-  final String reason; // prayer | requiredTasks | noTime | none
+
+  /// prayer | requiredTasks | noTime | none, and in Zad X Kids bedtime | study | reading.
+  final String reason;
 
   /// Games the parent selected (the lock list in [LockMode.selectedGames]).
   final List<String> androidPackages;
@@ -69,6 +76,15 @@ class LockPolicy {
   /// it to recognise the same lock; the auto-end timer itself runs on elapsed time since boot.
   final int? prayerLockSinceMs;
 
+  /// Zad X Kids: the enabled study / bedtime / reading windows. Native code locks during them by
+  /// itself (also while Zad X is closed). Always empty in Zad X Play.
+  final List<ScheduledLock> schedules;
+
+  /// The lock state WITHOUT the schedules ([locked]/[reason] include the schedule running now).
+  /// Android uses it when a schedule ends while Zad X is closed. Defaults to [locked]/[reason].
+  final bool? baseLocked;
+  final String? baseReason;
+
   Map<String, Object?> toMap() => {
         'locked': locked,
         'reason': reason,
@@ -79,6 +95,9 @@ class LockPolicy {
         'allowMessaging': allowMessaging,
         'prayerAutoEndMinutes': prayerAutoEndMinutes,
         'prayerLockSinceMs': prayerLockSinceMs,
+        'schedules': [for (final s in schedules) s.toNative()],
+        'baseLocked': baseLocked ?? locked,
+        'baseReason': baseReason ?? reason,
       };
 
   @override
@@ -92,11 +111,15 @@ class LockPolicy {
       other.prayerAutoEndMinutes == prayerAutoEndMinutes &&
       other.prayerLockSinceMs == prayerLockSinceMs &&
       listEquals(other.androidPackages, androidPackages) &&
-      listEquals(other.allowedPackages, allowedPackages);
+      listEquals(other.allowedPackages, allowedPackages) &&
+      listEquals(other.schedules, schedules) &&
+      (other.baseLocked ?? other.locked) == (baseLocked ?? locked) &&
+      (other.baseReason ?? other.reason) == (baseReason ?? reason);
 
   @override
   int get hashCode => Object.hash(locked, reason, remainingMinutes, mode, allowMessaging, prayerAutoEndMinutes, prayerLockSinceMs,
-      Object.hashAll(androidPackages), Object.hashAll(allowedPackages));
+      Object.hashAll(androidPackages), Object.hashAll(allowedPackages), Object.hashAll(schedules), baseLocked ?? locked,
+      baseReason ?? reason);
 }
 
 /// An installed app shown in the parent's allow-list editor (Android only; never uploaded).
@@ -244,12 +267,19 @@ typedef LockState = ({bool locked, String reason, int remainingMinutes});
 ///   The prayer lock ends only when a parent approves "I prayed".
 /// * tasks disabled (Free): unlocked = !prayer lock && used < [dailyLimitMinutes]. The prayer
 ///   lock ends by itself [freePrayerLockWindow] after it started ([now] is UTC wall time).
+/// * Zad X Kids: an active [schedule] (bedtime / study / reading) locks on every plan; its reason
+///   is the schedule kind. There is no prayer lock in Kids.
 LockState lockStateFor({
   required bool tasksEnabled,
   required WalletState wallet,
   required int dailyLimitMinutes,
   DateTime? now,
+  ScheduledLock? schedule,
 }) {
+  if (schedule != null) {
+    final remaining = tasksEnabled ? wallet.remainingMinutes : (dailyLimitMinutes - wallet.usedMinutes).clamp(0, 24 * 60);
+    return (locked: true, reason: schedule.kind.name, remainingMinutes: remaining);
+  }
   if (tasksEnabled) {
     return (
       locked: !wallet.gamesUnlocked,
@@ -270,12 +300,16 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
   final wallet = ref.watch(walletProvider);
   final settings = ref.watch(settingsProvider);
   final tasksEnabled = ref.watch(lockTasksEnabledProvider);
-  final state = lockStateFor(
-    tasksEnabled: tasksEnabled,
-    wallet: wallet,
-    dailyLimitMinutes: settings.dailyLimitMinutes,
-    now: DateTime.now().toUtc(),
-  );
+  LockState stateWith(ScheduledLock? schedule) => lockStateFor(
+        tasksEnabled: tasksEnabled,
+        wallet: wallet,
+        dailyLimitMinutes: settings.dailyLimitMinutes,
+        now: DateTime.now().toUtc(),
+        schedule: schedule,
+      );
+  final schedule = kIsKids ? ref.watch(activeScheduleProvider) : null;
+  final state = stateWith(schedule);
+  final base = schedule == null ? state : stateWith(null);
   return lockPolicyFrom(
     locked: state.locked,
     reason: state.reason,
@@ -283,6 +317,9 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
     settings: settings,
     prayerAutoEndMinutes: tasksEnabled ? 0 : freePrayerLockWindow.inMinutes,
     prayerLockSinceMs: state.reason == 'prayer' ? wallet.prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
+    schedules: kIsKids ? ref.watch(scheduleProvider) : const [],
+    baseLocked: base.locked,
+    baseReason: base.reason,
   );
 });
 
@@ -294,6 +331,9 @@ LockPolicy lockPolicyFrom({
   required AppSettings settings,
   int prayerAutoEndMinutes = 0,
   int? prayerLockSinceMs,
+  List<ScheduledLock> schedules = const [],
+  bool? baseLocked,
+  String? baseReason,
 }) {
   final packages = controlledGames
       .where((g) => settings.controlledGameIds.contains(g.id))
@@ -310,6 +350,9 @@ LockPolicy lockPolicyFrom({
     allowMessaging: settings.allowMessaging,
     prayerAutoEndMinutes: prayerAutoEndMinutes,
     prayerLockSinceMs: prayerLockSinceMs,
+    schedules: [for (final s in schedules) if (s.enabled && s.durationMinutes > 0) s],
+    baseLocked: baseLocked,
+    baseReason: baseReason,
   );
 }
 
@@ -324,8 +367,9 @@ Prayer _currentPrayer(Ref ref) {
 final lockCoordinatorProvider = Provider<void>((ref) {
   // Free: end the prayer lock in the wallet once its window is over, so every screen and the
   // parent devices agree (on all platforms, also where Zad X has no native blocker).
+  // Zad X Kids has no prayer lock.
   ref.listen<AsyncValue<DateTime>>(clockProvider, (_, __) {
-    if (!ref.read(lockTasksEnabledProvider)) {
+    if (!kIsKids && !ref.read(lockTasksEnabledProvider)) {
       ref.read(walletProvider.notifier).endPrayerLockIfOver(DateTime.now().toUtc(), freePrayerLockWindow);
     }
   }); // not fireImmediately: providers must not change other providers while building
@@ -365,11 +409,14 @@ final lockCoordinatorProvider = Provider<void>((ref) {
           wallet.addUsedMinutes(cap, cap: cap);
         }
       case 'prayer_lock':
-        // A native prayer alarm fired (possibly while Flutter was closed).
-        if (!ref.read(walletProvider).prayerLock) wallet.startPrayerLock(_currentPrayer(ref));
+        // A native prayer alarm fired (possibly while Flutter was closed). Never in Zad X Kids.
+        if (!kIsKids && !ref.read(walletProvider).prayerLock) wallet.startPrayerLock(_currentPrayer(ref));
     }
   }, onError: (Object e) => debugPrint('lock events error: $e'));
   ref.onDispose(sub.cancel);
+
+  // Zad X Kids: the schedules travel inside the policy and native code enforces them itself.
+  if (kIsKids) return;
 
   // Native alarms re-lock games at every adhan even when Zad X is closed.
   ref.listen<PrayerTimes>(prayerTimesProvider, (_, times) {

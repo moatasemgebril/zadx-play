@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/localized.dart';
 import '../models/game.dart';
 
@@ -40,3 +41,13 @@ const zadGames = <ZadGame>[
   ZadGame('prophets', Icons.auto_awesome_rounded, Color(0xFF4CC9F0), Color(0xFF1F1A3D)),
   ZadGame('masjid', Icons.mosque_rounded, Color(0xFF7ED9B8), Color(0xFF1F1A3D)),
 ];
+
+/// Learning games of Zad X Play only (prophets quiz, mosque builder).
+const islamicOnlyZadGameIds = {'prophets', 'masjid'};
+
+/// Built-in games of [variant]: Zad X Kids keeps the Arabic letters game only.
+List<ZadGame> zadGamesFor(AppVariant variant) =>
+    variant == AppVariant.kids ? [for (final g in zadGames) if (!islamicOnlyZadGameIds.contains(g.id)) g] : zadGames;
+
+/// Built-in games of this build.
+final List<ZadGame> activeZadGames = zadGamesFor(appVariant);

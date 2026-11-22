@@ -115,6 +115,9 @@ void main() {
         'allowMessaging': false,
         'prayerAutoEndMinutes': 0,
         'prayerLockSinceMs': null,
+        'schedules': <Object>[],
+        'baseLocked': false,
+        'baseReason': 'none',
       });
     });
 

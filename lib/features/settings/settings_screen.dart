@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/catalog/locations.dart';
@@ -13,16 +14,15 @@ import '../parent/devices_card.dart';
 import 'settings_controller.dart';
 
 /// Language, country, city and prayer calculation (globe icon in the header).
+/// Zad X Kids: language and family linking only (no location, no prayer calculation).
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final lang = context.lang;
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
-    final times = ref.watch(prayerTimesProvider);
 
     final langItems = [...supportedLanguages, ...upcomingLanguages.keys];
     String langLabel(String code) => switch (code) {
@@ -47,6 +47,21 @@ class SettingsScreen extends ConsumerWidget {
               onSelected: ctrl.setLanguage,
             ),
           ),
+          if (!kIsKids) ..._prayerSections(context, ref),
+          const JoinFamilyCard(),
+        ]),
+      ),
+    );
+  }
+
+  /// Country, city and prayer calculation: Zad X Play only.
+  List<Widget> _prayerSections(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final lang = context.lang;
+    final s = ref.watch(settingsProvider);
+    final ctrl = ref.read(settingsProvider.notifier);
+    final times = ref.watch(prayerTimesProvider);
+    return [
           _Section(
             title: l10n.country,
             child: ChoiceGrid<String>(
@@ -93,10 +108,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const JoinFamilyCard(),
-        ]),
-      ),
-    );
+    ];
   }
 }
 

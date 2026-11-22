@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
@@ -217,7 +218,7 @@ class _ChildRow extends ConsumerWidget {
                         ),
                         style: const TextStyle(fontSize: 15, color: AppColors.muted),
                       ),
-                      if (wallet.prayerLock)
+                      if (!kIsKids && wallet.prayerLock)
                         Text(l10n.childPrayerLocked,
                             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.lockText)),
                     ]),

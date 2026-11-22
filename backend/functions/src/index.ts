@@ -26,12 +26,15 @@ import {
 } from "./security";
 // Purchase ownership (verifyPurchase) + parent codes (redeemPairingCode).
 import { oldFamilyAction, purchaseOwnerDecision } from "./security";
+// Store products of Zad X Play and Zad X Kids (docs/decisions/ZADX-KIDS-VARIANT.md).
+import {
+  ANDROID_PACKAGES, KIDS_ASSISTANT_PROMPT, appForAndroidPackage, assistantVariant, productIdFor, productInfo, verifiedLine,
+} from "./security";
 
 initializeApp();
 const db = getFirestore();
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
-const ANDROID_PACKAGE = "com.zadx.app";
 const ASSISTANT_MODEL = "claude-haiku-5-5";
 const BASIC_DAILY_QUESTIONS = 10;
 /** Hard per-family cap for Plus too, so one account cannot run up the Anthropic bill. */
@@ -124,6 +127,8 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
   const question = typeof req.data?.question === "string" ? req.data.question.slice(0, 1000).trim() : "";
   const language = req.data?.language === "en" ? "en" : "ar";
   const history = sanitiseHistory(req.data?.history);
+  // Zad X Kids: a prompt with no religious content. Anything else gets the Zad X Play prompt.
+  const systemPrompt = assistantVariant(req.data?.variant) === "kids" ? KIDS_ASSISTANT_PROMPT : SYSTEM_PROMPT;
   if (!question) throw new HttpsError("invalid-argument", "Empty question.");
   await enforceRateLimit("ai", uid, 6, 60_000); // burst protection per user
 
@@ -158,7 +163,7 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
     body: JSON.stringify({
       model: ASSISTANT_MODEL,
       max_tokens: 500,
-      system: `${SYSTEM_PROMPT}\nReply language: ${language === "ar" ? "Arabic" : "English"}.`,
+      system: `${systemPrompt}\nReply language: ${language === "ar" ? "Arabic" : "English"}.`,
       messages,
     }),
     signal: AbortSignal.timeout(25_000),
@@ -211,16 +216,7 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
 // Purchases + referrals
 // ---------------------------------------------------------------------------
 
-const PRODUCTS: Record<string, { tier: "basic" | "plus" }> = {
-  zadx_basic_monthly: { tier: "basic" },
-  zadx_basic_yearly: { tier: "basic" },
-  zadx_plus_monthly: { tier: "plus" },
-  zadx_plus_yearly: { tier: "plus" },
-};
-
-function isKnownProduct(id: string): boolean {
-  return Object.prototype.hasOwnProperty.call(PRODUCTS, id);
-}
+// Product ids of both apps: PRODUCTS / productInfo in security.ts.
 
 async function androidPublisher() {
   const auth = new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/androidpublisher"] });
@@ -230,23 +226,28 @@ async function androidPublisher() {
 export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => {
   const uid = requireUid(req.auth);
   const { platform, productId, verificationData, referralCode } = req.data ?? {};
-  if (typeof productId !== "string" || !isKnownProduct(productId)) throw new HttpsError("invalid-argument", "Unknown product.");
+  const product = productInfo(productId);
+  if (!product) throw new HttpsError("invalid-argument", "Unknown product.");
   if (typeof verificationData !== "string" || verificationData.length < 10 || verificationData.length > 4096) {
     throw new HttpsError("invalid-argument", "Bad receipt.");
   }
   await enforceRateLimit("purchase", uid, 20, 60 * 60_000);
-  let tier = PRODUCTS[productId].tier;
+  // The app that sold it decides the Play package it is verified against (com.zadx.app / com.zadx.kids).
+  const app = product.app;
+  let tier = product.tier;
 
   let expiresAt: string | null = null;
   let inTrial = false;
 
   if (platform === "android") {
     const publisher = await androidPublisher();
-    const sub = await publisher.purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGE, token: verificationData });
-    // The tier comes from what Google says was bought, never from the client's productId.
-    const line = sub.data.lineItems?.find((l) => typeof l.productId === "string" && isKnownProduct(l.productId));
-    if (!line?.productId) throw new HttpsError("failed-precondition", "Unknown product.");
-    tier = PRODUCTS[line.productId].tier;
+    const sub = await publisher.purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGES[app], token: verificationData });
+    // The tier comes from what Google says was bought, never from the client's productId, and the
+    // product must belong to the same app as the package the token was checked against.
+    const line = verifiedLine(app, sub.data.lineItems);
+    const lineInfo = productInfo(line?.productId);
+    if (!line || !lineInfo) throw new HttpsError("failed-precondition", "Unknown product.");
+    tier = lineInfo.tier;
     expiresAt = line?.expiryTime ?? null;
     inTrial = Boolean(line?.offerDetails?.offerTags?.includes("trial") || sub.data.subscriptionState === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD");
     if (sub.data.subscriptionState !== "SUBSCRIPTION_STATE_ACTIVE" && sub.data.subscriptionState !== "SUBSCRIPTION_STATE_IN_GRACE_PERIOD") {
@@ -284,7 +285,9 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
     if (owner.exists) tx.set(purchaseRef, ownership);
     else tx.create(purchaseRef, ownership);
     tx.set(family.ref, { plan: tier, planExpiresAt: expiresAt, inTrial, store: platform, purchaseToken: FieldValue.delete() }, { merge: true });
-    tx.set(family.ref.collection("private").doc("billing"), { purchaseToken: verificationData }, { merge: true });
+    // storeApp (play | kids) sits next to the token in the server-only billing doc: referral
+    // deferrals need the app's package + product id. Firestore rules are unchanged.
+    tx.set(family.ref.collection("private").doc("billing"), { purchaseToken: verificationData, storeApp: app }, { merge: true });
   });
 
   // Record the referral now; the referrer is credited only after the friend's first PAID period.
@@ -401,8 +404,14 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
       res.status(204).send();
       return;
     }
+    // Only our two apps; the check below uses that app's own package.
+    const friendApp = appForAndroidPackage(msg.packageName);
+    if (!friendApp) {
+      res.status(204).send();
+      return;
+    }
     // Do not trust the message alone: confirm with Google that the subscription is really active.
-    const check = await (await androidPublisher()).purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGE, token: n.purchaseToken });
+    const check = await (await androidPublisher()).purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGES[friendApp], token: n.purchaseToken });
     if (check.data.subscriptionState !== "SUBSCRIPTION_STATE_ACTIVE") {
       res.status(204).send();
       return;
@@ -429,14 +438,17 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
     const referrer = await referrerRef.get();
     if (addMonths > 0 && referrer.get("store") === "android") {
       const publisher = await androidPublisher();
-      const productId = Object.keys(PRODUCTS).find((p) => PRODUCTS[p].tier === referrer.get("plan"));
+      const billing = await referrerRef.collection("private").doc("billing").get();
+      // The referrer's own app (families that subscribed before Zad X Kids existed are Zad X Play).
+      const referrerApp = billing.get("storeApp") === "kids" ? "kids" : "play";
+      const productId = productIdFor(referrer.get("plan"), referrerApp);
       const current = new Date(referrer.get("planExpiresAt"));
       const desired = new Date(current);
       desired.setMonth(desired.getMonth() + addMonths);
       await publisher.purchases.subscriptions.defer({
-        packageName: ANDROID_PACKAGE,
+        packageName: ANDROID_PACKAGES[referrerApp],
         subscriptionId: productId!,
-        token: (await referrerRef.collection("private").doc("billing").get()).get("purchaseToken") ?? referrer.get("purchaseToken"),
+        token: billing.get("purchaseToken") ?? referrer.get("purchaseToken"),
         requestBody: {
           deferralInfo: {
             expectedExpiryTimeMillis: String(current.getTime()),

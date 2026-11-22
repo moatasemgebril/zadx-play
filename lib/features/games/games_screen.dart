@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
@@ -16,6 +17,8 @@ import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../schedule/schedule_controller.dart';
+import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
@@ -31,6 +34,9 @@ class GamesScreen extends ConsumerWidget {
     final wallet = ref.watch(walletProvider);
     final enabledIds = ref.watch(settingsProvider.select((s) => s.controlledGameIds));
     final games = controlledGames.where((g) => enabledIds.contains(g.id)).toList();
+    // Zad X Kids: a study / bedtime / reading schedule locks every game while it runs.
+    final schedule = ref.watch(activeScheduleProvider);
+    final unlocked = wallet.gamesUnlocked && schedule == null;
 
     return ZadSceneBackground(
       scene: ZadScene.games,
@@ -43,9 +49,9 @@ class GamesScreen extends ConsumerWidget {
         PaidFeatureGate(
           feature: AppFeature.eduGames,
           child: Row(children: [
-            for (final g in zadGames) ...[
+            for (final g in activeZadGames) ...[
               Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
-              if (g != zadGames.last) const SizedBox(width: 10),
+              if (g != activeZadGames.last) const SizedBox(width: 10),
             ],
           ]),
         ),
@@ -53,8 +59,8 @@ class GamesScreen extends ConsumerWidget {
         Text(l10n.deviceGames, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.deviceGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
         const SizedBox(height: 10),
-        _LockBanner(wallet: wallet),
-        if (wallet.prayerLock) ...[const SizedBox(height: 10), const _PrayerLockCard()],
+        _LockBanner(wallet: wallet, schedule: schedule),
+        if (!kIsKids && wallet.prayerLock) ...[const SizedBox(height: 10), const _PrayerLockCard()],
         const SizedBox(height: 10),
         PaidFeatureGate(
           feature: AppFeature.games,
@@ -69,7 +75,7 @@ class GamesScreen extends ConsumerWidget {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               childAspectRatio: 0.62,
-              children: [for (final g in games) _GameTile(game: g, unlocked: wallet.gamesUnlocked)],
+              children: [for (final g in games) _GameTile(game: g, unlocked: unlocked)],
             ),
           ]),
         ),
@@ -133,12 +139,17 @@ class _ZadGameTile extends StatelessWidget {
 }
 
 class _LockBanner extends StatelessWidget {
-  const _LockBanner({required this.wallet});
+  const _LockBanner({required this.wallet, this.schedule});
   final WalletState wallet;
+  final ScheduledLock? schedule;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final schedule = this.schedule;
+    if (schedule != null) {
+      return Banner2(text: schedule.kind.lockBanner.of(context.lang), bg: AppColors.lockBg, fg: AppColors.lockText, icon: schedule.kind.icon);
+    }
     if (wallet.gamesUnlocked) {
       return Banner2(
         text: l10n.gamesOpen(Fmt.digits(wallet.remainingMinutes, context.lang)),

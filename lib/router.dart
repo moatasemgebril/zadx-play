@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/app_variant.dart';
 import 'features/edu_games/letters/letters_game_screen.dart';
 import 'features/edu_games/mosque/mosque_game_screen.dart';
 import 'features/edu_games/prophets/prophets_game_screen.dart';
@@ -31,29 +32,76 @@ abstract class Routes {
   static const eduProphets = '/edu/prophets';
   static const eduMasjid = '/edu/masjid';
   static String eduGame(String id) => '/edu/$id';
+
+  /// Routes that exist only in Zad X Play. Zad X Kids has no route for them at all
+  /// (docs/decisions/ZADX-KIDS-VARIANT.md); a link to one goes to [home].
+  static const islamicOnly = {quran, eduProphets, eduMasjid};
 }
+
+/// The bottom-bar tabs, in order. The shell branches in [appRoutes] follow this list.
+enum ShellTab {
+  home(Routes.home),
+  games(Routes.games),
+  quran(Routes.quran),
+  tasks(Routes.tasks),
+  parent(Routes.parent);
+
+  const ShellTab(this.path);
+  final String path;
+}
+
+/// Tabs of [variant] (default: this build). Zad X Kids has no Quran tab.
+List<ShellTab> shellTabsFor({AppVariant variant = appVariant}) => [
+      ShellTab.home,
+      ShellTab.games,
+      if (!kIsKids && variant == AppVariant.islamic) ShellTab.quran,
+      ShellTab.tasks,
+      ShellTab.parent,
+    ];
 
 final _rootKey = GlobalKey<NavigatorState>();
 
-final appRouter = GoRouter(
-  navigatorKey: _rootKey,
-  initialLocation: Routes.home,
-  routes: [
+/// Every route of [variant] (default: this build).
+///
+/// Islamic-only routes are added behind `!kIsKids`, a compile-time constant: in the Kids build
+/// the Quran, prophets and mosque screens are not reachable from any route (and are tree-shaken).
+List<RouteBase> appRoutes({AppVariant variant = appVariant, GlobalKey<NavigatorState>? rootKey}) {
+  final key = rootKey ?? _rootKey;
+  return [
     StatefulShellRoute.indexedStack(
       builder: (context, state, shell) => AppShell(shell: shell),
       branches: [
         StatefulShellBranch(routes: [GoRoute(path: Routes.home, builder: (_, __) => const HomeScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: Routes.games, builder: (_, __) => const GamesScreen())]),
-        StatefulShellBranch(routes: [GoRoute(path: Routes.quran, builder: (_, __) => const QuranScreen())]),
+        if (!kIsKids && variant == AppVariant.islamic)
+          StatefulShellBranch(routes: [GoRoute(path: Routes.quran, builder: (_, __) => const QuranScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: Routes.tasks, builder: (_, __) => const TasksScreen())]),
         StatefulShellBranch(routes: [GoRoute(path: Routes.parent, builder: (_, __) => const ParentScreen())]),
       ],
     ),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.settings, builder: (_, __) => const SettingsScreen()),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.help, builder: (_, __) => const HelpScreen()),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.subscription, builder: (_, __) => const SubscriptionScreen()),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduLetters, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: LettersGameScreen())),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduProphets, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: ProphetsGameScreen())),
-    GoRoute(parentNavigatorKey: _rootKey, path: Routes.eduMasjid, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: MosqueGameScreen())),
-  ],
-);
+    GoRoute(parentNavigatorKey: key, path: Routes.settings, builder: (_, __) => const SettingsScreen()),
+    GoRoute(parentNavigatorKey: key, path: Routes.help, builder: (_, __) => const HelpScreen()),
+    GoRoute(parentNavigatorKey: key, path: Routes.subscription, builder: (_, __) => const SubscriptionScreen()),
+    GoRoute(parentNavigatorKey: key, path: Routes.eduLetters, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: LettersGameScreen())),
+    if (!kIsKids && variant == AppVariant.islamic) ...[
+      GoRoute(parentNavigatorKey: key, path: Routes.eduProphets, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: ProphetsGameScreen())),
+      GoRoute(parentNavigatorKey: key, path: Routes.eduMasjid, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: MosqueGameScreen())),
+    ],
+  ];
+}
+
+/// Zad X Kids: a link to a Zad X Play-only page (e.g. an old `/quran` deep link) opens Home.
+String? kidsRedirect(String path, {AppVariant variant = appVariant}) =>
+    variant == AppVariant.kids && Routes.islamicOnly.any((r) => path == r || path.startsWith('$r/')) ? Routes.home : null;
+
+GoRouter buildAppRouter({AppVariant variant = appVariant, GlobalKey<NavigatorState>? rootKey}) {
+  final key = rootKey ?? _rootKey;
+  return GoRouter(
+    navigatorKey: key,
+    initialLocation: Routes.home,
+    redirect: (_, state) => kidsRedirect(state.uri.path, variant: variant),
+    routes: appRoutes(variant: variant, rootKey: key),
+  );
+}
+
+final appRouter = buildAppRouter();
