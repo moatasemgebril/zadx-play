@@ -118,6 +118,9 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get lockedKidBody => _text('lockedKidBody');
 
   @override
+  String get assistantParentOnlyBody => _text('assistantParentOnlyBody');
+
+  @override
   String get pairNote => _text('pairNote');
 
   @override

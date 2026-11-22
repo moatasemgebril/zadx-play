@@ -52,6 +52,7 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'eduRoundDone': 'Great job! Round complete!',
     // US English + no Zad X Guard / prayer play windows (Western market, 2026-11-22).
     'lockedKidBody': 'Ask a parent or grown-up to open it for you',
+    'assistantParentOnlyBody': 'Ask a parent or grown-up to open it with the parent PIN',
     'pairNote': "Open Zad X on your child's phone or tablet and enter this code.",
     'psScheduleNote': "Set your child's play time limits once in the PlayStation Family app.",
     'msScheduleNote': "Set your child's screen time limits once in Microsoft Family Safety.",
@@ -86,6 +87,7 @@ const Map<String, Map<String, String>> kidsRewrites = {
         'Zad X هيعرف أنهي تطبيق مفتوح على التليفون ده (اسم التطبيق بس، عمره ما بيقرا اللي على الشاشة) عشان يقفل التطبيقات لحد ما المهام تخلص وفي المواعيد اللي انت بتحددها. التليفون ومكالمات الطوارئ عمرهم ما بيتقفلوا. ومفيش أي معلومة عن التطبيقات بتخرج من التليفون.\n\nفي الصفحة الجاية، فعّل "Zad X" في إعدادات تسهيل الاستخدام.',
     'eduRoundDone': 'برافو! خلّصت الجولة',
     'lockedKidBody': 'اطلب من بابا أو ماما يفتحوه لك',
+    'assistantParentOnlyBody': 'اطلب من بابا أو ماما يفتحوه بالرقم السري',
     'pairNote': 'افتح Zad X على تليفون أو تابلت طفلك واكتب الكود ده.',
     'psScheduleNote': 'حدد وقت اللعب لطفلك مرة واحدة في تطبيق PlayStation Family.',
     'msScheduleNote': 'حدد حدود وقت الشاشة لطفلك مرة واحدة في Microsoft Family Safety.',
