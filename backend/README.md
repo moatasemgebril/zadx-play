@@ -52,3 +52,25 @@ It moves each token to `purchases/{sha256}` + `families/{id}/private/billing` an
 - Max 3 friends per year → 2 / 4 / 6 free months.
 - Android: the referrer's subscription is extended with `subscriptions.defer`.
 - iOS: send a one-time **offer code** (TODO).
+
+## Child-device write rules (R-32 / R-33) — manual rules test cases
+There is no rules emulator test in CI yet (follow-up in BACKLOG.md). Until then, check these in the
+Rules Playground (or the emulator) after any change to `firestore.rules`. Set up `families/F` with
+`members: [P, C]`, `childDevices: {C: "kid1"}` (P = parent uid, C = child-device uid) and
+`families/F/children/kid1/days/2026-11-22` = `{day, progress: {homework: {status: "pending", count: 0}}, usedMinutes: 10, prayerLock: true, earnedMinutes: 0, requiredDone: false}`.
+
+| # | As | Write to the day doc (set, merge) | Expected |
+|---|----|-----------------------------------|----------|
+| 1 | C | `{childTask: "prayer", progress: {prayer: {status: "pending", count: 0}}, updatedAt: serverTime, updatedBy: C}` | allow |
+| 2 | C | `{childTask: "homework", progress: {homework: {status: "done", count: 0}}}` | deny (done) |
+| 3 | C | `{progress: {prayer: {status: "pending", count: 0}}}` (no `childTask`) | deny |
+| 4 | C | `{childTask: "prayer", progress: {prayer: {...pending}, room: {...pending}}}` | deny (two tasks) |
+| 5 | C | `{usedMinutes: increment(5)}` | allow |
+| 6 | C | `{usedMinutes: 3}` | deny (decrease) |
+| 7 | C | `{earnedMinutes: 100}` / `{requiredDone: true}` | deny |
+| 8 | C | `{prayerLock: false}` | deny; `{prayerLock: true, prayerLockSinceMs: <now ms>}` on an unlocked day: allow |
+| 9 | C | delete the day doc | deny |
+| 10 | C | create another day `{day, usedMinutes: 0}` | allow; with `earnedMinutes` or a `done` entry: deny |
+| 11 | C | `families/F` update `{settings: {lockAtAdhan: false}}` | deny (R-33) |
+| 12 | P | any valid day write (approve, `earnedMinutes`, `prayerLock: false`), delete, `settings` | allow |
+| 13 | C | read `families/F/children/kid2/days/...` | deny |

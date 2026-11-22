@@ -53,6 +53,87 @@ class FamilyDay {
       );
 }
 
+/// What a paired child device writes to its day doc (risk R-32). backend/firestore.rules
+/// (`childDayWrite`) lets a child device only:
+/// - change ONE task entry per write (named in `childTask`) to `todo` or `pending`, never `done`;
+/// - add play time (`usedMinutes` only goes up: sent as an increment);
+/// - start a prayer lock (`prayerLock: true` + `prayerLockSinceMs`), never end it.
+/// `earnedMinutes`, `requiredDone`, approvals and ending a prayer lock come from parent devices.
+class ChildDayPatch {
+  const ChildDayPatch({
+    required this.day,
+    this.usedMinutesDelta = 0,
+    this.taskId,
+    this.task,
+    this.startsPrayerLock = false,
+    this.prayerLockSinceMs,
+  });
+
+  final String day;
+
+  /// Minutes to add to `usedMinutes` (never negative).
+  final int usedMinutesDelta;
+
+  /// The one task entry this write changes, with its new `{status, count}`.
+  final String? taskId;
+  final Map<String, Object?>? task;
+
+  /// True when this write starts a prayer lock.
+  final bool startsPrayerLock;
+  final int? prayerLockSinceMs;
+
+  static const _childStatuses = {'todo', 'pending'};
+
+  bool get isEmpty => usedMinutesDelta <= 0 && taskId == null && !startsPrayerLock;
+
+  /// Fields for the day doc, except `usedMinutes` (the repository sends [usedMinutesDelta]
+  /// as a server-side increment so it composes with the Windows Guard's own increments).
+  Map<String, Object?> toJson() => {
+        'day': day,
+        if (taskId != null && task != null) ...{
+          'childTask': taskId,
+          'progress': {taskId!: task},
+        },
+        if (startsPrayerLock) 'prayerLock': true,
+        if (startsPrayerLock && prayerLockSinceMs != null) 'prayerLockSinceMs': prayerLockSinceMs,
+      };
+
+  /// The writes a child device makes for a local change from [before] to [after].
+  /// Changes a child device may not make (approvals, ending a lock, fewer minutes) stay local:
+  /// the parent's devices own them and send them back through `watchDay`.
+  static List<ChildDayPatch> between(FamilyDay before, FamilyDay after) {
+    final delta = after.usedMinutes - before.usedMinutes;
+    final starts = after.prayerLock && !before.prayerLock;
+    final taskIds = <String>[
+      for (final e in after.progress.entries)
+        if (_childStatuses.contains(e.value['status'] ?? 'todo') && !_sameEntry(before.progress[e.key], e.value))
+          e.key,
+    ]..sort();
+
+    Map<String, Object?> entry(String id) {
+      final e = after.progress[id]!;
+      final count = e['count'];
+      return {'status': e['status'] ?? 'todo', 'count': count is int ? count : 0};
+    }
+
+    final first = ChildDayPatch(
+      day: after.day,
+      usedMinutesDelta: delta > 0 ? delta : 0,
+      taskId: taskIds.isEmpty ? null : taskIds.first,
+      task: taskIds.isEmpty ? null : entry(taskIds.first),
+      startsPrayerLock: starts,
+      prayerLockSinceMs: starts ? after.prayerLockSinceMs : null,
+    );
+    return [
+      if (!first.isEmpty) first,
+      for (final id in taskIds.skip(1)) ChildDayPatch(day: after.day, taskId: id, task: entry(id)),
+    ];
+  }
+
+  static bool _sameEntry(Map<String, dynamic>? a, Map<String, dynamic> b) =>
+      a != null && (a['status'] ?? 'todo') == (b['status'] ?? 'todo') && (a['count'] ?? 0) == (b['count'] ?? 0);
+}
+
 /// The plan `verifyPurchase` (backend/functions/src/index.ts) stores on families/{id}:
 /// `plan` ('basic' | 'plus'), `planExpiresAt` (ISO-8601 string), `inTrial` (bool).
 /// These fields are server-only (firestore.rules) and readable by every family member,
@@ -87,6 +168,9 @@ abstract class FamilyRepository {
 
   Future<void> saveDay(String childId, FamilyDay day);
 
+  /// A paired child device's write to its day doc: only what [ChildDayPatch] allows (R-32).
+  Future<void> saveChildDay(String childId, ChildDayPatch patch);
+
   /// Settings other devices need (city, method, controlled games for Windows Guard).
   Future<void> saveSettings(Map<String, Object?> settings);
 
@@ -115,6 +199,9 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> saveDay(String childId, FamilyDay day) async {}
+
+  @override
+  Future<void> saveChildDay(String childId, ChildDayPatch patch) async {}
 
   @override
   Future<void> saveSettings(Map<String, Object?> settings) async {}

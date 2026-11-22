@@ -62,6 +62,18 @@ class FirestoreFamilyRepository implements FamilyRepository {
   }
 
   @override
+  Future<void> saveChildDay(String childId, ChildDayPatch patch) async {
+    if (patch.isEmpty) return;
+    // Merge keeps every other task entry and the parent-only fields untouched.
+    await _dayDoc(childId, patch.day).set({
+      ...patch.toJson(),
+      if (patch.usedMinutesDelta > 0) 'usedMinutes': FieldValue.increment(patch.usedMinutesDelta),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+    }, SetOptions(merge: true));
+  }
+
+  @override
   Future<void> saveChild(ChildProfile child) => _db.doc('families/$familyId/children/${child.id}').set({
         'nickname': child.nickname,
         'avatar': child.avatar.name,

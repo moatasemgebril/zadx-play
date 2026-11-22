@@ -24,6 +24,38 @@ service cloud.firestore {
         && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
     }
 
+    // R-32: what a paired CHILD device may change on its own day doc (`before` = stored doc, {} on create).
+    // It may request a task (todo -> pending), add play time and start a prayer lock. Approvals ("done"),
+    // earnedMinutes, requiredDone and ending a prayer lock are parent-only.
+    // App side: ChildDayPatch in lib/services/family/family_repository.dart.
+    function childDayKeys() {
+      return ['day', 'progress', 'childTask', 'usedMinutes', 'prayerLock', 'prayerLockSinceMs', 'updatedAt', 'updatedBy'];
+    }
+    // One progress entry written by a child device: todo or pending only, never done.
+    function childTaskEntry(e) {
+      return e is map && e.keys().hasOnly(['status', 'count'])
+        && e.get('status', 'todo') in ['todo', 'pending']
+        && (!('count' in e) || (e.count is int && e.count >= 0 && e.count <= 10000));
+    }
+    function childDayWrite(before) {
+      let d = request.resource.data;
+      let changed = d.diff(before).affectedKeys();
+      let newProgress = d.get('progress', {});
+      let taskChanges = newProgress.diff(before.get('progress', {})).affectedKeys();
+      return changed.hasOnly(childDayKeys())
+        // At most one task per write, named in childTask (rules cannot loop over a map).
+        && (taskChanges.size() == 0
+          || ('childTask' in d && d.childTask is string && taskChanges.hasOnly([d.childTask])
+            && d.childTask in newProgress && childTaskEntry(newProgress[d.childTask])))
+        // Play time only goes up.
+        && d.get('usedMinutes', 0) >= before.get('usedMinutes', 0)
+        // A child device may start a prayer lock, never end it.
+        && (!changed.hasAny(['prayerLock']) || d.prayerLock == true)
+        && (!changed.hasAny(['prayerLockSinceMs']) || d.get('prayerLock', false) == true)
+        && (!changed.hasAny(['updatedAt']) || d.updatedAt == request.time)
+        && (!changed.hasAny(['updatedBy']) || d.updatedBy == request.auth.uid);
+    }
+
     // ---- Multi-child -------------------------------------------------------
     // families/{id}.childDevices = { uid: childId } is written only by Cloud Functions
     // (redeemPairingCode). A member listed there is a child device bound to one child;
@@ -66,8 +98,9 @@ service cloud.firestore {
         // parentDevices {uid: linkedAt}: written only by redeemPairingCode (parent code).
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['parentDevices'])
         && (!('settings' in request.resource.data) || request.resource.data.settings is map)
-        // Multi-child: child devices may only sync `settings`.
-        && (isParent(familyId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings']));
+        // R-33: only parent devices change the family doc, `settings` included (lockAtAdhan,
+        // controlled games, time zone, parent pushes). Child devices only read it.
+        && isParent(familyId);
 
       // Multi-child: parents manage every child; a paired child device sees only its own child.
       match /children/{childId} {
@@ -76,8 +109,14 @@ service cloud.firestore {
         allow delete: if isParent(familyId);
 
         match /days/{day} {
-          allow read, delete: if isParent(familyId) || isChildDevice(familyId, childId);
-          allow create, update: if (isParent(familyId) || isChildDevice(familyId, childId)) && validDay(day);
+          allow read: if isParent(familyId) || isChildDevice(familyId, childId);
+          // Parent-only: a child device could otherwise delete the day and recreate it unlocked.
+          allow delete: if isParent(familyId);
+          // Parents write everything (approvals, earnedMinutes, requiredDone, ending a prayer lock).
+          allow create, update: if isParent(familyId) && validDay(day);
+          // R-32: the paired child device writes only what childDayWrite allows.
+          allow create: if isChildDevice(familyId, childId) && validDay(day) && childDayWrite({});
+          allow update: if isChildDevice(familyId, childId) && validDay(day) && childDayWrite(resource.data);
         }
       }
 

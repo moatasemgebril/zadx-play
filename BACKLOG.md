@@ -103,6 +103,7 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - [x] Parent PIN session re-locks after 2 min idle and when the app goes to the background / screen off.
 - [ ] Native (other branch): honour `LockPolicy.prayerAutoEndMinutes` so a Free prayer lock ends without Zad X running.
 - [ ] Server-side trial per family (a reinstall / clear-data restarts the on-device trial).
+- [ ] R-32/R-33 follow-ups (fix/child-write-rules, 2026-11-22): (a) Firestore rules emulator tests with `@firebase/rules-unit-testing` + a CI job (needs the emulator, workflow change) covering backend/README.md cases 1–13; (b) `approveTask` callable with a server-side PIN check so approvals made on the child's own device sync (today they stay local on a bound device); (c) server-computed `earnedMinutes`/`requiredDone` (the child no longer writes them, so a child-side prayer-task reset leaves them stale until a parent writes); (d) parent device full-day writes can lower `usedMinutes` with a stale local value → parent should also write field-level patches; (e) Free plan + paired child: the server `prayerLock` now stays true until a parent device ends it (child app still ends it locally after the window); (f) older child builds that write the whole day will be refused → force-update before launch.
 
 ## Done
 

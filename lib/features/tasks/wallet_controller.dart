@@ -240,9 +240,17 @@ class WalletController extends Notifier<WalletState> {
   }
 
   void _update(WalletState next) {
+    final before = state;
     state = next;
     _persist(next);
-    _repo.saveDay(_childId, next.toFamilyDay());
+    if (ref.read(childrenProvider).isBound) {
+      // Paired child device (R-32): only task requests, added minutes and a starting prayer lock.
+      for (final patch in ChildDayPatch.between(before.toFamilyDay(), next.toFamilyDay())) {
+        _repo.saveChildDay(_childId, patch).catchError((Object e) => debugPrint('child day sync failed: $e'));
+      }
+    } else {
+      _repo.saveDay(_childId, next.toFamilyDay());
+    }
   }
 
   void _applyRemote(FamilyDay remote) {
