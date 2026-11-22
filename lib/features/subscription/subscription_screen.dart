@@ -168,7 +168,7 @@ class _PlanCard extends ConsumerWidget {
         const SizedBox(height: 6),
         Text(name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
         if (tier == null) ...[
-          Text(l10n.freeForever, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.mintText)),
+          Text(l10n.freeNoSubscription, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.mintText)),
           Text(l10n.freeNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
         ] else ...[
           Wrap(crossAxisAlignment: WrapCrossAlignment.end, spacing: 8, children: [
