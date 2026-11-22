@@ -9,7 +9,6 @@ import '../../core/app_config.dart';
 import '../../core/backend.dart';
 import '../../data/models/plan.dart';
 import '../../features/prayer/prayer_providers.dart';
-import '../../features/settings/settings_controller.dart';
 import '../family/family_repository.dart';
 import 'entitlement_cache.dart';
 import 'trial_clock.dart';
@@ -20,18 +19,27 @@ import 'trial_clock.dart';
 /// validates the receipt, stores the entitlement in Firestore and credits the
 /// referrer if [referralCode] was used → [entitlementProvider] updates.
 class SubscriptionService {
-  SubscriptionService({InAppPurchase? iap, FirebaseFunctions? functions, this.onFamilyRestored})
+  SubscriptionService({InAppPurchase? iap, FirebaseFunctions? functions})
       : _iap = iap ?? InAppPurchase.instance,
         _functions = functions;
 
   final InAppPurchase _iap;
   final FirebaseFunctions? _functions;
-
-  /// Called when `verifyPurchase` moved this phone into the family that owns the restored
-  /// purchase (restore on a new phone). The app then switches to that family, the same way
-  /// `PairingService.redeem` does.
-  final Future<void> Function(String familyId)? onFamilyRestored;
   final _entitlement = StreamController<Entitlement>.broadcast();
+  final _otherFamily = StreamController<bool>.broadcast();
+  bool _inOtherFamily = false;
+
+  /// True after `verifyPurchase` refused this store subscription because it belongs to another
+  /// Zad X family (e.g. restore on a new phone). The server never joins or unlocks the family
+  /// for it; the parent links this phone with a parent code from an existing parent phone.
+  bool get inOtherFamily => _inOtherFamily;
+  Stream<bool> get inOtherFamilyStream => _otherFamily.stream;
+
+  void _setInOtherFamily(bool value) {
+    if (_inOtherFamily == value) return;
+    _inOtherFamily = value;
+    _otherFamily.add(value);
+  }
   StreamSubscription<List<PurchaseDetails>>? _sub;
   Map<String, ProductDetails> _products = {};
   String? _pendingReferralCode;
@@ -88,8 +96,7 @@ class SubscriptionService {
             'referralCode': _pendingReferralCode,
           });
           final data = Map<String, dynamic>.from(result.data as Map);
-          final familyId = restoredFamilyId(data);
-          if (familyId != null) await onFamilyRestored?.call(familyId);
+          _setInOtherFamily(false);
           final ent = Entitlement(
             // Unknown or missing tier = Free, never silently Basic.
             tier: parsePlanTier(data['tier']),
@@ -98,6 +105,9 @@ class SubscriptionService {
           );
           _latest = ent;
           _entitlement.add(ent);
+        } on FirebaseFunctionsException catch (e) {
+          if (isPurchaseInOtherFamily(e.message)) _setInOtherFamily(true);
+          debugPrint('verifyPurchase failed: ${e.code}');
         } catch (e) {
           debugPrint('verifyPurchase failed: $e');
         }
@@ -109,27 +119,27 @@ class SubscriptionService {
   void dispose() {
     _sub?.cancel();
     _entitlement.close();
+    _otherFamily.close();
   }
 }
 
-/// The family `verifyPurchase` moved this phone into (restore on a new phone), or `null`.
-/// Only a well-formed Firestore id is accepted.
-String? restoredFamilyId(Map<String, dynamic> data) {
-  final id = data['familyId'];
-  if (data['restored'] != true || id is! String) return null;
-  return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ? id : null;
-}
+/// `verifyPurchase` error message when the store subscription belongs to another family.
+const purchaseInOtherFamilyCode = 'purchase_in_other_family';
+
+bool isPurchaseInOtherFamily(String? message) => message == purchaseInOtherFamilyCode;
 
 final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
-  final s = SubscriptionService(
-    onFamilyRestored: (familyId) async {
-      if (ref.read(familyIdProvider) == familyId) return;
-      await ref.read(sharedPrefsProvider).setString('family.id', familyId);
-      ref.read(familyIdProvider.notifier).state = familyId; // repository + plan stream switch
-    },
-  );
+  final s = SubscriptionService();
   ref.onDispose(s.dispose);
   return s;
+});
+
+/// True when this phone's store subscription belongs to another Zad X family: the
+/// subscription screen then explains how to link this phone as a parent phone.
+final purchaseInOtherFamilyProvider = StreamProvider<bool>((ref) async* {
+  final service = ref.watch(subscriptionServiceProvider);
+  yield service.inOtherFamily;
+  yield* service.inOtherFamilyStream;
 });
 
 /// The latest plan the store + `verifyPurchase` confirmed in this session (`null` until then).

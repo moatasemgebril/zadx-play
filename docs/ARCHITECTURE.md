@@ -68,18 +68,23 @@ derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
   Free. Every new server answer (including "expired") is recorded in the cache once, by
   `entitlementRecorderProvider`.
 - **The raw store token is server-only.** Ownership lives in `purchases/{sha256(token)}` →
-  `familyId`; the raw token (for referral deferrals) in `families/{id}/private/billing`. Both
-  are closed to clients in firestore.rules. Old docs with a `purchaseToken` field are still read
-  and the field is removed on the next verification.
-- **Restore on a new phone.** A new install signs in anonymously and gets a new family. When
-  the store-verified token belongs to exactly one other family, `verifyPurchase` moves the
-  caller into it as a **parent** member (never `childDevices`) in one transaction, deletes the
-  caller's old family only if it is an empty install (else just leaves it), and returns
-  `{familyId, restored: true}`; the app saves `family.id` and switches `familyIdProvider` like
-  pairing does. Refused: a device bound to a child (`restore_child_device`), a token on several
-  families (`purchase_in_use`), and a phone whose own family already has another device linked
-  (`restore_family_in_use`). Rate limits: 3 joins/hour per user, 5/day per family; existing
-  parent devices get a push ("a new parent phone joined").
+  `familyId` (first attach uses a transaction with `create()`, so two racing first purchases
+  cannot both win); the raw token (for referral deferrals) in `families/{id}/private/billing`.
+  Both are closed to clients in firestore.rules. Existing family docs are migrated once with
+  `backend/functions/scripts/migrate-purchase-tokens.js` (run at deploy, see backend/README.md).
+- **Restore on a new phone = link it from an existing parent phone.** The store token is a
+  bearer secret (`restorePurchases()` gives it to any device on that store account, a child's
+  tablet included), so it never grants membership or the plan: a token held by another family
+  makes `verifyPurchase` fail with `purchase_in_other_family`, and the subscription screen
+  (behind the parent PIN) explains: on the other parent phone open Parent → Link devices →
+  "Add a parent phone", then enter the code here. `createPairingCode` target `parent` is
+  accepted only from a parent member (not `childDevices`), same 6 digits / 10 min / single use,
+  plus 5 parent codes per family per day. Redeeming it adds the phone to `members` and the
+  server-only `parentDevices` map; the phone's own family must be an untouched fresh install and
+  is deleted (otherwise `parent_link_family_in_use`, so no data is abandoned); a child-bound
+  device is refused (`child_device`). Existing parent phones get a push. The app saves
+  `family.id`, switches `familyIdProvider` and re-runs the store restore, which now attaches.
+  Removing a linked device is still open (BACKLOG P1-3).
 
 ## Platforms
 | Platform | Game locking | Everything else |

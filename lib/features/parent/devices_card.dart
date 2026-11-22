@@ -56,7 +56,11 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
           items: PairingTarget.values,
           selected: _target,
           columns: 2,
-          label: (t) => t == PairingTarget.phone ? l10n.pairPhone : l10n.computerTitle,
+          label: (t) => switch (t) {
+            PairingTarget.phone => l10n.pairPhone,
+            PairingTarget.windows => l10n.computerTitle,
+            PairingTarget.parent => l10n.pairParentPhone,
+          },
           onSelected: (t) => setState(() {
             _target = t;
             _code = null;

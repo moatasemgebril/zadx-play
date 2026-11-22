@@ -10,6 +10,7 @@ import 'package:zadx/services/billing/entitlement_cache.dart';
 import 'package:zadx/services/billing/subscription_service.dart';
 import 'package:zadx/services/billing/trial_clock.dart';
 import 'package:zadx/services/family/family_repository.dart';
+import 'package:zadx/services/family/pairing_service.dart';
 
 /// P0-A: the plan a parent bought (stored on families/{id} by `verifyPurchase`) must reach a
 /// child device that has no purchase of its own, through the 7-day offline grace cache.
@@ -180,11 +181,16 @@ void main() {
     });
   });
 
-  test('restoredFamilyId accepts only a restored, well-formed family id', () {
-    expect(restoredFamilyId({'restored': true, 'familyId': 'Fam_123-x'}), 'Fam_123-x');
-    expect(restoredFamilyId({'restored': false, 'familyId': 'Fam1'}), isNull);
-    expect(restoredFamilyId({'familyId': 'Fam1'}), isNull);
-    expect(restoredFamilyId({'restored': true, 'familyId': '../x'}), isNull);
-    expect(restoredFamilyId({'restored': true, 'familyId': 42}), isNull);
+  test('a subscription of another family is recognised (no auto-join, parent code instead)', () {
+    expect(isPurchaseInOtherFamily('purchase_in_other_family'), isTrue);
+    expect(isPurchaseInOtherFamily('purchase_in_use'), isFalse);
+    expect(isPurchaseInOtherFamily(null), isFalse);
+  });
+
+  test('a redeemed family id must be a well-formed Firestore id', () {
+    expect(isSafeFamilyId('Fam_123-x'), isTrue);
+    expect(isSafeFamilyId('../x'), isFalse);
+    expect(isSafeFamilyId(''), isFalse);
+    expect(isSafeFamilyId('a/b'), isFalse);
   });
 }

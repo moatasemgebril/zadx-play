@@ -63,6 +63,8 @@ service cloud.firestore {
       // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
+        // parentDevices {uid: linkedAt}: written only by redeemPairingCode (parent code).
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['parentDevices'])
         && (!('settings' in request.resource.data) || request.resource.data.settings is map)
         // Multi-child: child devices may only sync `settings`.
         && (isParent(familyId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings']));

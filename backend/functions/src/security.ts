@@ -266,50 +266,39 @@ export function tamperReasonsToAlert(
 }
 
 // ---------------------------------------------------------------------------
-// Purchase ownership + restore on a new phone (verifyPurchase)
+// Purchase ownership (verifyPurchase) + linking a parent phone (redeemPairingCode)
 // ---------------------------------------------------------------------------
 
 export type PurchaseOwnerDecision =
   /** Token unused, or already this caller's family: store the entitlement on the caller's family. */
   | { action: "attach" }
-  /** Token belongs to exactly one other family: move the caller into it as a PARENT device. */
-  | { action: "join"; familyId: string }
-  | { action: "reject"; reason: "purchase_in_use" | "child_device" };
+  | { action: "reject"; reason: "purchase_in_other_family" | "purchase_in_use" };
 
 /**
- * Who may use a store-verified purchase token. Call it only AFTER the store confirmed the token
- * is an active subscription: Google Play hands the token only to devices signed in to the store
- * account that bought it, so holding a valid token proves the caller holds that account.
- * A device bound to a child (`childDevices`) can never take the parent role this way.
+ * Who may use a store-verified purchase token. The token is a bearer secret (any device signed
+ * in to the paying store account gets it from restorePurchases(), a child's tablet included), so
+ * it NEVER grants membership: a token held by another family is refused and the app asks the
+ * parent to link this phone from an existing parent phone (parent pairing code).
  */
 export function purchaseOwnerDecision(input: {
   callerFamilyId: string;
-  callerIsChildDevice: boolean;
   holderFamilyIds: readonly string[];
 }): PurchaseOwnerDecision {
   const holders = [...new Set(input.holderFamilyIds)];
   const others = holders.filter((id) => id !== input.callerFamilyId);
   if (others.length === 0) return { action: "attach" };
-  // Ambiguous ownership (token on several families, e.g. legacy data): never guess.
-  if (holders.length > 1) return { action: "reject", reason: "purchase_in_use" };
-  if (input.callerIsChildDevice) return { action: "reject", reason: "child_device" };
-  if (!isSafeId(others[0])) return { action: "reject", reason: "purchase_in_use" };
-  return { action: "join", familyId: others[0] };
+  // Exactly one other family: the restore case on a new phone. More: shared/legacy data.
+  return { action: "reject", reason: holders.length === 1 ? "purchase_in_other_family" : "purchase_in_use" };
 }
 
 /** Fields a brand-new, unused family may hold (firestore.rules `create` + saveSettings). */
 const FRESH_FAMILY_KEYS: readonly string[] = ["members", "createdAt", "settings"];
 
-export type OldFamilyAction = "delete" | "leave" | "reject";
-
 /**
- * What happens to the caller's own (new-install) family when it joins the purchasing family:
- * * "reject": another device is linked to it (leaving would orphan that device), or the caller
- *   is a child device there.
- * * "delete": only the caller, and no child profiles, devices, plan or referral data (an empty
- *   fresh install).
- * * "leave": only the caller, but it holds data: the caller is removed from `members` and the
- *   data is left untouched (no client can read it any more).
+ * A phone that redeems a PARENT code leaves its own family. Allowed only when that family is an
+ * untouched fresh install (only this phone, no child profiles, devices, plan or referral data):
+ * it is then deleted, so no data is left behind in a family nobody can open. Anything else is
+ * refused ("reject"); the parent links the phone before setting it up.
  */
 export function oldFamilyAction(input: {
   uid: string;
@@ -318,11 +307,22 @@ export function oldFamilyAction(input: {
   keys: readonly string[];
   hasChildren: boolean;
   hasDevices: boolean;
-}): OldFamilyAction {
+}): "delete" | "reject" {
   if (!Array.isArray(input.members) || input.members.some((m) => m !== input.uid)) return "reject";
   const map = input.childDevices && typeof input.childDevices === "object" ? (input.childDevices as Record<string, unknown>) : {};
   if (Object.prototype.hasOwnProperty.call(map, input.uid)) return "reject";
-  if (input.hasChildren || input.hasDevices) return "leave";
-  if (input.keys.some((k) => !FRESH_FAMILY_KEYS.includes(k))) return "leave";
+  if (input.hasChildren || input.hasDevices) return "reject";
+  if (input.keys.some((k) => !FRESH_FAMILY_KEYS.includes(k))) return "reject";
   return "delete";
+}
+
+/**
+ * One-off migration (scripts/migrate-purchase-tokens.js): a family doc that still carries the
+ * raw `purchaseToken` moves it to private/billing + purchases/{sha256}. If purchases/{sha256}
+ * already names ANOTHER family the doc is left alone and reported ("conflict") for a human.
+ */
+export function tokenMigrationAction(familyId: string, token: unknown, ownerFamilyId: unknown): "skip" | "move" | "conflict" {
+  if (typeof token !== "string" || token.length === 0) return "skip";
+  if (ownerFamilyId !== undefined && ownerFamilyId !== null && ownerFamilyId !== familyId) return "conflict";
+  return "move";
 }
