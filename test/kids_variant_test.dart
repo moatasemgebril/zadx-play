@@ -308,7 +308,22 @@ void main() {
         _expectNeutral('reading', t.ar);
         _expectNeutral('reading', t.en);
         expect(arabic.hasMatch(t.en), isFalse, reason: t.en);
+        // Zad X Kids shows the stories in US English (Localized.of -> kidsUsEnglish).
+        expect(britishWordsIn(t.enKids), isEmpty, reason: t.enKids);
       }
+    });
+
+    test('reading stories: US English in Kids, British English kept for Zad X Play', () {
+      final classmate = storyById('new_classmate')!;
+      final play = classmate.paragraphs.map((p) => p.en).join(' ');
+      final kids = classmate.paragraphs.map((p) => p.enKids).join(' ');
+      expect(play, contains('break time'));
+      expect(kids, isNot(contains('break time')));
+      expect(kids, contains('recess'));
+      expect(kids, contains('first day of school'));
+      expect(storyById('broken_vase')!.paragraphs.map((p) => p.enKids).join(' '), contains('Mom'));
+      // What the Kids build really renders.
+      expect(classmate.paragraphs.first.of('en'), kIsKids ? classmate.paragraphs.first.enKids : classmate.paragraphs.first.en);
     });
 
     test('schedules replace prayer locks', () {

@@ -9,8 +9,10 @@ import '../../core/utils/formatters.dart';
 import '../../data/catalog/reading_stories.dart';
 import '../../data/models/family_task.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/family/children_controller.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../tasks/wallet_controller.dart';
+import 'reading_timer_store.dart';
 
 /// Child-facing screen for a reading homework task ([TaskKind.reading]).
 ///
@@ -290,6 +292,10 @@ class _OptionButton extends StatelessWidget {
 
 /// Paper-book flow: a calm countdown, then the child hands the task in for the parent.
 /// The child cannot hand it in before the time is up.
+///
+/// The time read is kept per child and task for the day ([ReadingTimerStore]): leaving the
+/// screen or Zad X pauses the timer instead of resetting it, and it continues from there. It only
+/// counts while this screen is open and Zad X is in the foreground.
 class PaperBookReading extends ConsumerStatefulWidget {
   const PaperBookReading({super.key, required this.task, required this.status});
 
@@ -306,48 +312,76 @@ class _PaperBookReadingState extends ConsumerState<PaperBookReading> {
   late int _left;
   bool _handedIn = false;
 
+  // Saved progress (read in initState: `ref` must not be used in dispose).
+  late final ReadingTimerStore _store;
+  late final String _childId;
+  late ReadingTimerProgress _progress;
+  late final AppLifecycleListener _lifecycle;
+
   @override
   void initState() {
     super.initState();
     final minutes = widget.task.readingMinutes ?? 15;
     _total = minutes.clamp(1, 120) * 60;
-    _left = _total;
+    _store = ref.read(readingTimerStoreProvider);
+    _childId = ref.read(activeChildIdProvider);
+    _progress = _store.load(_childId, widget.task.id, ref.read(walletProvider).day);
+    _left = (_total - _progress.seconds).clamp(0, _total);
+    // Zad X hidden (home button, another app, screen off): pause, never count time away.
+    _lifecycle = AppLifecycleListener(onHide: _pause);
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _lifecycle.dispose();
+    _pause(rebuild: false);
     super.dispose();
   }
 
   bool get _running => _timer != null;
 
-  void _toggle() {
-    if (_running) {
-      _timer!.cancel();
-      setState(() => _timer = null);
-      return;
-    }
+  void _save() => unawaited(_store.save(_childId, widget.task.id, _progress));
+
+  void _pause({bool rebuild = true}) {
+    final wasRunning = _timer != null;
+    _timer?.cancel();
+    _timer = null;
+    if (!wasRunning) return;
+    _progress = _progress.copyWith(running: false);
+    _save();
+    if (rebuild && mounted) setState(() {});
+  }
+
+  void _start() {
+    if (_running || _left <= 0) return;
+    _progress = _progress.copyWith(running: true, startedAtMs: _progress.startedAtMs ?? DateTime.now().millisecondsSinceEpoch);
+    _save();
     setState(() {
       _timer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (!mounted) return;
         setState(() {
           _left--;
+          _progress = _progress.copyWith(seconds: (_total - _left).clamp(0, _total));
           if (_left <= 0) {
             _left = 0;
             t.cancel();
             _timer = null;
+            _progress = _progress.copyWith(running: false);
           }
         });
+        _save();
       });
     });
   }
+
+  void _toggle() => _running ? _pause() : _start();
 
   void _handIn() {
     if (_left > 0) return;
     if (ref.read(walletProvider).progressOf(widget.task.id).status == TaskStatus.todo) {
       ref.read(walletProvider.notifier).submit(widget.task.id);
     }
+    unawaited(_store.clear(_childId, widget.task.id));
     setState(() => _handedIn = true);
   }
 

@@ -6,7 +6,7 @@ abstract final class IslamicBrand {
 
   /// Who Zad X Play is for (owner request 2026-11-22): shown on the launch splash and in Help,
   /// in both languages. Short and dignified; never used in Zad X Kids.
-  static const identityAr = 'لأطفال المسلمين';
+  static const identityAr = 'للأطفال المسلمين';
   static const identityEn = 'For Muslim Kids';
 
   /// The identity line in [lang] (Arabic unless English).

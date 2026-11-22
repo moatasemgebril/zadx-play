@@ -8,7 +8,9 @@ import 'package:zadx/features/prayer/prayer_calculator.dart';
 import 'package:zadx/features/prayer/prayer_providers.dart';
 import 'package:zadx/features/reading/reading_screen.dart';
 import 'package:zadx/features/reading/reading_tasks.dart';
+import 'package:zadx/features/reading/reading_timer_store.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
+import 'package:zadx/services/family/children_controller.dart';
 import 'package:zadx/features/tasks/wallet_controller.dart';
 import 'package:zadx/l10n/app_localizations.dart';
 
@@ -210,6 +212,87 @@ void main() {
     expect(c.read(walletProvider).progressOf(ReadingTasks.bookId).status, TaskStatus.pending);
 
     await tester.pumpWidget(const SizedBox());
+  });
+
+  group('paper-book timer is kept per child and task', () {
+    test('store: per child + task, a new day starts at zero, a running timer comes back paused', () async {
+      SharedPreferences.setMockInitialValues({});
+      final store = ReadingTimerStore(await SharedPreferences.getInstance());
+      const day = '2026-11-20';
+      expect(store.load('child-1', 'reading_book', day), const ReadingTimerProgress(day: day));
+
+      await store.save('child-1', 'reading_book', const ReadingTimerProgress(day: day, seconds: 125, running: true, startedAtMs: 7));
+      final back = store.load('child-1', 'reading_book', day);
+      expect(back.seconds, 125);
+      expect(back.running, isFalse, reason: 'time while Zad X was closed is never counted');
+      expect(back.startedAtMs, 7);
+
+      expect(store.load('child-2', 'reading_book', day).seconds, 0, reason: 'another child has its own timer');
+      expect(store.load('child-1', 'other_task', day).seconds, 0);
+      expect(store.load('child-1', 'reading_book', '2026-11-21').seconds, 0, reason: 'a new day starts again');
+
+      await store.clear('child-1', 'reading_book');
+      expect(store.load('child-1', 'reading_book', day).seconds, 0);
+      expect(ReadingTimerProgress.fromJson({'day': day, 'seconds': -4}), isNull);
+      expect(ReadingTimerProgress.fromJson('junk'), isNull);
+    });
+
+    testWidgets('leaving the screen keeps the time read (paused), coming back continues', (tester) async {
+      final c = await makeContainer();
+      c.read(walletProvider.notifier).upsertTask(ReadingTasks.book(10));
+      await pumpReading(tester, c, ReadingTasks.bookId);
+
+      await tapNow(tester, 'readingTimerButton'); // start
+      await tester.pump(const Duration(minutes: 2));
+      await tester.pump();
+      expect(find.text('08:00'), findsOneWidget);
+
+      // The child leaves the screen (or Zad X is closed), then comes back.
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(minutes: 5));
+      await pumpReading(tester, c, ReadingTasks.bookId);
+      expect(find.text('08:00'), findsOneWidget, reason: 'not reset, and the time away is not counted');
+      expect(find.text('Keep reading'), findsOneWidget);
+
+      await tapNow(tester, 'readingTimerButton');
+      await tester.pump(const Duration(minutes: 8));
+      await tester.pump();
+      expect(find.text('00:00'), findsOneWidget);
+      await tapKey(tester, 'readingSendButton');
+      expect(c.read(walletProvider).progressOf(ReadingTasks.bookId).status, TaskStatus.pending);
+      final prefs = c.read(sharedPrefsProvider);
+      expect(prefs.getKeys().where((k) => k.startsWith('reading.timer.')), isEmpty, reason: 'cleared after hand-in');
+
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('Zad X in the background pauses the timer', (tester) async {
+      final c = await makeContainer();
+      c.read(walletProvider.notifier).upsertTask(ReadingTasks.book(10));
+      await pumpReading(tester, c, ReadingTasks.bookId);
+
+      await tapNow(tester, 'readingTimerButton');
+      await tester.pump(const Duration(minutes: 1));
+      await tester.pump();
+      expect(find.text('09:00'), findsOneWidget);
+
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(minutes: 4));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(find.text('09:00'), findsOneWidget);
+      expect(find.text('Keep reading'), findsOneWidget);
+      // Saved for the active child as paused, with the minute read.
+      final saved = c.read(readingTimerStoreProvider).load(c.read(activeChildIdProvider), ReadingTasks.bookId, c.read(walletProvider).day);
+      expect(saved.seconds, 60);
+      expect(saved.running, isFalse);
+
+      await tester.pumpWidget(const SizedBox());
+    });
   });
 
   testWidgets('Arabic: right-to-left with Arabic digits; already handed-in task shows its status', (tester) async {

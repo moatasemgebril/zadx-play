@@ -183,10 +183,15 @@ default platform font (no font download). Native splash colour `#0A225E` (Androi
 `values*/styles.xml`; iOS `LaunchScreen.storyboard`) = `AppColors.navy`, so there is no white flash.
 Variant-aware (docs/decisions/ZADX-KIDS-VARIANT.md): the logo always comes from `BrandLogo`.
 **Zad X Play** shows the logo, "Zad X" and the identity line `IslamicBrand.identityAr/En`
-("لأطفال المسلمين" / "For Muslim Kids", also in Help → About); screen-reader label "Zad X — <line>".
+("للأطفال المسلمين" / "For Muslim Kids", also in Help → About); screen-reader label "Zad X — <line>".
 **Zad X Kids** shows only the Latin "ZAD X KIDS" wordmark on a white badge over a navy → teal sky with
 sun-yellow and coral light: no Arabic, no religious line, no artwork logo; label "Zad X Kids". Both start
 from the native navy. The splash source holds no Arabic text (checked by test/kids_artwork_test.dart).
+Never stuck (review fix 2026-11-22): `main()` wraps start-up (`startUpApp()`) in try/catch and calls
+`splash.fail(...)` on an error; network steps (Firebase, family setup, notifications) time out after 5 s
+and fall back to local mode. If start-up failed or is not done after `LaunchSplash.maxHold` (6 s), the
+splash hands over to `StartupFallback` (lib/features/startup/: friendly message + a 56 dp "Try again"
+that re-runs `startUpApp`; English only in Zad X Kids); a late app still replaces it.
 
 ## Reading homework (owner request 2026-11-22)
 Task kind `reading` (`TaskDefinition.readingMode` story | paperBook, `readingLevel`, `readingMinutes`).
@@ -195,7 +200,11 @@ picks the level (5–7, 8–10, 11–12) or minutes (10/15/20). The child opens 
 - **Story:** original offline stories in `lib/data/catalog/reading_stories.dart` (general/ethical themes
   only: no Quran, hadith or rulings, so no scholar review; a test enforces it), then 2–3 multiple-choice
   questions; a wrong answer just asks to try again.
-- **Paper book:** calm countdown with pause; "Send to my parent" appears only when time is up.
+- **Paper book:** calm countdown with pause; "Send to my parent" appears only when time is up. The time
+  read is saved per child, task and day (`ReadingTimerStore`, local prefs only), counted tick by tick
+  (never from the wall clock); leaving the screen or Zad X going to the background pauses it, and it
+  continues from there. Cleared after hand-in.
+- **Zad X Kids:** the stories' English is shown in US English (`kidsUsEnglish` via `Localized.of`).
 Both end with `WalletController.submit` → `pending`; the reward is earned only when the parent approves
 (same PIN-protected approvals as every task). Gated by `AppFeature.tasksRewards` (Basic/Plus), like the
 rest of tasks. No network, microphone, camera or new permissions.

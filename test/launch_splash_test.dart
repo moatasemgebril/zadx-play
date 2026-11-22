@@ -1,5 +1,5 @@
 // Launch splash, one per app (docs/decisions/ZADX-KIDS-VARIANT.md):
-// * Zad X Play: logo + "Zad X" + the identity line "لأطفال المسلمين" / "For Muslim Kids";
+// * Zad X Play: logo + "Zad X" + the identity line "للأطفال المسلمين" / "For Muslim Kids";
 // * Zad X Kids: the Latin "ZAD X KIDS" wordmark only (no Arabic, no religious line, no artwork logo).
 //
 // Runs in both builds: `flutter test` and
@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zadx/core/app_config.dart';
 import 'package:zadx/core/app_variant.dart';
 import 'package:zadx/features/splash/launch_splash.dart';
+import 'package:zadx/features/startup/startup_fallback.dart';
 
 /// Arabic script blocks: Arabic, Supplement, Extended-A, Presentation Forms A and B.
 final _arabic = RegExp('[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]');
@@ -35,10 +36,13 @@ void _reduceMotion(WidgetTester tester) {
 void main() {
   group('brand identity text', () {
     test('Zad X Play says it is for Muslim kids, in Arabic and English, within store limits', () {
-      expect(IslamicBrand.identityAr, 'لأطفال المسلمين');
+      expect(IslamicBrand.identityAr, 'للأطفال المسلمين');
       expect(IslamicBrand.identityEn, 'For Muslim Kids');
       expect(IslamicBrand.identityFor('ar'), IslamicBrand.identityAr);
       expect(IslamicBrand.identityFor('en'), IslamicBrand.identityEn);
+      // One Arabic wording everywhere (splash, Help, store), matching "For Muslim Kids".
+      expect(IslamicBrand.storeSubtitleAr, startsWith(IslamicBrand.identityAr));
+      expect(IslamicBrand.storeShortDescriptionAr, startsWith(IslamicBrand.identityAr));
       for (final s in [IslamicBrand.storeSubtitleAr, IslamicBrand.storeShortDescriptionAr]) {
         expect(s, contains('المسلمين'), reason: s);
       }
@@ -62,7 +66,7 @@ void main() {
       expect(LaunchSplash.semanticsLabel(AppVariant.kids, 'ar'), 'Zad X Kids');
       if (!kIsKids) {
         expect(LaunchSplash.semanticsLabel(AppVariant.islamic, 'en'), 'Zad X — For Muslim Kids');
-        expect(LaunchSplash.semanticsLabel(AppVariant.islamic, 'ar'), 'Zad X — لأطفال المسلمين');
+        expect(LaunchSplash.semanticsLabel(AppVariant.islamic, 'ar'), 'Zad X — للأطفال المسلمين');
       } else {
         // The Kids build never shows the Zad X Play splash, whatever is asked.
         expect(LaunchSplash.semanticsLabel(AppVariant.islamic, 'ar'), 'Zad X Kids');
@@ -206,5 +210,95 @@ void main() {
     expect(find.bySemanticsLabel(label), findsNothing);
     expect(find.text('APP'), findsOneWidget);
     semantics.dispose();
+  });
+
+  group('start-up never leaves the splash up forever', () {
+    for (final variant in [AppVariant.islamic, AppVariant.kids]) {
+      final shown = kIsKids ? AppVariant.kids : variant;
+      testWidgets('a start-up error shows a friendly retry screen, retry starts the app (${variant.name})', (tester) async {
+        _reduceMotion(tester);
+        var attempts = 0;
+        Future<Widget> retry() async {
+          attempts++;
+          return const _FakeApp();
+        }
+
+        await tester.pumpWidget(LaunchSplashHost(
+          app: Future<Widget>.error(StateError('prefs broken')),
+          retry: retry,
+          variant: variant,
+          language: 'ar',
+        ));
+        await tester.pump();
+        await tester.pump(LaunchSplash.reducedMotionHold);
+        await tester.pump();
+
+        final lang = StartupText.languageFor(shown, 'ar');
+        expect(find.text(StartupText.failedTitle.of(lang)), findsOneWidget);
+        expect(find.text('APP'), findsNothing);
+        if (shown == AppVariant.kids) {
+          expect(lang, 'en');
+          expect(_renderedText(tester).where(_arabic.hasMatch), isEmpty, reason: 'no Arabic in Zad X Kids');
+        }
+        // The retry button is big enough for small fingers.
+        final button = find.widgetWithText(FilledButton, StartupText.retry.of(lang));
+        expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+
+        await tester.tap(button);
+        await tester.pumpAndSettle();
+        expect(attempts, 1);
+        expect(find.text('APP'), findsOneWidget);
+        expect(find.text(StartupText.failedTitle.of(lang)), findsNothing);
+      });
+    }
+
+    testWidgets('slow start-up: after the max hold a "taking longer" screen, then the app when ready', (tester) async {
+      _reduceMotion(tester);
+      final app = Completer<Widget>();
+      await tester.pumpWidget(LaunchSplashHost(app: app.future, language: 'en', maxHold: const Duration(seconds: 6)));
+      await tester.pump(const Duration(seconds: 5));
+      final lang = StartupText.languageFor(appVariant, 'en');
+      expect(find.text(StartupText.slowTitle.of(lang)), findsNothing, reason: 'still inside the max hold');
+
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      expect(find.text(StartupText.slowTitle.of(lang)), findsOneWidget);
+      // No retry callback given: no button.
+      expect(find.byType(FilledButton), findsNothing);
+
+      app.complete(const _FakeApp());
+      await tester.pumpAndSettle();
+      expect(find.text('APP'), findsOneWidget);
+      expect(find.text(StartupText.slowTitle.of(lang)), findsNothing);
+    });
+
+    testWidgets('a failing retry shows the error screen again', (tester) async {
+      _reduceMotion(tester);
+      await tester.pumpWidget(LaunchSplashHost(
+        app: Future<Widget>.error(Exception('offline')),
+        retry: () => Future<Widget>.error(Exception('still offline')),
+        language: 'en',
+      ));
+      await tester.pump();
+      await tester.pump(LaunchSplash.reducedMotionHold);
+      await tester.pump();
+      final lang = StartupText.languageFor(appVariant, 'en');
+      await tester.tap(find.widgetWithText(FilledButton, StartupText.retry.of(lang)));
+      await tester.pumpAndSettle();
+      expect(find.text(StartupText.failedTitle.of(lang)), findsOneWidget);
+      expect(find.text('APP'), findsNothing);
+    });
+
+    test('the max hold is a few seconds', () {
+      expect(LaunchSplash.maxHold, lessThanOrEqualTo(const Duration(seconds: 6)));
+      expect(LaunchSplash.maxHold, greaterThan(LaunchSplash.revealDuration + LaunchSplash.exitDuration));
+    });
+
+    test('LaunchSplashHandle.fail completes the app future with the error', () async {
+      final handle = LaunchSplashHandle();
+      handle.fail(StateError('x'));
+      await expectLater(handle.app, throwsStateError);
+      handle.complete(const _FakeApp()); // ignored after the first result
+    });
   });
 }

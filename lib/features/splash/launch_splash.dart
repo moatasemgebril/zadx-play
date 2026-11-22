@@ -7,6 +7,7 @@ import '../../core/app_variant.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/brand_logo.dart';
 import '../settings/settings_controller.dart' show defaultLanguageFor;
+import '../startup/startup_fallback.dart';
 
 /// Brand launch screen, shown while the start-up work in `main()` runs. One per app:
 ///
@@ -28,6 +29,9 @@ import '../settings/settings_controller.dart' show defaultLanguageFor;
 ///   for [reducedMotionHold] and then the app appears without a fade.
 /// * Bundled assets and the platform default font only: no network, no runtime font download.
 /// * Screen readers hear one label: "Zad X Kids", or "Zad X — <identity line>" in Zad X Play.
+/// * Never stuck: if start-up fails ([LaunchSplashHandle.fail]) or is not done after [maxHold],
+///   the splash hands over to [StartupFallback] (friendly message + "Try again"); the app replaces
+///   it as soon as it is ready.
 class LaunchSplash {
   const LaunchSplash._();
 
@@ -38,28 +42,43 @@ class LaunchSplash {
   static const exitDuration = Duration(milliseconds: 300);
   static const reducedMotionHold = Duration(milliseconds: 500);
 
+  /// Longest time the splash waits for start-up before showing [StartupFallback].
+  static const maxHold = Duration(seconds: 6);
+
   /// Screen-reader label of the splash for [variant] in [lang].
   static String semanticsLabel(AppVariant variant, String lang) => !kIsKids && variant == AppVariant.islamic
       ? '${AppConfig.brandName} — ${IslamicBrand.identityFor(lang)}'
       : KidsBrand.storeName;
 
   /// Shows the splash right away (`runApp`) and returns a handle. Hand the real app to
-  /// [LaunchSplashHandle.complete] once start-up is done.
-  static LaunchSplashHandle show() {
+  /// [LaunchSplashHandle.complete] once start-up is done, or the error to
+  /// [LaunchSplashHandle.fail]. [retry] runs start-up again from the fallback's "Try again".
+  static LaunchSplashHandle show({Future<Widget> Function()? retry}) {
     final handle = LaunchSplashHandle();
-    runApp(LaunchSplashHost(app: handle.app));
+    runApp(LaunchSplashHost(app: handle.app, retry: retry));
     return handle;
   }
 }
 
-/// Passes the real app to the splash when start-up is done.
+/// Passes the real app (or the start-up error) to the splash.
 class LaunchSplashHandle {
+  LaunchSplashHandle() {
+    // The host listens a frame later (runApp attaches the root asynchronously): an early failure
+    // must not be reported as an unhandled error meanwhile.
+    _app.future.ignore();
+  }
+
   final _app = Completer<Widget>();
 
   Future<Widget> get app => _app.future;
 
   void complete(Widget app) {
     if (!_app.isCompleted) _app.complete(app);
+  }
+
+  /// Start-up failed: the splash shows [StartupFallback] instead of waiting forever.
+  void fail(Object error, [StackTrace? stackTrace]) {
+    if (!_app.isCompleted) _app.completeError(error, stackTrace);
   }
 }
 
@@ -74,9 +93,19 @@ class LaunchSplashHost extends StatefulWidget {
     this.revealDuration = LaunchSplash.revealDuration,
     this.exitDuration = LaunchSplash.exitDuration,
     this.reducedMotionHold = LaunchSplash.reducedMotionHold,
+    this.maxHold = LaunchSplash.maxHold,
+    this.retry,
   });
 
+  /// The app once start-up is done; an error shows [StartupFallback].
   final Future<Widget> app;
+
+  /// Runs start-up again ("Try again" on the fallback). Null: no button.
+  final Future<Widget> Function()? retry;
+
+  /// After this long without an app, [StartupFallback] is shown (the app still replaces it when
+  /// it arrives).
+  final Duration maxHold;
 
   /// Which app's splash (default: this build; the Kids build always shows the Kids splash).
   final AppVariant variant;
@@ -97,30 +126,97 @@ class _LaunchSplashHostState extends State<LaunchSplashHost> {
   static const _appKey = ValueKey('zadx-app');
   static const _splashKey = ValueKey('zadx-splash');
 
+  static const _fallbackKey = ValueKey('zadx-startup-fallback');
+
   Widget? _app;
   bool _splashDone = false;
+  StartupProblem? _problem;
+  bool _retrying = false;
+  Timer? _maxHold;
+  int _attempt = 0;
 
   @override
   void initState() {
     super.initState();
-    widget.app.then((app) {
-      if (mounted) setState(() => _app = app);
+    _wait(widget.app);
+  }
+
+  /// Waits for one start-up attempt; a newer attempt makes an older result irrelevant, except
+  /// that any finished app is always taken.
+  void _wait(Future<Widget> attempt) {
+    final id = ++_attempt;
+    _maxHold?.cancel();
+    _maxHold = Timer(widget.maxHold, () {
+      if (!mounted || _app != null || id != _attempt) return;
+      // Also ends a retry that hangs: the button can be pressed again.
+      setState(() {
+        _problem = StartupProblem.slow;
+        _retrying = false;
+      });
     });
+    attempt.then((app) {
+      if (!mounted || _app != null) return;
+      _maxHold?.cancel();
+      setState(() {
+        _app = app;
+        _problem = null;
+        _retrying = false;
+      });
+    }, onError: (Object e, StackTrace st) {
+      debugPrint('start-up failed: $e');
+      if (!mounted || _app != null || id != _attempt) return;
+      _maxHold?.cancel();
+      setState(() {
+        _problem = StartupProblem.failed;
+        _retrying = false;
+      });
+    });
+  }
+
+  void _onRetry() {
+    final retry = widget.retry;
+    if (retry == null || _retrying) return;
+    setState(() => _retrying = true);
+    Future<Widget> next;
+    try {
+      next = retry();
+    } catch (e, st) {
+      next = Future<Widget>.error(e, st);
+    }
+    _wait(next);
+  }
+
+  @override
+  void dispose() {
+    _maxHold?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final app = _app;
     final variant = kIsKids ? AppVariant.kids : widget.variant;
-    final lang = widget.language ??
-        defaultLanguageFor(variant, WidgetsBinding.instance.platformDispatcher.locale.languageCode);
+    final deviceLanguage = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
+    final lang = widget.language ?? defaultLanguageFor(variant, deviceLanguage);
+    final problem = app == null ? _problem : null;
     return Stack(
       alignment: Alignment.center,
       fit: StackFit.expand,
       children: [
         if (app != null)
           // Hidden from screen readers while the splash covers it.
-          ExcludeSemantics(key: _appKey, excluding: !_splashDone, child: app),
+          ExcludeSemantics(key: _appKey, excluding: !_splashDone, child: app)
+        else if (problem != null)
+          ExcludeSemantics(
+            key: _fallbackKey,
+            excluding: !_splashDone,
+            child: StartupFallback(
+              problem: problem,
+              lang: StartupText.languageFor(variant, widget.language ?? deviceLanguage),
+              onRetry: widget.retry == null ? null : _onRetry,
+              retrying: _retrying,
+            ),
+          ),
         if (!_splashDone)
           MediaQuery.fromView(
             key: _splashKey,
@@ -131,7 +227,8 @@ class _LaunchSplashHostState extends State<LaunchSplashHost> {
               child: _SplashStage(
                 variant: variant,
                 label: LaunchSplash.semanticsLabel(variant, lang),
-                appReady: app != null,
+                // Leave for the app, or for the fallback when start-up failed / is too slow.
+                appReady: app != null || problem != null,
                 revealDuration: widget.revealDuration,
                 exitDuration: widget.exitDuration,
                 reducedMotionHold: widget.reducedMotionHold,

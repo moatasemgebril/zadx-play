@@ -15,10 +15,26 @@ import 'services/family/family_repository.dart';
 import 'services/family/firestore_family_repository.dart';
 import 'services/notifications/prayer_notification_service.dart';
 
+/// Network steps of start-up never hold the app longer than this (offline phones start locally).
+const _networkStepTimeout = Duration(seconds: 5);
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Brand splash first; the start-up work below runs while it plays (features/splash/).
-  final splash = LaunchSplash.show();
+  // Brand splash first; the start-up work below runs while it plays (features/splash/). If it
+  // throws, the splash shows a friendly "Try again" screen instead of staying up forever.
+  final splash = LaunchSplash.show(retry: startUpApp);
+  try {
+    splash.complete(await startUpApp());
+  } catch (e, st) {
+    debugPrint('start-up failed: $e');
+    splash.fail(e, st);
+  }
+}
+
+/// Everything the app needs before its first screen. Safe to run again (the "Try again" button).
+/// Optional services (Firebase, family sync, notifications, purchases) fail soft: the app then
+/// starts in local mode. Only a failure of local storage is fatal (the fallback screen).
+Future<Widget> startUpApp() async {
   tzdata.initializeTimeZones();
 
   final prefs = await SharedPreferences.getInstance();
@@ -27,7 +43,7 @@ Future<void> main() async {
   // GoogleService-Info.plist the app runs in single-device (local) mode.
   var firebaseReady = false;
   try {
-    await Firebase.initializeApp();
+    if (Firebase.apps.isEmpty) await Firebase.initializeApp().timeout(_networkStepTimeout);
     firebaseReady = true;
   } catch (e) {
     debugPrint('Firebase not configured, running locally: $e');
@@ -36,7 +52,7 @@ Future<void> main() async {
   String? familyId = prefs.getString('family.id');
   if (firebaseReady) {
     try {
-      familyId = await FirestoreFamilyRepository.ensureFamily(familyId);
+      familyId = await FirestoreFamilyRepository.ensureFamily(familyId).timeout(_networkStepTimeout);
       await prefs.setString('family.id', familyId);
     } catch (e) {
       debugPrint('Family setup failed, staying local: $e');
@@ -50,13 +66,17 @@ Future<void> main() async {
     familyIdProvider.overrideWith((_) => familyId),
   ]);
 
-  // Adhan notifications: Zad X Play only (Zad X Kids has no prayer times).
+  // Adhan notifications: Zad X Play only (Zad X Kids has no prayer times). Not fatal.
   if (!kIsKids && AppPlatform.canScheduleNotifications) {
-    await container.read(prayerNotificationServiceProvider).init();
+    try {
+      await container.read(prayerNotificationServiceProvider).init().timeout(_networkStepTimeout);
+    } catch (e) {
+      debugPrint('Notifications init failed: $e');
+    }
   }
   if (firebaseReady && AppPlatform.canPurchase) {
     container.read(subscriptionServiceProvider).init().catchError((Object e) => debugPrint('IAP init: $e'));
   }
 
-  splash.complete(UncontrolledProviderScope(container: container, child: const ZadXApp()));
+  return UncontrolledProviderScope(container: container, child: const ZadXApp());
 }
