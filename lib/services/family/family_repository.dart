@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/child_profile.dart';
-import '../../data/models/plan.dart';
 import 'firestore_family_repository.dart';
+import '../../data/models/plan.dart';
 
 /// Snapshot of a child's day that both the child and parent devices share.
 class FamilyDay {
@@ -80,6 +80,11 @@ abstract class FamilyRepository {
   /// [day] is the date in the family's city (yyyy-MM-dd).
   Stream<FamilyDay> watchDay(String childId, String day);
 
+  /// The family's server-written plan ([parseFamilyEntitlement]), emitted only for snapshots
+  /// confirmed by the server (never from the offline cache: offline, the app relies on the
+  /// EntitlementCache grace instead). Emits nothing for local-only.
+  Stream<Entitlement> watchEntitlement();
+
   Future<void> saveDay(String childId, FamilyDay day);
 
   /// Settings other devices need (city, method, controlled games for Windows Guard).
@@ -97,11 +102,6 @@ abstract class FamilyRepository {
   /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
   /// `accessibility_off`. The backend alerts the parent devices once per new reason.
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
-
-  /// The family's server-written plan ([parseFamilyEntitlement]), emitted only for snapshots
-  /// confirmed by the server (never from the offline cache: offline, the app relies on the
-  /// EntitlementCache grace instead). Emits nothing for local-only.
-  Stream<Entitlement> watchEntitlement();
 }
 
 class LocalFamilyRepository implements FamilyRepository {

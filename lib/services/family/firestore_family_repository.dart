@@ -4,8 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/backend.dart';
 import '../../data/models/child_profile.dart';
-import '../../data/models/plan.dart';
 import 'family_repository.dart';
+import '../../data/models/plan.dart';
 
 /// Firestore layout (see backend/firestore.rules):
 ///

@@ -21,9 +21,11 @@ import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
   HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, heartbeatAction, hexDigestEquals,
-  isPairingCode, isSafeId, normaliseReferralCode, oldFamilyAction, parseProtectionReport, planAllows, protectionAlertText,
-  purchaseOwnerDecision, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
+  isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
+  rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
+// Restore on a new phone (verifyPurchase).
+import { oldFamilyAction, purchaseOwnerDecision } from "./security";
 
 initializeApp();
 const db = getFirestore();

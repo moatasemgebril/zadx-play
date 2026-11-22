@@ -175,21 +175,6 @@ test("heartbeatAction deletes orphans and old docs, alerts once", () => {
   assert.equal(s.heartbeatAction({ ...ok, lastSeenMs: "x", staleAlerted: false }, now), "delete");
 });
 
-test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
-  const now = Date.UTC(2026, 10, 21);
-  const first = s.tamperReasonsToAlert([], ["accessibility_off"], undefined, now);
-  assert.deepEqual(first.reasons, ["accessibility_off"]);
-  // Turned back on, then off again 10 minutes later: no second push.
-  const again = s.tamperReasonsToAlert([], ["accessibility_off"], first.alertedAt, now + 10 * 60_000);
-  assert.deepEqual(again.reasons, []);
-  // After the hour: pushed again.
-  assert.deepEqual(s.tamperReasonsToAlert([], ["accessibility_off"], first.alertedAt, now + 61 * 60_000).reasons, ["accessibility_off"]);
-  // Still off (already reported): never re-pushed.
-  assert.deepEqual(s.tamperReasonsToAlert(["accessibility_off"], ["accessibility_off"], {}, now).reasons, []);
-  // Junk in the stored map is dropped.
-  assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
-});
-
 test("purchaseOwnerDecision: new token or own token attaches to the caller's family", () => {
   const base = { callerFamilyId: "famNew", callerIsChildDevice: false };
   assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: [] }), { action: "attach" });
@@ -224,4 +209,19 @@ test("oldFamilyAction: delete an empty install, keep data, never orphan another 
   assert.equal(s.oldFamilyAction({ ...fresh, members: ["u1", "childPhone"] }), "reject");
   assert.equal(s.oldFamilyAction({ ...fresh, childDevices: { u1: "child-1" } }), "reject");
   assert.equal(s.oldFamilyAction({ ...fresh, members: "junk" }), "reject");
+});
+
+test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
+  const now = Date.UTC(2026, 10, 21);
+  const first = s.tamperReasonsToAlert([], ["accessibility_off"], undefined, now);
+  assert.deepEqual(first.reasons, ["accessibility_off"]);
+  // Turned back on, then off again 10 minutes later: no second push.
+  const again = s.tamperReasonsToAlert([], ["accessibility_off"], first.alertedAt, now + 10 * 60_000);
+  assert.deepEqual(again.reasons, []);
+  // After the hour: pushed again.
+  assert.deepEqual(s.tamperReasonsToAlert([], ["accessibility_off"], first.alertedAt, now + 61 * 60_000).reasons, ["accessibility_off"]);
+  // Still off (already reported): never re-pushed.
+  assert.deepEqual(s.tamperReasonsToAlert(["accessibility_off"], ["accessibility_off"], {}, now).reasons, []);
+  // Junk in the stored map is dropped.
+  assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
 });
