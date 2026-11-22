@@ -108,7 +108,9 @@ test("child can start a prayer lock only with the server time", async () => {
   await seed({ prayerLock: false });
   await assertFails(setDoc(day(as(KID1)), { prayerLock: true, prayerLockAt: Timestamp.fromMillis(Date.now() - 3600_000) }, { merge: true }));
   await assertFails(setDoc(day(as(KID1)), { prayerLock: true }, { merge: true }));
-  await assertSucceeds(setDoc(day(as(KID1)), { prayerLock: true, prayerLockAt: serverTimestamp(), prayerLockSinceMs: Date.now() }, { merge: true }));
+  // The device-clock start is not synced any more: a back-dated value could shorten the lock.
+  await assertFails(setDoc(day(as(KID1)), { prayerLock: true, prayerLockAt: serverTimestamp(), prayerLockSinceMs: 0 }, { merge: true }));
+  await assertSucceeds(setDoc(day(as(KID1)), { prayerLock: true, prayerLockAt: serverTimestamp() }, { merge: true }));
   // Re-stamping an existing lock with an old time is refused too.
   await assertFails(setDoc(day(as(KID1)), { prayerLockAt: Timestamp.fromMillis(0) }, { merge: true }));
 });
@@ -171,4 +173,14 @@ test("strangers get nothing", async () => {
   await assertFails(getDoc(doc(db, "families/f1")));
   await assertFails(setDoc(day(db), { progress: {} }, { merge: true }));
   assert.ok(true);
+});
+
+test("prayerLockSinceMs is not writable by any client (lock window counts from server prayerLockAt)", async () => {
+  await seed({ lockMinutesAgo: 5 });
+  // A child cannot back-date the lock start, on its own or together with ending the lock.
+  await assertFails(setDoc(day(as(KID1)), { prayerLockSinceMs: 0 }, { merge: true }));
+  await assertFails(setDoc(day(as(KID1)), { prayerLock: false, prayerLockSinceMs: 0 }, { merge: true }));
+  await assertFails(setDoc(day(as(KID1), "c1", "2026-11-23"), { day: "2026-11-23", prayerLockSinceMs: 0 }));
+  // Parents do not write it either (the app never sends it).
+  await assertFails(setDoc(day(as(PARENT)), { prayerLockSinceMs: 0 }, { merge: true }));
 });

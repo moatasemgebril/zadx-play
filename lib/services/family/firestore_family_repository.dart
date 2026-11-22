@@ -50,6 +50,8 @@ class FirestoreFamilyRepository implements FamilyRepository {
           final data = Map<String, dynamic>.from(s.data()!);
           final lockAt = data.remove('prayerLockAt');
           if (lockAt is Timestamp) data['prayerLockAtMs'] = lockAt.millisecondsSinceEpoch;
+          // Legacy device-clock value from older builds: never trusted, only the server time counts.
+          data.remove('prayerLockSinceMs');
           data.remove('updatedAt');
           // Server-only credits: an absent map means "nothing approved yet" (never null here).
           data['approved'] = FamilyDay.parseCredits(data['approved']) ?? <String, int>{};
@@ -93,8 +95,9 @@ class FirestoreFamilyRepository implements FamilyRepository {
       data['prayerLock'] = day.prayerLock;
       if (day.prayerLock) {
         // Server time of the lock: the rules end a child's lock only after the window from here.
+        // The device-clock start (`prayerLockSinceMs`) stays on this device: the rules refuse it,
+        // because a child could back-date it to shorten the lock.
         data['prayerLockAt'] = FieldValue.serverTimestamp();
-        if (day.prayerLockSinceMs != null) data['prayerLockSinceMs'] = day.prayerLockSinceMs;
       }
     }
     await _dayDoc(childId, day.day).set(data, SetOptions(merge: true));

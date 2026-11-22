@@ -7,8 +7,31 @@ firebase login
 firebase use --add            # pick/create the Zad X project
 cd functions && npm install && npm run build
 firebase functions:secrets:set ANTHROPIC_API_KEY   # from console.anthropic.com
-npm run deploy
+firebase functions:secrets:set APPLE_PRIVATE_KEY   # the .p8 key, or type `unset` for now (iOS fails closed)
 ```
+Then deploy with the **Deploy runbook** below (never rules and functions in one step).
+
+## Deploy runbook (functions first, rules last)
+`npm run deploy` is disabled on purpose; it prints this order and stops.
+
+1. **Secrets exist.** `APPLE_PRIVATE_KEY` must exist before any functions deploy, because
+   `verifyPurchase` / `appStoreNotifications` declare it. Until the App Store key is ready, set it to
+   the text `unset` (`firebase functions:secrets:set APPLE_PRIVATE_KEY`, then type `unset`): iOS
+   purchases then fail closed. `npm run deploy:functions` checks the secret first
+   (`firebase functions:secrets:get`, shows versions only, never the value) and stops if it is missing.
+2. **Deploy functions (+ indexes):** `cd backend/functions && npm run deploy:functions`.
+   Safe with the current app builds: old builds keep writing as before, and the new callables
+   (`approveTask`, `rejectTask`) are simply not called yet.
+3. **Ship the new app and require testers to update.** Publish the build that calls `approveTask`
+   (Play internal testing / TestFlight / web preview) and ask every tester family to update **both** the
+   parent phone and the child devices. Older builds write `earnedMinutes` / `prayerLockSinceMs`
+   themselves; after step 4 the rules refuse those writes, so their sync stops until they update.
+4. **Deploy rules:** `npm run deploy:rules` (only after step 3 is done).
+5. **Check:** on a test family, approve a task from the parent phone (minutes appear on the child),
+   and confirm a child device cannot end a prayer lock early.
+
+Rollback: re-deploy the previous `firestore.rules` first (`git checkout <previous> -- backend/firestore.rules
+&& npm run deploy:rules`), then functions if needed.
 
 In the Flutter app run `flutterfire configure` (adds google-services.json / GoogleService-Info.plist).
 
@@ -21,7 +44,8 @@ families/{familyId}
   plan, planExpiresAt, inTrial, store                    (functions only; every member reads them)
   private/billing { purchaseToken }                      (functions only, no client access)
   referralCode, referredBy, referralPaid, referrals{year}  (functions only)
-  children/{childId}/days/{yyyy-MM-dd}   progress (child submissions), usedMinutes, prayerLock, prayerLockAt
+  children/{childId}/days/{yyyy-MM-dd}   progress (child submissions), usedMinutes, prayerLock, prayerLockAt (server time)
+                                         prayerLockSinceMs: legacy device time, no client may write it
                                          approved{taskId: minutes}, earnedMinutes, requiredDone  (approveTask only)
   assistantUsage/{yyyy-MM-dd}            Basic plan daily AI quota
 referralCodes/{CODE} → familyId

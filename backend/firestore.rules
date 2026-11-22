@@ -53,14 +53,17 @@ service cloud.firestore {
     // ---- Task approval + prayer lock (R-32) --------------------------------
     // Minutes are credited ONLY by the approveTask Cloud Function after it checks server-side that
     // the caller is a parent device. No client (parent or child) writes these day fields.
+    // `prayerLockSinceMs` (device clock of the lock start) is no longer synced: a child could set it
+    // to the past to shorten its own lock. The lock window counts only from the server-stamped
+    // `prayerLockAt`. Only approveTask (admin SDK) touches it, to delete legacy values.
     function serverOnlyDayKeys() {
-      return ['approved', 'earnedMinutes', 'requiredDone'];
+      return ['approved', 'earnedMinutes', 'requiredDone', 'prayerLockSinceMs'];
     }
     // What a paired child device may write on its own day doc: its submissions (`progress`,
     // status "pending"; "done" counts for nothing without a server `approved` entry), more used
     // minutes, and a prayer lock that it may START but end only after the Free prayer window.
     function childDayKeys() {
-      return ['day', 'progress', 'usedMinutes', 'prayerLock', 'prayerLockSinceMs', 'prayerLockAt', 'updatedAt', 'updatedBy'];
+      return ['day', 'progress', 'usedMinutes', 'prayerLock', 'prayerLockAt', 'updatedAt', 'updatedBy'];
     }
     // AppConfig.playWindowAfterPrayerMinutes (20) minus one minute of clock skew, measured from the
     // server time the lock reached Firestore (prayerLockAt = serverTimestamp()).

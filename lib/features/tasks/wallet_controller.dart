@@ -327,7 +327,8 @@ class WalletController extends Notifier<WalletState> {
   void _applyRemote(FamilyDay remote) {
     if (remote.day != state.day) return;
     // The window of a Free prayer lock counts from the later of the device time and the server
-    // time the lock reached Firestore, so an edited `prayerLockSinceMs` cannot shorten it.
+    // time the lock reached Firestore. `prayerLockSinceMs` is not synced (the repository drops it),
+    // so a back-dated device time cannot shorten the lock.
     final sinceMs = [remote.prayerLockSinceMs, remote.prayerLockAtMs].whereType<int>().fold<int?>(
         null, (a, b) => a == null || b > a ? b : a);
     state = state.copyWith(
