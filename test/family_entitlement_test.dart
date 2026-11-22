@@ -149,9 +149,14 @@ void main() {
 
     test('offline: the last family plan is kept for the 7-day grace, then Free', () async {
       final online = _FamilyDocRepository();
-      container(online);
+      final first = container(online);
       online.controller.add(parseFamilyEntitlement(doc('plus', const Duration(days: 30)), now: clock));
       await settle();
+      // Flush the rebuild now, so the cache records this confirmation at t0 (Riverpod may
+      // otherwise rebuild after the test has already moved the clock forward).
+      expect(first.read(planEntitlementProvider).effectiveTier, PlanTier.plus);
+      await settle();
+      expect(EntitlementCache(prefs, clock: clock).lastVerified?.verifiedAt, t0);
 
       // Next launches: no server snapshot arrives (offline).
       now = t0.add(const Duration(days: 3));
@@ -167,9 +172,12 @@ void main() {
 
     test('offline grace is not stretched by turning the clock back', () async {
       final online = _FamilyDocRepository();
-      container(online);
+      final first = container(online);
       online.controller.add(parseFamilyEntitlement(doc('basic', const Duration(days: 30)), now: clock));
       await settle();
+      expect(first.read(planEntitlementProvider).effectiveTier, PlanTier.basic);
+      await settle();
+      expect(EntitlementCache(prefs, clock: clock).lastVerified?.verifiedAt, t0);
 
       now = t0.add(const Duration(days: 8));
       container(_FamilyDocRepository());
