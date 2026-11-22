@@ -26,6 +26,7 @@ const dhikrSourcesEn = <String, String>{
   'أبو داود': 'Abu Dawud',
   'أبو داود والترمذي': 'Abu Dawud and At-Tirmidhi',
   'الترمذي وغيره': 'At-Tirmidhi and others',
+  'رواه مسلم (2723)': 'Muslim (2723)',
 };
 
 /// Morning/evening adhkar and salawat, from Hisn al-Muslim (Sa'id al-Qahtani).
@@ -34,13 +35,14 @@ const dhikrSourcesEn = <String, String>{
 /// trusted published sources (URLs next to each item) instead of a sheikh
 /// sign-off. Copy any new text verbatim from its cited page; ids must be unique.
 ///
-/// Verified counts: bismillah 3, hasbi 7, subhan 100, bika 1, ibrahimiya 1.
+/// Verified counts: bismillah 3, hasbi 7, subhan 100, bika 1, ibrahimiya 1, asbahna 1, amsayna 1.
 const adhkar = <AdhkarSection, List<Dhikr>>{
   AdhkarSection.morning: [
-    // Sahih Muslim (Ibn Mas'ud): https://hadeethenc.com/ar/browse/hadith/3008
-    // TODO(content): complete with «رب أسألك خير ما في هذا اليوم…» copied verbatim from
-    // the page above (could not be fetched verbatim on 2026-11-22; text left unchanged).
-    Dhikr(id: 'm_asbahna', times: 1, source: 'مسلم', text: 'أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ'),
+    // Sahih Muslim 2723 (Ibn Mas'ud): https://sunnah.com/muslim:2723a
+    // https://hadeethenc.com/ar/browse/hadith/3008
+    // Morning form per the hadith «وإذا أصبح قال ذلك أيضا: أصبحنا وأصبح الملك لله»: the day
+    // replaces the night, pronouns adjusted (hadeethenc explanation). Text from the cited pages (2026-11-22).
+    Dhikr(id: 'm_asbahna', times: 1, source: 'رواه مسلم (2723)', text: 'أصبحنا وأصبح الملك لله، والحمد لله، لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير، ربِّ أسألك خير ما في هذا اليوم وخير ما بعده، وأعوذ بك من شر ما في هذا اليوم وشر ما بعده، رب أعوذ بك من الكسل، وسوء الكبر، رب أعوذ بك من عذاب في النار، وعذاب في القبر'),
     Dhikr(id: 'm_bika', times: 1, source: 'الترمذي', text: 'اللَّهُمَّ بِكَ أَصْبَحْنَا، وَبِكَ أَمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ النُّشُورُ'),
     Dhikr(id: 'm_bismillah', times: 3, source: 'أبو داود والترمذي', text: 'بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ'),
     // Hisn al-Muslim 87 (At-Tirmidhi and others): https://sunnah.com/hisn:87
@@ -50,10 +52,10 @@ const adhkar = <AdhkarSection, List<Dhikr>>{
     Dhikr(id: 'm_subhan', times: 100, source: 'مسلم', text: 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ'),
   ],
   AdhkarSection.evening: [
-    // Sahih Muslim (Ibn Mas'ud): https://hadeethenc.com/ar/browse/hadith/3008
-    // TODO(content): complete with «رب أسألك خير ما في هذه الليلة…» copied verbatim from
-    // the page above (could not be fetched verbatim on 2026-11-22; text left unchanged).
-    Dhikr(id: 'e_amsayna', times: 1, source: 'مسلم', text: 'أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ'),
+    // Sahih Muslim 2723 (Ibn Mas'ud): https://sunnah.com/muslim:2723a
+    // https://hadeethenc.com/ar/browse/hadith/3008
+    // Evening wording as narrated. Text from the cited pages (2026-11-22).
+    Dhikr(id: 'e_amsayna', times: 1, source: 'رواه مسلم (2723)', text: 'أمسينا وأمسى الملك لله، والحمد لله، لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير، ربِّ أسألك خير ما في هذه الليلة وخير ما بعدها، وأعوذ بك من شر ما في هذه الليلة وشر ما بعدها، رب أعوذ بك من الكسل، وسوء الكبر، رب أعوذ بك من عذاب في النار، وعذاب في القبر'),
     Dhikr(id: 'e_bika', times: 1, source: 'الترمذي', text: 'اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ'),
     // Hisn al-Muslim 97 (At-Tirmidhi): https://sunnah.com/hisn:97
     Dhikr(id: 'e_kalimat', times: 3, source: 'الترمذي', text: 'أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ'),

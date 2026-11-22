@@ -12,6 +12,7 @@ import 'package:zadx/data/catalog/locations.dart';
 import 'package:zadx/core/localized.dart';
 import 'package:zadx/data/models/location.dart';
 import 'package:zadx/features/prayer/city_time_zone.dart';
+import 'package:zadx/features/prayer/hijri_ramadan.dart';
 import 'package:zadx/features/prayer/prayer_calculator.dart';
 import 'package:zadx/features/prayer/prayer_schedule.dart';
 
@@ -172,7 +173,7 @@ void main() {
           if (!a2.isAfter(a1)) problems.add('$where: Hanafi Asr $a2 not after Shafi\'i Asr $a1');
           if (!a2.isBefore(shafii[Prayer.maghrib]!)) problems.add('$where: Hanafi Asr not before Maghrib');
           // Fixed-interval Isha methods (Umm al-Qura, Qatar).
-          final fixed = c.method.ishaMinutesAfterMaghrib;
+          final fixed = ishaIntervalOn(c.method, date.year, date.month, date.day);
           if (fixed != null) {
             final gap = shafii[Prayer.isha]!.difference(shafii[Prayer.maghrib]!).inMinutes;
             if ((gap - fixed).abs() > 1) problems.add('$where: Isha is $gap min after Maghrib, expected $fixed');
@@ -694,6 +695,10 @@ void main() {
         final m = methodById(id);
         expect((m.fajrAngle, m.ishaAngle, m.ishaMinutesAfterMaghrib), e, reason: id);
       });
+      // Only Umm al-Qura has a Ramadan Isha interval (SPA https://www.spa.gov.sa/907467).
+      for (final m in calcMethods.values) {
+        expect(m.ishaMinutesAfterMaghribInRamadan, m.id == 'makkah' ? 120 : null, reason: m.id);
+      }
     });
 
     test('each tested city uses its customary method and Asr school by default', () {
@@ -733,30 +738,87 @@ void main() {
       }
     });
 
-    test('Umm al-Qura: Isha is Maghrib + 90 min, also in Ramadan (no Ramadan rule yet)', () {
+    test('Umm al-Qura: Isha is Maghrib + 120 min during Ramadan', () {
       final makkah = WorldCase.catalog('makkah');
-      // ~15 Ramadan 1448 (approximate date, only used to pick a day inside the month).
-      final raw = appUtcMinutes(makkah, DateTime.utc(2027, 2, 22));
-      expect(raw[Prayer.isha.index] - raw[Prayer.maghrib.index], closeTo(90, 1e-6));
+      // 2027-02-22 is well inside Ramadan 1448 whichever day the month starts (about
+      // 8-9 Feb 2027); 2027-05-01 is well outside it. "Is it Ramadan" comes from the
+      // Umm al-Qura calendar (package:hijri), not from these dates.
+      expect(isUmmAlQuraRamadan(2027, 2, 22), isTrue);
+      expect(isUmmAlQuraRamadan(2027, 5, 1), isFalse);
+      final ramadan = appUtcMinutes(makkah, DateTime.utc(2027, 2, 22));
+      expect(ramadan[Prayer.isha.index] - ramadan[Prayer.maghrib.index], closeTo(120, 1e-6));
+      final normal = appUtcMinutes(makkah, DateTime.utc(2027, 5, 1));
+      expect(normal[Prayer.isha.index] - normal[Prayer.maghrib.index], closeTo(90, 1e-6));
     });
 
-    test(
-      'Umm al-Qura: Isha is Maghrib + 120 min during Ramadan',
-      () {
-        final makkah = WorldCase.catalog('makkah');
-        // 2027-02-22 is well inside Ramadan 1448 whichever day the month starts (about
-        // 8-9 Feb 2027); 2027-05-01 is well outside it. The app must get "is it Ramadan"
-        // from a verified Umm al-Qura source, not from these dates.
-        final ramadan = appUtcMinutes(makkah, DateTime.utc(2027, 2, 22));
-        expect(ramadan[Prayer.isha.index] - ramadan[Prayer.maghrib.index], closeTo(120, 1e-6));
-        final normal = appUtcMinutes(makkah, DateTime.utc(2027, 5, 1));
-        expect(normal[Prayer.isha.index] - normal[Prayer.maghrib.index], closeTo(90, 1e-6));
-      },
-      skip: 'TODO(scholar + owner): the Umm al-Qura calendar uses Isha = Maghrib + 120 min in '
-          'Ramadan (adhan: "UmmAlQura ... 30 minutes in Ramadan"). The app has no Hijri '
-          'calendar, so this cannot be applied yet. Needs a decision and a verified, offline Umm al-Qura '
-          'month-start source (none is vetted in the project yet; Saudi Ramadan is also announced by '
-          'sighting, which can differ from the calendar by a day). Enable when that source lands.',
-    );
+    test('Umm al-Qura calendar: Ramadan 1448 starts 7-9 Feb 2027 and lasts 29 or 30 days', () {
+      // Sanity bounds only (astronomical new moons 6 Feb and 8 Mar 2027), not a ruling.
+      final days = <DateTime>[
+        for (var d = DateTime.utc(2027, 1, 20); d.isBefore(DateTime.utc(2027, 3, 25)); d = d.add(const Duration(days: 1)))
+          if (isUmmAlQuraRamadan(d.year, d.month, d.day)) d,
+      ];
+      expect(days, isNotEmpty);
+      expect(days.first, isIn([DateTime.utc(2027, 2, 7), DateTime.utc(2027, 2, 8), DateTime.utc(2027, 2, 9)]));
+      expect(days.length, isIn([29, 30]));
+      expect(days.last.difference(days.first).inDays, days.length - 1); // one unbroken month
+    });
+
+    test('parent Hijri adjustment moves the Ramadan Isha rule by exactly one day', () {
+      final makkah = WorldCase.catalog('makkah');
+      // First and last calendar day of Ramadan 1448 (from the calendar, not hard-coded).
+      var first = DateTime.utc(2027, 1, 25);
+      while (!isUmmAlQuraRamadan(first.year, first.month, first.day)) {
+        first = first.add(const Duration(days: 1));
+      }
+      var last = first;
+      while (isUmmAlQuraRamadan(last.year, last.month, last.day + 1)) {
+        last = last.add(const Duration(days: 1));
+      }
+      final dayBefore = first.subtract(const Duration(days: 1));
+      final dayAfter = last.add(const Duration(days: 1));
+      int gap(DateTime d, int adj) {
+        final t = const PrayerCalculator().compute(
+          date: d,
+          lat: makkah.city.lat,
+          lng: makkah.city.lng,
+          utcOffsetHours: 3,
+          method: makkah.method,
+          hijriAdjustmentDays: adj,
+        );
+        return ((t.of(Prayer.isha) - t.of(Prayer.maghrib)) * 60).round();
+      }
+
+      // As the calendar.
+      expect(gap(dayBefore, 0), 90);
+      expect(gap(first, 0), 120);
+      expect(gap(last, 0), 120);
+      expect(gap(dayAfter, 0), 90);
+      // Ramadan started one day earlier here (+1): the day before is already Ramadan.
+      expect(gap(dayBefore, 1), 120);
+      expect(gap(last, 1), 90);
+      // Ramadan started one day later here (-1): the calendar's first day is not Ramadan yet.
+      expect(gap(first, -1), 90);
+      expect(gap(dayAfter, -1), 120);
+      // Out-of-range values are clamped to ±1.
+      expect(clampHijriAdjustment(5), 1);
+      expect(clampHijriAdjustment(-3), -1);
+      expect(gap(dayBefore, 7), gap(dayBefore, 1));
+    });
+
+    test('only Umm al-Qura changes in Ramadan: Qatar stays 90, angle methods unchanged', () {
+      expect(ishaIntervalOn(methodById('qatar'), 2027, 2, 22), 90);
+      expect(ishaIntervalOn(methodById('egypt'), 2027, 2, 22), isNull);
+      expect(ishaIntervalOn(methodById('makkah'), 2027, 2, 22), 120);
+      expect(ishaIntervalOn(methodById('makkah'), 2027, 5, 1), 90);
+    });
+
+    test('adhan plan in Ramadan uses the Ramadan Isha', () {
+      final makkah = WorldCase.catalog('makkah');
+      final now = tz.TZDateTime(tz.getLocation('Asia/Riyadh'), 2027, 2, 22, 12);
+      final slots = planAdhanNotifications(now: now, lat: makkah.city.lat, lng: makkah.city.lng, method: makkah.method);
+      final maghrib = slots.firstWhere((x) => x.prayer == Prayer.maghrib).when;
+      final isha = slots.firstWhere((x) => x.prayer == Prayer.isha).when;
+      expect(isha.difference(maghrib).inMinutes, inInclusiveRange(119, 121));
+    });
   });
 }

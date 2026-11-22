@@ -119,6 +119,8 @@ const Set<String> islamicOnlyL10nKeys = {
   // combining note (#35). Not offered in Kids.
   'highLatitudeRule', 'highLatitudeAuto', 'highLatitudeRelative45', 'highLatitudeAngle12', 'highLatitudeMiddleOfNight',
   'highLatitudeSeventhOfNight', 'highLatitudeTwilightAngle', 'highLatitudeHelp', 'highLatitudeSource', 'ishaCombineNote',
+  // Parent area: Umm al-Qura Ramadan date adjustment for the Ramadan Isha rule (#35). Not in Kids.
+  'hijriAdjustTitle', 'hijriAdjustHelp', 'hijriAdjustEarlier', 'hijriAdjustNone', 'hijriAdjustLater',
   // Plans: Islamic features and the Ramadan offer.
   'featPrayer', 'featQuran', 'featAdhkar', 'offer3',
   // Learning games: mosque builder, prophets quiz, scholar-review note. The Arabic Letters game is

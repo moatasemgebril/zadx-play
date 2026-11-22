@@ -49,6 +49,7 @@ final prayerTimesProvider = Provider<PrayerTimes>((ref) {
     method: methodById(s.methodId),
     asrFactor: s.asrFactor,
     highLatitudeRule: resolveHighLatitudeRule(s.highLatitude, city.lat),
+    hijriAdjustmentDays: s.hijriAdjustmentDays,
   );
 });
 

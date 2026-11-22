@@ -334,6 +334,21 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get ishaCombineNote => _text('ishaCombineNote');
 
   @override
+  String get hijriAdjustTitle => _text('hijriAdjustTitle');
+
+  @override
+  String get hijriAdjustHelp => _text('hijriAdjustHelp');
+
+  @override
+  String get hijriAdjustEarlier => _text('hijriAdjustEarlier');
+
+  @override
+  String get hijriAdjustNone => _text('hijriAdjustNone');
+
+  @override
+  String get hijriAdjustLater => _text('hijriAdjustLater');
+
+  @override
   String get featPrayer => _text('featPrayer');
 
   @override

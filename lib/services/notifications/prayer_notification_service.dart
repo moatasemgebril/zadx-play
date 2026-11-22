@@ -69,6 +69,7 @@ class PrayerNotificationService {
       method: methodById(s.methodId),
       asrFactor: s.asrFactor,
       highLatitudeRule: resolveHighLatitudeRule(s.highLatitude, city.lat),
+      hijriAdjustmentDays: s.hijriAdjustmentDays,
     );
     for (final slot in slots) {
       await _plugin.zonedSchedule(

@@ -96,7 +96,7 @@ Reading is in both apps: the reading task / paper-book timer (branch `feat/splas
 
 * **Strings.** The ARB files stay the Zad X Play text. In Kids, `KidsLocalizationsDelegate` (lib/variant/kids_localizations.dart) returns subclasses of the generated `AppLocalizationsAr/En` that override:
   * `kidsRewrites` — 21 shared strings rewritten in neutral words (greeting, help/FAQ, lock texts, plan text, Accessibility disclosure…);
-  * `islamicOnlyL10nKeys` — 66 strings used only by Islamic screens; they return `''` as a second safety net.
+  * `islamicOnlyL10nKeys` — 87 strings used only by Islamic screens; they return `''` as a second safety net.
   Kids-only text (schedules, wordmark) lives in `KidsText` (lib/variant/kids_strings.dart).
 * **Plans.** `featuresOf(tier, variant:)` / `hasFeature(…, variant:)` drop `islamicOnlyFeatures` (`prayerTimes`, `adhan`, `quran`, `adhkar`) in Kids. The `AppFeature` enum and the backend `PLAN_FEATURES` mirror are unchanged.
 * **Routes.** `appRoutes()` / `shellTabsFor()` in lib/router.dart add the Islamic routes only behind `!kIsKids && variant == islamic`.

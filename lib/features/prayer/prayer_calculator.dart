@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../../data/models/location.dart';
+import 'hijri_ramadan.dart';
 
 enum Prayer { fajr, dhuhr, asr, maghrib, isha }
 
@@ -107,6 +108,10 @@ class PrayerCalculator {
   /// reaches the twilight angle (and, for the night-portion rules, bounds them). `null` = no
   /// rule (Fajr/Isha are NaN when the angle is not reached). A fixed-interval Isha
   /// (Umm al-Qura, Qatar) is never changed by the rule, as in the adhan library.
+  ///
+  /// [date]'s year/month/day is the city's calendar day. With Umm al-Qura, Isha is
+  /// Maghrib + 120 min on days of Ramadan in the Umm al-Qura calendar, shifted by the
+  /// parent's [hijriAdjustmentDays] (-1, 0, +1); see `hijri_ramadan.dart`.
   PrayerTimes compute({
     required DateTime date,
     required double lat,
@@ -115,6 +120,7 @@ class PrayerCalculator {
     required CalcMethod method,
     int asrFactor = 1,
     HighLatitudeRule? highLatitudeRule,
+    int hijriAdjustmentDays = 0,
   }) {
     final utcMidnight = DateTime.utc(date.year, date.month, date.day);
     final jd = utcMidnight.millisecondsSinceEpoch / 86400000 + 2440587.5 + 0.5 - lng / 360;
@@ -128,9 +134,9 @@ class PrayerCalculator {
     final asrAngle = -_deg(math.atan(1 / (asrFactor + math.tan(_rad((lat - sun.decl).abs())))));
     final asr = angleTime(asrAngle, beforeNoon: false);
     final maghrib = angleTime(0.833, beforeNoon: false);
-    var isha = method.ishaMinutesAfterMaghrib != null
-        ? maghrib + method.ishaMinutesAfterMaghrib! / 60
-        : angleTime(method.ishaAngle!, beforeNoon: false);
+    final ishaInterval =
+        ishaIntervalOn(method, date.year, date.month, date.day, hijriAdjustmentDays: hijriAdjustmentDays);
+    var isha = ishaInterval != null ? maghrib + ishaInterval / 60 : angleTime(method.ishaAngle!, beforeNoon: false);
 
     if (highLatitudeRule != null) {
       final sunrise = angleTime(0.833, beforeNoon: true);
