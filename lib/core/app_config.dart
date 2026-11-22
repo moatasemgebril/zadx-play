@@ -34,7 +34,7 @@ abstract final class IslamicBrand {
 abstract final class KidsBrand {
   static const storeName = 'Zad X Kids';
   static const storeSubtitleAr = 'وقت الشاشة بعد المهام والواجب'; // ≤ 30 (App Store)
-  static const storeSubtitleEn = 'Screen time after tasks & homework';
+  static const storeSubtitleEn = 'Tasks first, then screen time'; // ≤ 30 (App Store)
   static const storeShortDescriptionAr = 'وقت الشاشة بعد المهام والمذاكرة، مع مواعيد للمذاكرة والقراءة والنوم';
   static const storeShortDescriptionEn = 'Screen time after tasks & homework, with study, reading and bedtime schedules';
   static const androidPackage = 'com.zadx.kids';
