@@ -91,6 +91,8 @@ void main() {
         expect(find.byType(Image), findsNothing, reason: 'the artwork logo (Arabic, crescent, mosques) is never used');
         expect(tester.hasRunningAnimations, reduce ? isFalse : isTrue);
 
+        // Let the reveal (or the reduced-motion hold) end, then the hand-over.
+        await tester.pump(const Duration(seconds: 2));
         await tester.pumpAndSettle();
         expect(find.bySemanticsLabel('Zad X Kids'), findsNothing);
         expect(find.text('APP'), findsOneWidget);
