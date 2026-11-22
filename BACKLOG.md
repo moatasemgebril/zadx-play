@@ -136,3 +136,14 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 ## Owner request 2026-11-21: adhkar read aloud by a sheikh (P1, Approvals & Licensing)
 - No freely-licensed adhkar audio found yet. Contact the official Hisn al-Muslim site (binwahaf.com, the late Sheikh Saeed bin Wahf al-Qahtani) for permission to use its audio in a paid kids app; find the official contact on the site itself. Alternatives: a recognised Islamic institution with recordings, or a local imam/sheikh recording the adhkar for us with written permission (owner then owns the recordings).
 - When licensed: per-dhikr audio in adhkar_view with a play button, attribution, offline bundling.
+
+## Findings from the 2026-11-21 PM cycle (Approvals + Marketing + Skills & Add-ons)
+Details: docs/ADDONS-REGISTRY.md, docs/marketing/STORE-LISTING.md, docs/approvals/OUTREACH-2026-11-21-PM.md.
+- **P1 child safety:** the AI assistant card (lib/features/help/help_screen.dart) is gated only by `PaidFeatureGate`, not the parent PIN, and Help opens from the main shell → a child in a paid family can chat with the Anthropic API. Put it behind the parent gate (check whether PR #28 "assistant gate" already does this before starting).
+- **P1 privacy/offline:** `google_fonts` downloads Tajawal / Baloo Bhaijaan 2 / Amiri Quran from Google at runtime on the child's device. Bundle the OFL fonts in assets and set `GoogleFonts.config.allowRuntimeFetching = false` (or drop the package).
+- **P2:** `geolocator` is declared and the Android manifest asks for ACCESS_COARSE_LOCATION but no code uses it → remove until the location-map review is done (Families policy).
+- **P2:** commit `pubspec.lock` and `backend/functions/package-lock.json`, switch CI to `npm ci`; pin third-party GitHub Actions (dorny/paths-filter, softprops/action-gh-release) to commit SHAs.
+- **P2:** the CC BY 3.0 adhan credit in lib/features/parent/credits_card.dart lacks the licence URL and the source link.
+- **P2:** remove/trim .github/workflows/fetch-adhan.yml — re-running it would re-add CC BY-SA adhans and overwrite ADHAN-CREDITS.txt.
+- **Docs:** ARCHITECTURE.md plans table still lists adhkar under Basic (owner made adhkar free on 2026-11-21); STORE_CHECKLIST says a 14-day intro offer while the app gives a 7-day trial → owner decides one.
+- **Owner decision:** Cloud Functions + Secret Manager need the Blaze plan (Spark can't run them); decide Blaze with a budget alert/cap before backend launch.
