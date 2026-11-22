@@ -62,9 +62,11 @@ class AdhanSlot {
 /// strictly increasing time order.
 ///
 /// With [HighLatitudeRule.middleOfTheNight], Isha of one day and Fajr of the next both
-/// fall at the middle of the night and can round to the same minute (or Isha can be a
-/// few seconds after the next Fajr). A slot that is not after the previous one is then
-/// dropped, so the child never gets two adhans (or two locks) at the same moment.
+/// fall around the middle of the night; while the nights grow or shrink (e.g. July in
+/// Oslo) the computed Isha can even be a few minutes AFTER the next Fajr. An Isha at or
+/// after the next day's Fajr is then not scheduled (Fajr time has already begun), so the
+/// child never gets an Isha adhan after Fajr, or two adhans at the same moment.
+/// PENDING SCHOLAR REVIEW (docs/decisions/PRAYER-TIMES-ACCURACY.md).
 List<AdhanSlot> planAdhanNotifications({
   required tz.TZDateTime now,
   required double lat,
@@ -74,11 +76,12 @@ List<AdhanSlot> planAdhanNotifications({
   HighLatitudeRule? highLatitudeRule,
   int days = 2,
 }) {
-  final slots = <AdhanSlot>[];
-  for (var dayOffset = 0; dayOffset < days; dayOffset++) {
+  // One extra day, only to know the Fajr that follows the last Isha.
+  final perDay = <Map<Prayer, tz.TZDateTime?>>[];
+  for (var dayOffset = 0; dayOffset <= days; dayOffset++) {
     // Calendar arithmetic, not "+24 h": a DST day is 23 or 25 hours long.
     final d = DateTime.utc(now.year, now.month, now.day + dayOffset);
-    final instants = prayerInstantsOn(
+    perDay.add(prayerInstantsOn(
       location: now.location,
       year: d.year,
       month: d.month,
@@ -88,10 +91,18 @@ List<AdhanSlot> planAdhanNotifications({
       method: method,
       asrFactor: asrFactor,
       highLatitudeRule: highLatitudeRule,
-    );
+    ));
+  }
+  final slots = <AdhanSlot>[];
+  for (var dayOffset = 0; dayOffset < days; dayOffset++) {
+    final instants = perDay[dayOffset];
     for (final p in Prayer.values) {
       final when = instants[p];
       if (when == null || !when.isAfter(now)) continue;
+      if (p == Prayer.isha) {
+        final nextFajr = perDay[dayOffset + 1][Prayer.fajr];
+        if (nextFajr != null && !nextFajr.isAfter(when)) continue;
+      }
       if (slots.isNotEmpty && !when.isAfter(slots.last.when)) continue;
       slots.add(AdhanSlot(id: dayOffset * 10 + p.index, prayer: p, when: when));
     }

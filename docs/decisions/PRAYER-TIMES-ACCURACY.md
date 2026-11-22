@@ -22,9 +22,11 @@ review / بانتظار مراجعة الشيخ") with the standard definitions 
 
 * Default ("Automatic"): Twilight angle at latitudes of 48° and above, no rule below 48°.
 * A fixed-interval Isha (Umm al-Qura, Qatar: Maghrib + 90 min) is never moved by the rule.
-* With "Middle of the night", Isha and the next Fajr meet at midnight; the adhan plan then
-  keeps only one adhan for that minute (no double adhan / double lock). Scholar question:
-  which of the two should it be named?
+* With "Middle of the night", Isha and the next Fajr meet at midnight. Because each night
+  is a little different, the computed Isha can be a few minutes AFTER the next Fajr (about
+  3 minutes in Oslo/Reykjavik in July). The adhan plan then does not schedule that Isha
+  adhan (Fajr time has begun), so there is never an Isha adhan after Fajr or two adhans at
+  once. Scholar question: is dropping that Isha adhan right, or should Isha be moved earlier?
 * Wired into: displayed times (`prayerTimesProvider`), adhan notifications
   (`planAdhanNotifications`), the phone prayer lock (`app_lock_service`), and Windows Guard
   (synced as `settings.highLatRule`, passed by the `devicePolicy` function; an older app that

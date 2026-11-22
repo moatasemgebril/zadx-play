@@ -415,9 +415,12 @@ void main() {
             for (var k = 1; k < app.length; k++) {
               if (!(app[k] > app[k - 1])) problems.add('$where: ${Prayer.values[k]} not after ${Prayer.values[k - 1]}');
             }
-            // Isha is not after the next day's Fajr (they meet at midnight with middleOfTheNight).
-            if (app[Prayer.isha.index] > next[Prayer.fajr.index] + 1440 + 1) {
-              problems.add('$where: Isha after next Fajr');
+            // Isha is before the next day's Fajr. With middleOfTheNight both are at the middle
+            // of (slightly different) nights, so they may cross by half the day-to-day change
+            // of sunrise + sunset (a few minutes at 64° N in July); the adhan plan handles it.
+            final gapToNextFajr = next[Prayer.fajr.index] + 1440 - app[Prayer.isha.index];
+            if (rule == HighLatitudeRule.middleOfTheNight ? gapToNextFajr.abs() > 6 : gapToNextFajr <= 0) {
+              problems.add('$where: Isha ${_hm(app[Prayer.isha.index])} vs next Fajr ${_hm(next[Prayer.fajr.index])}');
             }
 
             // Night portions from the independent reference (sunset to next sunrise).
@@ -453,11 +456,18 @@ void main() {
             for (var i = 1; i < plan.length; i++) {
               if (!plan[i].when.isAfter(plan[i - 1].when)) problems.add('$where: adhan plan not increasing at $i');
             }
-            final prayers = plan.map((s) => s.prayer).toSet();
-            if (!prayers.contains(Prayer.isha) || !prayers.contains(Prayer.fajr)) {
-              problems.add('$where: adhan plan lacks Fajr or Isha: ${plan.map((s) => s.prayer.name).toList()}');
+            final names = plan.map((s) => s.prayer.name).toList();
+            // Fajr is always scheduled (both days start after `now` = local midnight, or Fajr is
+            // within the first day); an Isha may only be left out when it is not before the next Fajr.
+            if (plan.where((s) => s.prayer == Prayer.fajr).isEmpty) problems.add('$where: no Fajr adhan: $names');
+            final ishas = plan.where((s) => s.prayer == Prayer.isha).length;
+            if (rule != HighLatitudeRule.middleOfTheNight && ishas != 2) problems.add('$where: $ishas Isha adhans: $names');
+            if (plan.length < 10 - (2 - ishas)) problems.add('$where: only ${plan.length} adhans in 2 days: $names');
+            for (var i = 0; i + 1 < plan.length; i++) {
+              if (plan[i].prayer == Prayer.isha && plan[i + 1].prayer == Prayer.fajr) {
+                if (!plan[i + 1].when.isAfter(plan[i].when)) problems.add('$where: Isha adhan not before next Fajr');
+              }
             }
-            if (plan.length < 9) problems.add('$where: only ${plan.length} adhans in 2 days');
           }
         }
         expect(problems, isEmpty, reason: problems.take(30).join('\n'));
