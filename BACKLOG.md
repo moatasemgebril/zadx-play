@@ -147,3 +147,13 @@ Details: docs/ADDONS-REGISTRY.md, docs/marketing/STORE-LISTING.md, docs/approval
 - **P2:** remove/trim .github/workflows/fetch-adhan.yml — re-running it would re-add CC BY-SA adhans and overwrite ADHAN-CREDITS.txt.
 - **Docs:** ARCHITECTURE.md plans table still lists adhkar under Basic (owner made adhkar free on 2026-11-21); STORE_CHECKLIST says a 14-day intro offer while the app gives a 7-day trial → owner decides one.
 - **Owner decision:** Cloud Functions + Secret Manager need the Blaze plan (Spark can't run them); decide Blaze with a budget alert/cap before backend launch.
+
+## Family setup & payment review (product manager, 2026-11-21 evening, owner question)
+Flow today: same Zad X app on the parent phone and the child device (Windows = Zad X Guard); parent creates the PIN on the device (PR #28 adds a first-run PIN screen with confirm); children added in the Parent dashboard (Free 1 / Basic 2 / Plus 5); child device linked with a 6-digit code from the parent phone (10 min); payment = store in-app subscription (Google Play / App Store), verified by `verifyPurchase`; no code/password is ever sent after payment. One-device mode works offline today; linking + payments need Firebase (apps, Firestore, Blaze for Functions) and store products.
+- **P0:** the paid plan never reaches the child's device — the app does not read the entitlement `verifyPurchase` stores on the family doc; the child device falls back to Free after its own 7-day trial.
+- **P0:** restore on a new phone fails — each install signs in anonymously = new family; the server rejects the old purchase as used by another family. Needs a family recovery path (e.g. parent sign-in) before launch.
+- **P0 (before iOS):** App Store receipt verification returns `unimplemented`.
+- **P1:** no way to link a second parent phone (every redeemed code becomes a child device).
+- **P1:** no PIN recovery (store-account or email-based reset that a child can't trigger).
+- **P1:** even after PR #28, the paid-plan assistant lives on the Help screen, which children can open → put it behind the parent PIN.
+- FAQ faq6–faq12 + new step 1 added (help/faq-setup-payment); faq8/10/11 describe the launch flow and depend on the P0 fixes + Firebase.
