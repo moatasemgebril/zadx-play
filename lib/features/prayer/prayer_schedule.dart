@@ -11,8 +11,13 @@ import 'prayer_calculator.dart';
 /// UTC and the time-zone database places each prayer, so every instant is right on any
 /// day, in any zone, whatever the device's own time zone is.
 ///
-/// A prayer is `null` when the sun never reaches its angle that day (high latitudes in
-/// summer: there is no high-latitude rule yet).
+/// A prayer is `null` when the sun never reaches its angle that day and no
+/// [highLatitudeRule] is given (high latitudes in summer).
+///
+/// Assumption: UTC calendar day D and the city's calendar day D share the city's solar
+/// noon, i.e. the city's UTC offset is within ±12 h of its longitude time. True for every
+/// catalog city (guarded by a test in test/prayer_times_world_test.dart); a zone across
+/// the date line from its longitude (e.g. Pacific/Kiritimati, +14) would need a day shift.
 Map<Prayer, tz.TZDateTime?> prayerInstantsOn({
   required tz.Location location,
   required int year,
@@ -22,6 +27,7 @@ Map<Prayer, tz.TZDateTime?> prayerInstantsOn({
   required double lng,
   required CalcMethod method,
   int asrFactor = 1,
+  HighLatitudeRule? highLatitudeRule,
 }) {
   final utcDay = DateTime.utc(year, month, day);
   final times = const PrayerCalculator().compute(
@@ -31,6 +37,7 @@ Map<Prayer, tz.TZDateTime?> prayerInstantsOn({
     utcOffsetHours: 0,
     method: method,
     asrFactor: asrFactor,
+    highLatitudeRule: highLatitudeRule,
   );
   return {
     for (final p in Prayer.values)
@@ -51,13 +58,20 @@ class AdhanSlot {
 }
 
 /// The adhan notifications to schedule from [now] for [days] calendar days of the city
-/// whose zone is `now.location`. Only prayers strictly after [now] are returned, in order.
+/// whose zone is `now.location`. Only prayers strictly after [now] are returned, in
+/// strictly increasing time order.
+///
+/// With [HighLatitudeRule.middleOfTheNight], Isha of one day and Fajr of the next both
+/// fall at the middle of the night and can round to the same minute (or Isha can be a
+/// few seconds after the next Fajr). A slot that is not after the previous one is then
+/// dropped, so the child never gets two adhans (or two locks) at the same moment.
 List<AdhanSlot> planAdhanNotifications({
   required tz.TZDateTime now,
   required double lat,
   required double lng,
   required CalcMethod method,
   int asrFactor = 1,
+  HighLatitudeRule? highLatitudeRule,
   int days = 2,
 }) {
   final slots = <AdhanSlot>[];
@@ -73,10 +87,12 @@ List<AdhanSlot> planAdhanNotifications({
       lng: lng,
       method: method,
       asrFactor: asrFactor,
+      highLatitudeRule: highLatitudeRule,
     );
     for (final p in Prayer.values) {
       final when = instants[p];
       if (when == null || !when.isAfter(now)) continue;
+      if (slots.isNotEmpty && !when.isAfter(slots.last.when)) continue;
       slots.add(AdhanSlot(id: dayOffset * 10 + p.index, prayer: p, when: when));
     }
   }

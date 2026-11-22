@@ -9,6 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:zadx/data/catalog/locations.dart';
+import 'package:zadx/core/localized.dart';
+import 'package:zadx/data/models/location.dart';
+import 'package:zadx/features/prayer/city_time_zone.dart';
 import 'package:zadx/features/prayer/prayer_calculator.dart';
 import 'package:zadx/features/prayer/prayer_schedule.dart';
 
@@ -216,6 +219,39 @@ void main() {
       expect(problems, isEmpty, reason: problems.take(30).join('\n'));
     });
 
+    test('every catalog city: local noon and Dhuhr fall on the same calendar day as UTC noon', () {
+      // prayer_schedule.dart computes "UTC day D" and places it in the city's zone; that is
+      // the city's day D only while the zone is within ±12 h of UTC (no date-line zones
+      // such as Pacific/Kiritimati +14). Guard it for every catalog city.
+      final problems = <String>[];
+      for (final city in cities) {
+        for (final loc in {tz.getLocation(city.timeZone), cityLocation(city)}) {
+          for (final date in worldDates) {
+            final noon = tz.TZDateTime.from(DateTime.utc(date.year, date.month, date.day, 12), loc);
+            if ((noon.year, noon.month, noon.day) != (date.year, date.month, date.day)) {
+              problems.add('${city.id} (${loc.name}) ${_d(date)}: UTC noon is $noon locally');
+            }
+            if (noon.timeZoneOffset.inMinutes.abs() >= 12 * 60) {
+              problems.add('${city.id} (${loc.name}) ${_d(date)}: offset ${noon.timeZoneOffset}');
+            }
+            final dhuhr = prayerInstantsOn(
+              location: loc,
+              year: date.year,
+              month: date.month,
+              day: date.day,
+              lat: city.lat,
+              lng: city.lng,
+              method: methodById(countryById(city.countryId).methodId),
+            )[Prayer.dhuhr]!;
+            if ((dhuhr.year, dhuhr.month, dhuhr.day) != (date.year, date.month, date.day)) {
+              problems.add('${city.id} (${loc.name}) ${_d(date)}: Dhuhr is $dhuhr locally');
+            }
+          }
+        }
+      }
+      expect(problems, isEmpty, reason: problems.take(30).join('\n'));
+    });
+
     test('leap day 2028-02-29 is computed as its own day between Feb 28 and Mar 1', () {
       final cairo = WorldCase.catalog('cairo');
       final loc = tz.getLocation(cairo.city.timeZone);
@@ -301,33 +337,153 @@ void main() {
       }
     });
 
-    test('documents today\'s behaviour: London MWL has no Fajr/Isha around the June solstice', () {
+    test('without a rule: London MWL has no Fajr/Isha around the June solstice', () {
       // The sun stays above -18° all night in London from about 21 May to 23 July, and
-      // above -17° from about 27 May to 17 July. The app has no high-latitude rule, so
-      // these prayers are missing (shown as "--", no adhan, no prayer lock).
+      // above -17° from about 27 May to 17 July. Without a high-latitude rule these
+      // prayers are missing; the app's default rule (below) fills them in.
       final london = WorldCase.catalog('london');
       final raw = appUtcMinutes(london, DateTime.utc(2026, 6, 21));
       expect(raw[Prayer.fajr.index].isNaN, isTrue);
       expect(raw[Prayer.isha.index].isNaN, isTrue);
     });
 
-    test(
-      'Fajr and Isha exist on every day of the year in every catalog city',
-      () {
-        final problems = <String>[];
-        for (final city in cities) {
-          final c = WorldCase.catalog(city.id);
-          for (var i = 0; i < 365; i++) {
-            final raw = appUtcMinutes(c, DateTime.utc(2026, 1, 1 + i));
-            if (raw.any((v) => v.isNaN)) problems.add('${city.id} day ${i + 1}');
+    test('default setting: twilight angle from 48° latitude, no rule below', () {
+      expect(HighLatitudeSetting.parse(null), HighLatitudeSetting.auto);
+      expect(HighLatitudeSetting.parse('nonsense'), HighLatitudeSetting.auto);
+      for (final v in HighLatitudeSetting.values) {
+        expect(HighLatitudeSetting.parse(v.name), v);
+      }
+      const auto = HighLatitudeSetting.auto;
+      expect(resolveHighLatitudeRule(auto, 51.5074), HighLatitudeRule.twilightAngle); // London
+      expect(resolveHighLatitudeRule(auto, 48.0), HighLatitudeRule.twilightAngle);
+      expect(resolveHighLatitudeRule(auto, -48.0), HighLatitudeRule.twilightAngle);
+      expect(resolveHighLatitudeRule(auto, 47.99), isNull);
+      expect(resolveHighLatitudeRule(auto, 30.0444), isNull); // Cairo
+      // An explicit parent choice applies at any latitude.
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.middleOfTheNight, 30), HighLatitudeRule.middleOfTheNight);
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.seventhOfTheNight, 30), HighLatitudeRule.seventhOfTheNight);
+      expect(resolveHighLatitudeRule(HighLatitudeSetting.twilightAngle, 30), HighLatitudeRule.twilightAngle);
+    });
+
+    test('Fajr and Isha exist on every day of the year in every catalog city (default setting)', () {
+      final problems = <String>[];
+      for (final city in cities) {
+        final c = WorldCase.catalog(city.id);
+        final rule = resolveHighLatitudeRule(HighLatitudeSetting.auto, city.lat);
+        for (var i = 0; i < 365; i++) {
+          final raw = appUtcMinutes(c, DateTime.utc(2026, 1, 1 + i), highLatitudeRule: rule);
+          if (raw.any((v) => !v.isFinite)) problems.add('${city.id} day ${i + 1}');
+          for (var k = 1; k < raw.length; k++) {
+            if (!(raw[k] > raw[k - 1])) problems.add('${city.id} day ${i + 1}: ${Prayer.values[k]} not after ${Prayer.values[k - 1]}');
           }
         }
-        expect(problems, isEmpty, reason: problems.take(20).join(', '));
-      },
-      skip: 'TODO(scholar + owner): no high-latitude rule. London, Birmingham and Berlin '
-          'lose Fajr/Isha for weeks every summer. Pick a rule (e.g. middle of the night, '
-          'one-seventh of the night, or angle-based as used by adhan/PrayTimes) and enable this test.',
-    );
+      }
+      expect(problems, isEmpty, reason: problems.take(20).join(', '));
+    });
+
+    final hlCases = [
+      WorldCase.catalog('london'),
+      worldCases.firstWhere((c) => c.city.id == 'test-oslo'),
+      worldCases.firstWhere((c) => c.city.id == 'test-reykjavik'),
+    ];
+    final hlDates = [
+      DateTime.utc(2026, 6, 21),
+      DateTime.utc(2026, 5, 20),
+      DateTime.utc(2026, 7, 10),
+      DateTime.utc(2026, 12, 21),
+    ];
+
+    for (final rule in HighLatitudeRule.values) {
+      test('${rule.name}: London (21 Jun), Oslo, Reykjavik have Fajr/Isha, in order, by the night-portion definition', () {
+        final problems = <String>[];
+        for (final c in hlCases) {
+          final tol = c.toleranceMinutes;
+          final (fajrPortion, ishaPortion) = switch (rule) {
+            HighLatitudeRule.middleOfTheNight => (1 / 2, 1 / 2),
+            HighLatitudeRule.seventhOfTheNight => (1 / 7, 1 / 7),
+            HighLatitudeRule.twilightAngle => (c.method.fajrAngle / 60, c.method.ishaAngle! / 60),
+          };
+          for (final date in hlDates) {
+            final where = '$c ${_d(date)}';
+            final app = appUtcMinutes(c, date, highLatitudeRule: rule);
+            final next = appUtcMinutes(c, DateTime.utc(date.year, date.month, date.day + 1), highLatitudeRule: rule);
+            final plain = appUtcMinutes(c, date);
+            if (app.any((v) => !v.isFinite)) {
+              problems.add('$where: missing/invalid time $app');
+              continue;
+            }
+            for (var k = 1; k < app.length; k++) {
+              if (!(app[k] > app[k - 1])) problems.add('$where: ${Prayer.values[k]} not after ${Prayer.values[k - 1]}');
+            }
+            // Isha is not after the next day's Fajr (they meet at midnight with middleOfTheNight).
+            if (app[Prayer.isha.index] > next[Prayer.fajr.index] + 1440 + 1) {
+              problems.add('$where: Isha after next Fajr');
+            }
+
+            // Night portions from the independent reference (sunset to next sunrise).
+            final ref = referenceFor(c, date);
+            final refNext = referenceFor(c, DateTime.utc(date.year, date.month, date.day + 1));
+            final night = refNext.sunrise! + 1440 - ref.maghrib!;
+            final safeFajr = ref.sunrise! - fajrPortion * night;
+            final safeIsha = ref.maghrib! + ishaPortion * night;
+            final fajr = app[Prayer.fajr.index], isha = app[Prayer.isha.index];
+            if (fajr < safeFajr - tol) problems.add('$where: Fajr ${_hm(fajr)} earlier than the bound ${_hm(safeFajr)}');
+            if (isha > safeIsha + tol) problems.add('$where: Isha ${_hm(isha)} later than the bound ${_hm(safeIsha)}');
+            // Where the plain calculation has no time, the rule's time is the bound itself.
+            if (plain[Prayer.fajr.index].isNaN && (fajr - safeFajr).abs() > tol) {
+              problems.add('$where: Fajr ${_hm(fajr)}, expected ${_hm(safeFajr)}');
+            }
+            if (plain[Prayer.isha.index].isNaN && (isha - safeIsha).abs() > tol) {
+              problems.add('$where: Isha ${_hm(isha)}, expected ${_hm(safeIsha)}');
+            }
+            // Dhuhr, Asr and Maghrib are never touched by the rule.
+            for (final p in [Prayer.dhuhr, Prayer.asr, Prayer.maghrib]) {
+              if (app[p.index] != plain[p.index]) problems.add('$where: $p changed by the rule');
+            }
+
+            // Adhan plan: Fajr and Isha are scheduled, strictly in order, never twice at once.
+            final loc = tz.getLocation(c.city.timeZone);
+            final plan = planAdhanNotifications(
+              now: tz.TZDateTime(loc, date.year, date.month, date.day),
+              lat: c.city.lat,
+              lng: c.city.lng,
+              method: c.method,
+              highLatitudeRule: rule,
+            );
+            for (var i = 1; i < plan.length; i++) {
+              if (!plan[i].when.isAfter(plan[i - 1].when)) problems.add('$where: adhan plan not increasing at $i');
+            }
+            final prayers = plan.map((s) => s.prayer).toSet();
+            if (!prayers.contains(Prayer.isha) || !prayers.contains(Prayer.fajr)) {
+              problems.add('$where: adhan plan lacks Fajr or Isha: ${plan.map((s) => s.prayer.name).toList()}');
+            }
+            if (plan.length < 9) problems.add('$where: only ${plan.length} adhans in 2 days');
+          }
+        }
+        expect(problems, isEmpty, reason: problems.take(30).join('\n'));
+      });
+    }
+
+    test('a fixed-interval Isha (Umm al-Qura) is never moved by a rule; only Fajr is bounded', () {
+      // Makkah's method used in London on 21 June (e.g. a family that keeps Umm al-Qura abroad).
+      const c = WorldCase(
+        City(
+          id: 'test-london-uaq',
+          countryId: '',
+          name: Localized('لندن', 'London'),
+          lat: 51.5074,
+          lng: -0.1278,
+          timeZone: 'Europe/London',
+        ),
+        'makkah',
+        inCatalog: false,
+      );
+      for (final rule in HighLatitudeRule.values) {
+        final app = appUtcMinutes(c, DateTime.utc(2026, 6, 21), highLatitudeRule: rule);
+        expect(app[Prayer.isha.index] - app[Prayer.maghrib.index], closeTo(90, 1e-6), reason: rule.name);
+        expect(app[Prayer.fajr.index].isFinite, isTrue, reason: rule.name);
+      }
+    });
   });
 
   group('methods', () {
@@ -409,10 +565,21 @@ void main() {
 
     test(
       'Umm al-Qura: Isha is Maghrib + 120 min during Ramadan',
-      () {},
+      () {
+        final makkah = WorldCase.catalog('makkah');
+        // 2027-02-22 is well inside Ramadan 1448 whichever day the month starts (about
+        // 8-9 Feb 2027); 2027-05-01 is well outside it. The app must get "is it Ramadan"
+        // from a verified Umm al-Qura source, not from these dates.
+        final ramadan = appUtcMinutes(makkah, DateTime.utc(2027, 2, 22));
+        expect(ramadan[Prayer.isha.index] - ramadan[Prayer.maghrib.index], closeTo(120, 1e-6));
+        final normal = appUtcMinutes(makkah, DateTime.utc(2027, 5, 1));
+        expect(normal[Prayer.isha.index] - normal[Prayer.maghrib.index], closeTo(90, 1e-6));
+      },
       skip: 'TODO(scholar + owner): the Umm al-Qura calendar uses Isha = Maghrib + 120 min in '
           'Ramadan (adhan: "UmmAlQura ... 30 minutes in Ramadan"). The app has no Hijri '
-          'calendar, so this cannot be applied yet. Needs a decision and a verified Hijri source.',
+          'calendar, so this cannot be applied yet. Needs a decision and a verified, offline Umm al-Qura '
+          'month-start source (none is vetted in the project yet; Saudi Ramadan is also announced by '
+          'sighting, which can differ from the calendar by a day). Enable when that source lands.',
     );
   });
 }

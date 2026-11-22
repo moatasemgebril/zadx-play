@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../data/catalog/locations.dart';
+import '../../features/prayer/city_time_zone.dart';
 import '../../features/prayer/prayer_calculator.dart';
 import '../../features/prayer/prayer_schedule.dart';
 import '../../features/settings/settings_controller.dart';
@@ -38,11 +39,12 @@ class PrayerNotificationService {
     // DST-safe plan (see planAdhanNotifications): the old "midnight + hours" and
     // "now + 24 h" arithmetic put every adhan one hour off on clock-change days.
     final slots = planAdhanNotifications(
-      now: tz.TZDateTime.now(tz.getLocation(city.timeZone)),
+      now: tz.TZDateTime.now(cityLocation(city)),
       lat: city.lat,
       lng: city.lng,
       method: methodById(s.methodId),
       asrFactor: s.asrFactor,
+      highLatitudeRule: resolveHighLatitudeRule(s.highLatitude, city.lat),
     );
     for (final slot in slots) {
       await _plugin.zonedSchedule(

@@ -131,7 +131,7 @@ final List<DateTime> worldDates = [
 ];
 
 /// App result in minutes after 00:00 UTC of [date] (NaN when the angle is not reached).
-List<double> appUtcMinutes(WorldCase c, DateTime date, {int? asrFactor}) {
+List<double> appUtcMinutes(WorldCase c, DateTime date, {int? asrFactor, HighLatitudeRule? highLatitudeRule}) {
   final t = const PrayerCalculator().compute(
     date: DateTime.utc(date.year, date.month, date.day),
     lat: c.city.lat,
@@ -139,6 +139,7 @@ List<double> appUtcMinutes(WorldCase c, DateTime date, {int? asrFactor}) {
     utcOffsetHours: 0,
     method: c.method,
     asrFactor: asrFactor ?? c.asrFactor,
+    highLatitudeRule: highLatitudeRule,
   );
   return [for (final p in Prayer.values) t.of(p) * 60];
 }

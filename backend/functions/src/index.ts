@@ -704,6 +704,8 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
         lat: settings.lat, lng: settings.lng, timeZone,
         fajrAngle: settings.fajrAngle, ishaAngle: settings.ishaAngle ?? null, ishaMinutes: settings.ishaMinutes ?? null,
         asrFactor: settings.asrFactor ?? 1, lockAtAdhan: settings.lockAtAdhan !== false,
+        // High-latitude rule for Fajr/Isha (absent from older apps: the guard then uses its default).
+        highLatRule: typeof settings.highLatRule === "string" ? settings.highLatRule : null,
       },
     });
   } catch (e) {

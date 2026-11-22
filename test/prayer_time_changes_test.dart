@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:zadx/data/catalog/locations.dart';
+import 'package:zadx/features/prayer/city_time_zone.dart';
 import 'package:zadx/features/prayer/prayer_calculator.dart';
 import 'package:zadx/features/prayer/prayer_schedule.dart';
 
@@ -130,21 +131,49 @@ void main() {
       expect(_transitionDays(tz.getLocation('Africa/Cairo'), DateTime.utc(2027), DateTime.utc(2028)).length, 2);
     });
 
-    test('Morocco: permanent +00 since 2026-09-20 (IANA tzdata 2026c)', () {
-      // IANA tzdata 2026c: "Morocco moves to permanent +00 on 2026-09-20." Before that,
-      // Africa/Casablanca was +01 with +00 during Ramadan. A bundled database older than
-      // 2026c shows every Moroccan prayer time one hour late on screen.
-      expectOffset('Africa/Casablanca', DateTime(2026, 11, 22), 0);
-      expectOffset('Africa/Casablanca', DateTime(2027, 6, 1), 0);
-      expectOffset('Africa/Casablanca', DateTime(2027, 2, 20), 0); // Ramadan 1448
-    },
-        skip: 'TODO(owner, P1): the bundled tz database (timezone 0.10.1, pinned by '
-            'flutter_local_notifications 18) predates tzdata 2026c and still has Morocco at +01, '
-            'so Casablanca/Rabat/Marrakech/Fes/Tangier times are shown one hour late. Adhan '
-            'notifications and prayer locks use exact instants and are not affected. Fix needs '
-            'timezone >= a 2026c release (requires a flutter_local_notifications upgrade) or a '
-            'catalog override; then enable this test.',
-    );
+    test('Morocco: every Moroccan city shows +00 since 2026-09-20 (IANA tzdata 2026c)', () {
+      // IANA tzdata 2026c (2026-07-08, https://www.iana.org/time-zones/releases/2026c):
+      // "Morocco plans to move back to permanent UTC, without daylight saving time
+      // transitions, on 2026-09-20 at 02:00." The bundled timezone 0.10.1 predates it, so
+      // cityLocation() replaces the stale zone (lib/features/prayer/city_time_zone.dart).
+      final moroccan = cities.where((c) => c.countryId == 'ma').toList();
+      expect(moroccan.map((c) => c.id), containsAll(['rabat', 'casa', 'marrakech', 'fes', 'tangier']));
+      for (final city in moroccan) {
+        final loc = cityLocation(city);
+        for (final d in [
+          DateTime(2026, 9, 21),
+          DateTime(2026, 11, 22),
+          DateTime(2027, 2, 20), // Ramadan 1448: no Ramadan change any more
+          DateTime(2027, 6, 1),
+          DateTime(2028, 3, 1),
+        ]) {
+          expect(_offsetAtNoon(loc, d), Duration.zero, reason: '${city.id} on $d');
+        }
+        // Wall clock = UTC: Dhuhr in late November is about 12:05-12:20 across Morocco (not 13:xx).
+        final dhuhr = prayerInstantsOn(
+          location: loc,
+          year: 2026,
+          month: 11,
+          day: 22,
+          lat: city.lat,
+          lng: city.lng,
+          method: methodById('morocco'),
+        )[Prayer.dhuhr]!;
+        expect(dhuhr.timeZoneOffset, Duration.zero, reason: city.id);
+        expect(dhuhr.hour, 12, reason: '${city.id}: Dhuhr $dhuhr');
+      }
+    });
+
+    test('the Morocco correction touches no other city', () {
+      for (final city in cities.where((c) => c.countryId != 'ma')) {
+        expect(cityLocation(city).name, city.timeZone, reason: city.id);
+      }
+      // And it switches itself off once the bundled data is current (+00 after the change).
+      final casa = cityLocation(cityById('casa'));
+      final raw = tz.getLocation('Africa/Casablanca');
+      final rawIsCurrent = _offsetAtNoon(raw, DateTime(2026, 11, 22)) == Duration.zero;
+      expect(casa.name, rawIsCurrent ? 'Africa/Casablanca' : 'UTC');
+    });
   });
 
   group('DST switch days', () {
