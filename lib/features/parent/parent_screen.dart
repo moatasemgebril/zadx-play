@@ -8,6 +8,7 @@ import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/catalog/games.dart';
+import '../../data/catalog/locations.dart';
 import '../../data/models/child_profile.dart';
 import '../../data/models/plan.dart';
 import '../../router.dart';
@@ -47,8 +48,9 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
-          // Zad X Play only: Zad X Kids has no prayer tasks or prayer lock.
+          // Zad X Play only: Zad X Kids has no prayer tasks, prayer lock or prayer times.
           if (!kIsKids) const _PrayerPauseCard(),
+          if (!kIsKids) const _HijriAdjustmentCard(),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),
           const SizedBox(height: 12),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: ReadingSetupCard()),
@@ -205,6 +207,42 @@ class _PrayerPauseCard extends ConsumerWidget {
               // Synced family: only a parent device may change it (the rules refuse a child device).
               if (!ref.read(walletProvider.notifier).setPrayerPaused(v)) showToast(context, l10n.approveOnParentPhone);
             },
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+/// Parent only (inside [ParentGate]): moves the Umm al-Qura Hijri date by one day for the
+/// Ramadan Isha rule (Isha = Maghrib + 120 min), for families whose Ramadan started a day
+/// before or after the printed calendar. Shown only for a method with a Ramadan rule.
+/// docs/decisions/PRAYER-TIMES-ACCURACY.md section 3.
+class _HijriAdjustmentCard extends ConsumerWidget {
+  const _HijriAdjustmentCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final s = ref.watch(settingsProvider);
+    if (methodById(s.methodId).ishaMinutesAfterMaghribInRamadan == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ZadCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(l10n.hijriAdjustTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(l10n.hijriAdjustHelp, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+          const SizedBox(height: 8),
+          ChoiceGrid<int>(
+            items: const [1, 0, -1],
+            selected: s.hijriAdjustmentDays,
+            label: (d) => switch (d) {
+              1 => l10n.hijriAdjustEarlier,
+              -1 => l10n.hijriAdjustLater,
+              _ => l10n.hijriAdjustNone,
+            },
+            onSelected: ref.read(settingsProvider.notifier).setHijriAdjustmentDays,
           ),
         ]),
       ),

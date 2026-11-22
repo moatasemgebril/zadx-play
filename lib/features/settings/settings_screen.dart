@@ -35,6 +35,7 @@ bool _ishaMeetsFajrSoon(AppSettings s) {
       lng: city.lng,
       method: methodById(s.methodId),
       highLatitudeRule: rule,
+      hijriAdjustmentDays: s.hijriAdjustmentDays,
     )) {
       return true;
     }

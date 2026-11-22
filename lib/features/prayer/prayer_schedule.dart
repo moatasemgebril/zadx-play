@@ -28,6 +28,7 @@ Map<Prayer, tz.TZDateTime?> prayerInstantsOn({
   required CalcMethod method,
   int asrFactor = 1,
   HighLatitudeRule? highLatitudeRule,
+  int hijriAdjustmentDays = 0,
 }) {
   final utcDay = DateTime.utc(year, month, day);
   final times = const PrayerCalculator().compute(
@@ -38,6 +39,7 @@ Map<Prayer, tz.TZDateTime?> prayerInstantsOn({
     method: method,
     asrFactor: asrFactor,
     highLatitudeRule: highLatitudeRule,
+    hijriAdjustmentDays: hijriAdjustmentDays,
   );
   return {
     for (final p in Prayer.values)
@@ -72,6 +74,7 @@ bool ishaReachesNextFajr({
   required double lng,
   required CalcMethod method,
   HighLatitudeRule? highLatitudeRule,
+  int hijriAdjustmentDays = 0,
 }) {
   Map<Prayer, tz.TZDateTime?> on(DateTime d) => prayerInstantsOn(
         location: location,
@@ -82,6 +85,7 @@ bool ishaReachesNextFajr({
         lng: lng,
         method: method,
         highLatitudeRule: highLatitudeRule,
+        hijriAdjustmentDays: hijriAdjustmentDays,
       );
   final isha = on(DateTime.utc(year, month, day))[Prayer.isha];
   final nextFajr = on(DateTime.utc(year, month, day + 1))[Prayer.fajr];
@@ -108,6 +112,7 @@ List<AdhanSlot> planAdhanNotifications({
   int asrFactor = 1,
   HighLatitudeRule? highLatitudeRule,
   int days = 2,
+  int hijriAdjustmentDays = 0,
 }) {
   // One extra day, only to know the Fajr that follows the last Isha.
   final perDay = <Map<Prayer, tz.TZDateTime?>>[];
@@ -124,6 +129,7 @@ List<AdhanSlot> planAdhanNotifications({
       method: method,
       asrFactor: asrFactor,
       highLatitudeRule: highLatitudeRule,
+      hijriAdjustmentDays: hijriAdjustmentDays,
     ));
   }
   final slots = <AdhanSlot>[];

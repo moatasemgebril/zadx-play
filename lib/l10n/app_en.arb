@@ -467,5 +467,10 @@
   "prayerPauseTitle": "Pause prayer tasks (excused)",
   "prayerPauseHelp": "Today only, for this child only: prayer tasks and the prayer lock pause, and no stars are lost. The child, siblings and the family log never see it; adhkar stay open.",
   "otherTasksOpenToday": "Your other tasks are open today",
-  "approveOnParentPhone": "Approve tasks from the parent phone. This is the child's device."
+  "approveOnParentPhone": "Approve tasks from the parent phone. This is the child's device.",
+  "hijriAdjustTitle": "Ramadan date (Umm al-Qura calendar)",
+  "hijriAdjustHelp": "In Ramadan, Isha is 2 hours after Maghrib in the Umm al-Qura calendar. If Ramadan started a day before or after the calendar where you live, choose it here.",
+  "hijriAdjustEarlier": "Started 1 day earlier",
+  "hijriAdjustNone": "As the calendar",
+  "hijriAdjustLater": "Started 1 day later"
 }

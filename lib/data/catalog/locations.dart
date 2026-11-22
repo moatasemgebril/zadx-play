@@ -4,7 +4,7 @@ import '../models/location.dart';
 
 const calcMethods = <String, CalcMethod>{
   'egypt': CalcMethod(id: 'egypt', name: Localized('الهيئة المصرية', 'Egyptian Authority'), fajrAngle: 19.5, ishaAngle: 17.5),
-  'makkah': CalcMethod(id: 'makkah', name: Localized('أم القرى (مكة)', 'Umm al-Qura (Makkah)'), fajrAngle: 18.5, ishaMinutesAfterMaghrib: 90),
+  'makkah': CalcMethod(id: 'makkah', name: Localized('أم القرى (مكة)', 'Umm al-Qura (Makkah)'), fajrAngle: 18.5, ishaMinutesAfterMaghrib: 90, ishaMinutesAfterMaghribInRamadan: 120),
   'mwl': CalcMethod(id: 'mwl', name: Localized('رابطة العالم الإسلامي', 'Muslim World League'), fajrAngle: 18, ishaAngle: 17),
   'isna': CalcMethod(id: 'isna', name: Localized('أمريكا الشمالية (ISNA)', 'North America (ISNA)'), fajrAngle: 15, ishaAngle: 15),
   'karachi': CalcMethod(id: 'karachi', name: Localized('جامعة كراتشي', 'Univ. of Karachi'), fajrAngle: 18, ishaAngle: 18),
