@@ -10,7 +10,7 @@ enum BillingPeriod { monthly, yearly }
 /// Names are mirrored in `backend/functions/src/security.ts` (`PLAN_FEATURES`)
 /// and a test keeps both lists identical.
 enum AppFeature {
-  // ---- Free forever (owner decision 2026-11-21) ----
+  // ---- Free plan, no subscription (owner decision 2026-11-21) ----
   /// Device lock: lock at prayer times + a simple daily time limit (1 child).
   appLock,
 

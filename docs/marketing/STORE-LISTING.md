@@ -26,10 +26,10 @@ Children" for the Kids Category; we plan Lifestyle/Education).
 ## 2. Apple promotional text (≤170) and keywords (≤100)
 
 **Promotional text — AR (~120 chars, includes tanween in مجانًا):**
-> مجانًا للأبد: قفل التطبيقات وقت الصلاة، ومواقيت الصلاة والأذان، والقرآن الكريم. بلا إعلانات، والقفل والمواقيت تعمل دون إنترنت. [A1][A3][A4]
+> مجانًا بلا اشتراك: قفل التطبيقات وقت الصلاة، ومواقيت الصلاة والأذان، والقرآن الكريم والأذكار. بلا إعلانات، والقفل والمواقيت تعمل دون إنترنت. [A1][A3][A4]
 
 **Promotional text — EN (135 chars):**
-> Free forever: app lock at prayer time, prayer times, adhan and the Holy Quran. No ads. Prayer times and the lock work without internet. [A1][A3][A4]
+> Free, no subscription: prayer-time app lock, prayer times, adhan, the Holy Quran and adhkar. No ads. Prayer times and the lock work offline. [A1][A3][A4]
 
 **Keywords — EN (100/100):**
 ```
@@ -52,11 +52,11 @@ Zad X Play — العب • تعلّم • تألّق
 
 تطبيق عائلي يساعدك على تنظيم وقت طفلك على الجهاز بروح إسلامية: الألعاب تُفتح بعد الصلاة وإنجاز المهام، ووقت الأذان يوقف اللعب، ومعه مواقيت الصلاة والأذان والقرآن الكريم.
 
-■ مجانًا للأبد، بلا اشتراك
+■ الخطة المجانية، بلا اشتراك
 • قفل التطبيقات عند وقت الصلاة مع حدّ يومي لوقت الشاشة (طفل واحد). في الخطة المجانية ينتهي قفل الصلاة تلقائيًا بعد ٢٠ دقيقة.
 • مواقيت الصلاة تُحسب على الجهاز نفسه لمدن في أكثر من ٣٠ دولة، مع تنبيهات الأذان.
-• الأذان بأصوات متعددة.
-• القرآن الكريم مع تلاوات بأصوات أربعة من كبار القرّاء.
+• الأذان بصوت من المدينة المنورة.
+• القرآن الكريم مع تلاوات أربعة من كبار القرّاء، بإذن مكتوب عبر Quran Foundation.
 • الأذكار اليومية مع عدّاد التسبيح.
 
 ■ الخطة الأساسية والخطة بلس
@@ -98,11 +98,11 @@ Zad X Play — Play • Learn • Shine
 
 A family app that helps you shape your child's screen time around Islamic habits: games unlock after prayer and tasks, the adhan pauses play, and prayer times, adhan and the Holy Quran are built in.
 
-■ FREE FOREVER, NO SUBSCRIPTION
+■ FREE PLAN, NO SUBSCRIPTION
 • App lock at prayer time plus a daily screen-time limit (1 child). On Free, the prayer lock ends by itself after 20 minutes.
 • Prayer times calculated on the device for cities in 30+ countries, with adhan alerts.
-• Adhan with several voices.
-• The Holy Quran with recitations by approved reciters.
+• Adhan recorded in Madinah.
+• The Holy Quran with recitations by four renowned reciters, used with written permission via Quran Foundation.
 • Daily adhkar with a tasbeeh counter.
 
 ■ BASIC AND PLUS
@@ -193,11 +193,11 @@ sign-off; no "free"/"No.1"/"best"/"download now" overlay text; same captions in 
 ### Claims that need approval before use
 | Tag | Claim | Status / owner |
 |---|---|---|
-| A1 | "Free forever / مجانًا للأبد" | Owner request 2026-11-21; legal to confirm wording (perpetual promise). |
+| A1 | "Free, no subscription / مجانًا بلا اشتراك" | Owner decision 2026-11-21 (after marketing expert review): no "forever / للأبد" anywhere — it is a perpetual promise (FTC 16 CFR 251, EU UCPD, UK CAP, Egypt Law 181/2018 risk). Always list what the free plan includes and its limits (1 child, 20-min prayer lock). Never use "free" in the app name/icon (Google Play metadata policy). |
 | A2 | "No ads, no third-party ad/analytics SDKs" | True per pubspec; Security to re-verify on release build (incl. transitive deps). |
 | A3 | Adhan claims + screenshot 3 | **Blocked**: `assets/audio/adhan_*.mp3` missing until recordings licence. |
 | A4 | "Works without internet" | Prayer times + lock offline today; tasks offline pending local DB; offline test suite not done. Quran text needs network on first open → do not claim Quran offline. |
-| A5 | Quran "approved reciters" | QF approval covers QF API only; source switch from EveryAyah pending; Abdur-Rashid Sufi must be removed (P1). |
+| A5 | Quran reciters | **Approved in writing** by Quran Foundation (2026-11-21) for Alafasy, Abdul Basit (murattal), Al-Husary, Al-Minshawi (murattal) via the QF API, with attribution. Wording allowed: "with permission via Quran Foundation" — never "endorsed by". Engineering still must switch audio from EveryAyah URLs to the QF API before store release (R-34). Abdur-Rashid Sufi is not in the app. |
 | A6 | Adhkar listed as Free | Owner decision 2026-11-21 (BACKLOG); ARCHITECTURE "Plans" table still shows Basic — fix doc. Adhkar scholar review pending; no "reviewed" claim. |
 | A7 | Privacy claims (nickname only, on-device check) | Privacy officer sign-off; privacy policy must say the same. |
 | A8 | Windows Guard, iOS lock | Not yet tested on real devices; drop lines if not shipped at launch. |
