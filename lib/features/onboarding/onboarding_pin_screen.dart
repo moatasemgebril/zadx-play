@@ -155,13 +155,17 @@ class _OnboardingPinScreenState extends ConsumerState<OnboardingPinScreen> {
                     onSubmitted: (_) => _save(),
                   ),
                   const SizedBox(height: 6),
-                  CheckboxListTile(
-                    key: const Key('onboardingIsParent'),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: _isParent,
-                    onChanged: (v) => setState(() => _isParent = v ?? false),
-                    title: Text(l10n.onboardingIamParent, style: const TextStyle(fontSize: 16)),
+                  // Own Material so the tile's ink shows on the white card.
+                  Material(
+                    type: MaterialType.transparency,
+                    child: CheckboxListTile(
+                      key: const Key('onboardingIsParent'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _isParent,
+                      onChanged: (v) => setState(() => _isParent = v ?? false),
+                      title: Text(l10n.onboardingIamParent, style: const TextStyle(fontSize: 16)),
+                    ),
                   ),
                   if (errorText != null)
                     Padding(
