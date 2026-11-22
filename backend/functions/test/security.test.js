@@ -230,3 +230,16 @@ test("freeChildIdOf defaults to child-1", () => {
   assert.equal(s.freeChildIdOf("a/b"), "child-1");
   assert.equal(s.freeChildIdOf(42), "child-1");
 });
+
+test("redeemPairingCode refuses a code for a child paused on Free (child_paused)", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const free = { plan: null, planExpiresAt: null, createdAtMs: now - 30 * 86_400_000, freeChildId: undefined, now };
+  const paused = s.childPaused({ ...free, childId: "cyusuf" });
+  assert.equal(s.pairingRedeemRefusal(true, paused), "child_paused");
+  // The free child, a paid family or a trial family can still redeem.
+  assert.equal(s.pairingRedeemRefusal(true, s.childPaused({ ...free, childId: "child-1" })), null);
+  const paid = { ...free, plan: "basic", planExpiresAt: new Date(now + 86_400_000).toISOString() };
+  assert.equal(s.pairingRedeemRefusal(true, s.childPaused({ ...paid, childId: "cyusuf" })), null);
+  assert.equal(s.pairingRedeemRefusal(true, s.childPaused({ ...free, createdAtMs: now - 86_400_000, childId: "cyusuf" })), null);
+  assert.equal(s.pairingRedeemRefusal(false, true), null);
+});

@@ -23,7 +23,7 @@ import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
   DEFAULT_CHILD_ID, HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, childPaused, heartbeatAction,
-  hexDigestEquals,
+  hexDigestEquals, pairingRedeemRefusal,
   isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
   rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
@@ -530,8 +530,17 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
     if (t !== "windows" && req.auth?.uid === snap.get("createdBy")) {
       throw new HttpsError("failed-precondition", "own_code");
     }
+    const codeChildId = parseChildId(snap.get("childId"));
+    // Free plan = one child: the family may have dropped to Free since the code was created.
+    // Refuse before burning the code, so it still works if the parent subscribes in time.
+    const codeFamilyId = snap.get("familyId");
+    if (!isSafeId(codeFamilyId)) throw new HttpsError("not-found", "invalid_code");
+    const family = await tx.get(db.doc(`families/${codeFamilyId}`));
+    if (pairingRedeemRefusal(family.exists, isChildPaused(family, codeChildId)) !== null) {
+      throw new HttpsError("failed-precondition", "child_paused");
+    }
     tx.delete(ref); // single use
-    return { familyId: snap.get("familyId") as string, target: t, childId: parseChildId(snap.get("childId")) };
+    return { familyId: codeFamilyId as string, target: t, childId: codeChildId };
   });
 
   if (target === "windows") {

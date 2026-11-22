@@ -143,6 +143,15 @@ export function childPaused(input: {
   return input.childId !== freeChildIdOf(input.freeChildId);
 }
 
+/**
+ * `redeemPairingCode`: why a valid code must be refused before it is burned, or null.
+ * A child paused on the Free plan gets no new device (same as `createPairingCode`).
+ * A missing family keeps the old behaviour (null): the redeem then fails on its own.
+ */
+export function pairingRedeemRefusal(familyExists: boolean, paused: boolean): "child_paused" | null {
+  return familyExists && paused ? "child_paused" : null;
+}
+
 // ---------------------------------------------------------------------------
 // AI assistant input
 // ---------------------------------------------------------------------------
