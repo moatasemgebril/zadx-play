@@ -2,19 +2,32 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../core/app_config.dart';
+import '../../core/app_variant.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/widgets/brand_logo.dart';
+import '../settings/settings_controller.dart' show defaultLanguageFor;
 
-/// Brand launch screen: the "Zad X" wordmark (always in Latin letters, also in Arabic)
-/// on a soft navy → purple gradient, shown while the start-up work in `main()` runs.
+/// Brand launch screen, shown while the start-up work in `main()` runs. One per app:
 ///
+/// * **Zad X Play**: the Zad X logo ([BrandLogo]), the Latin "Zad X" wordmark and the identity
+///   line in Arabic and English ([IslamicBrand.identityAr] / [IslamicBrand.identityEn]) on a
+///   soft navy → purple gradient.
+/// * **Zad X Kids**: the Latin "ZAD X KIDS" wordmark ([BrandLogo] in Kids) on a bright, neutral
+///   navy → teal sky with sun-yellow and coral light. No Arabic script, no religious line, no
+///   artwork logo (docs/decisions/ZADX-KIDS-VARIANT.md).
+///
+/// Shared behaviour:
 /// * The native splash (Android `launch_background`, iOS `LaunchScreen.storyboard`) uses
-///   [LaunchSplash.background] so there is no white flash before the first Flutter frame.
+///   [LaunchSplash.background] (navy, both apps) so there is no white flash before the first
+///   Flutter frame; both gradients start from that navy.
 /// * The reveal (fade + scale + one shimmer pass) takes [revealDuration] (≤ 1.6 s together
 ///   with the exit fade). The app is built underneath while it plays, so start-up is not
 ///   delayed: the splash leaves as soon as both the reveal and the app are ready.
-/// * Reduced motion (`MediaQuery.disableAnimations`): no animation, the wordmark is shown
+/// * Reduced motion (`MediaQuery.disableAnimations`): no animation, the final frame is shown
 ///   for [reducedMotionHold] and then the app appears without a fade.
 /// * Bundled assets and the platform default font only: no network, no runtime font download.
+/// * Screen readers hear one label: "Zad X Kids", or "Zad X — <identity line>" in Zad X Play.
 class LaunchSplash {
   const LaunchSplash._();
 
@@ -24,6 +37,11 @@ class LaunchSplash {
   static const revealDuration = Duration(milliseconds: 1300);
   static const exitDuration = Duration(milliseconds: 300);
   static const reducedMotionHold = Duration(milliseconds: 500);
+
+  /// Screen-reader label of the splash for [variant] in [lang].
+  static String semanticsLabel(AppVariant variant, String lang) => !kIsKids && variant == AppVariant.islamic
+      ? '${AppConfig.brandName} — ${IslamicBrand.identityFor(lang)}'
+      : KidsBrand.storeName;
 
   /// Shows the splash right away (`runApp`) and returns a handle. Hand the real app to
   /// [LaunchSplashHandle.complete] once start-up is done.
@@ -51,12 +69,22 @@ class LaunchSplashHost extends StatefulWidget {
   const LaunchSplashHost({
     super.key,
     required this.app,
+    this.variant = appVariant,
+    this.language,
     this.revealDuration = LaunchSplash.revealDuration,
     this.exitDuration = LaunchSplash.exitDuration,
     this.reducedMotionHold = LaunchSplash.reducedMotionHold,
   });
 
   final Future<Widget> app;
+
+  /// Which app's splash (default: this build; the Kids build always shows the Kids splash).
+  final AppVariant variant;
+
+  /// Language of the screen-reader label. Default: the first-run language of [variant] for the
+  /// phone's language (settings are not loaded yet at this point).
+  final String? language;
+
   final Duration revealDuration;
   final Duration exitDuration;
   final Duration reducedMotionHold;
@@ -83,6 +111,9 @@ class _LaunchSplashHostState extends State<LaunchSplashHost> {
   @override
   Widget build(BuildContext context) {
     final app = _app;
+    final variant = kIsKids ? AppVariant.kids : widget.variant;
+    final lang = widget.language ??
+        defaultLanguageFor(variant, WidgetsBinding.instance.platformDispatcher.locale.languageCode);
     return Stack(
       alignment: Alignment.center,
       fit: StackFit.expand,
@@ -95,9 +126,11 @@ class _LaunchSplashHostState extends State<LaunchSplashHost> {
             key: _splashKey,
             view: View.of(context),
             child: Directionality(
-              // The wordmark is Latin, so it always reads left to right (RTL app included).
+              // The wordmarks are Latin, so the stage reads left to right (RTL app included).
               textDirection: TextDirection.ltr,
               child: _SplashStage(
+                variant: variant,
+                label: LaunchSplash.semanticsLabel(variant, lang),
                 appReady: app != null,
                 revealDuration: widget.revealDuration,
                 exitDuration: widget.exitDuration,
@@ -115,6 +148,8 @@ class _LaunchSplashHostState extends State<LaunchSplashHost> {
 
 class _SplashStage extends StatefulWidget {
   const _SplashStage({
+    required this.variant,
+    required this.label,
     required this.appReady,
     required this.revealDuration,
     required this.exitDuration,
@@ -122,6 +157,8 @@ class _SplashStage extends StatefulWidget {
     required this.onFinished,
   });
 
+  final AppVariant variant;
+  final String label;
   final bool appReady;
   final Duration revealDuration;
   final Duration exitDuration;
@@ -141,6 +178,8 @@ class _SplashStageState extends State<_SplashStage> with TickerProviderStateMixi
   bool _revealed = false;
   bool _leaving = false;
 
+  bool get _play => !kIsKids && widget.variant == AppVariant.islamic;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -152,7 +191,8 @@ class _SplashStageState extends State<_SplashStage> with TickerProviderStateMixi
       _reveal.value = 1;
       _hold = Timer(widget.reducedMotionHold, _onRevealed);
     } else {
-      precacheImage(const AssetImage(_logoAsset), context, onError: (_, __) {});
+      // Zad X Play only: the Kids bundle has no artwork logo (tools/kids_variant_prepare.py).
+      if (_play) precacheImage(const AssetImage(BrandLogo.islamicAsset), context, onError: (_, __) {});
       _reveal.forward().whenComplete(_onRevealed);
     }
   }
@@ -198,23 +238,27 @@ class _SplashStageState extends State<_SplashStage> with TickerProviderStateMixi
   Widget build(BuildContext context) {
     return AbsorbPointer(
       child: Semantics(
-        label: 'Zad X',
+        label: widget.label,
         container: true,
         excludeSemantics: true,
         child: FadeTransition(
           opacity: ReverseAnimation(_exit),
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [LaunchSplash.background, Color(0xFF1A2C7A), AppColors.purpleDark],
-                stops: [0, 0.6, 1],
+                colors: _play
+                    ? const [LaunchSplash.background, Color(0xFF1A2C7A), AppColors.purpleDark]
+                    : const [LaunchSplash.background, KidsColors.tealDeep, KidsColors.teal],
+                stops: const [0, 0.6, 1],
               ),
             ),
             child: AnimatedBuilder(
               animation: _reveal,
-              builder: (context, _) => _SplashContent(t: _reveal.value, animate: !_reduced),
+              builder: (context, _) => _play
+                  ? _PlayContent(t: _reveal.value, animate: !_reduced)
+                  : _KidsContent(t: _reveal.value, animate: !_reduced),
             ),
           ),
         ),
@@ -223,25 +267,26 @@ class _SplashStageState extends State<_SplashStage> with TickerProviderStateMixi
   }
 }
 
-const _logoAsset = 'assets/images/zadx_logo.jpg';
+double _interval(double t, double begin, double end, Curve curve) =>
+    curve.transform(((t - begin) / (end - begin)).clamp(0.0, 1.0));
 
-class _SplashContent extends StatelessWidget {
-  const _SplashContent({required this.t, required this.animate});
+double _logoWidth(BuildContext context) => (MediaQuery.sizeOf(context).width * 0.62).clamp(160.0, 300.0);
+
+/// Zad X Play: logo, "Zad X" wordmark, a fine gold rule and the identity line (Arabic, English).
+class _PlayContent extends StatelessWidget {
+  const _PlayContent({required this.t, required this.animate});
 
   /// Reveal progress 0 → 1.
   final double t;
   final bool animate;
 
-  static double _interval(double t, double begin, double end, Curve curve) =>
-      curve.transform(((t - begin) / (end - begin)).clamp(0.0, 1.0));
-
   @override
   Widget build(BuildContext context) {
     final logo = _interval(t, 0, 0.5, Curves.easeOutCubic);
     final word = _interval(t, 0.2, 0.7, Curves.easeOutCubic);
+    final line = _interval(t, 0.45, 0.9, Curves.easeOutCubic);
     final shine = animate ? _interval(t, 0.55, 1, Curves.easeInOut) : 1.0;
-    final width = MediaQuery.sizeOf(context).width;
-    final logoWidth = (width * 0.62).clamp(160.0, 300.0);
+    final logoWidth = _logoWidth(context);
 
     return Stack(fit: StackFit.expand, children: [
       // Soft glow behind the logo.
@@ -259,41 +304,42 @@ class _SplashContent extends StatelessWidget {
         ),
       ),
       Center(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Opacity(
-            opacity: logo,
-            child: Transform.scale(
-              scale: 0.9 + 0.1 * logo,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(28),
-                child: Image.asset(
-                  _logoAsset,
-                  width: logoWidth,
-                  fit: BoxFit.contain,
-                  excludeFromSemantics: true,
-                  gaplessPlayback: true,
-                  errorBuilder: (_, __, ___) => SizedBox(width: logoWidth),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Opacity(
+              opacity: logo,
+              child: Transform.scale(
+                scale: 0.9 + 0.1 * logo,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: BrandLogo(width: logoWidth, height: logoWidth * 0.66, variant: AppVariant.islamic),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 28),
-          Opacity(
-            opacity: word,
-            child: Transform.scale(
-              scale: 0.94 + 0.06 * word,
-              child: _Shimmer(progress: shine, enabled: animate, child: const _Wordmark()),
+            const SizedBox(height: 26),
+            Opacity(
+              opacity: word,
+              child: Transform.scale(
+                scale: 0.94 + 0.06 * word,
+                child: _Shimmer(progress: shine, enabled: animate, child: const _PlayWordmark()),
+              ),
             ),
-          ),
-        ]),
+            const SizedBox(height: 14),
+            Opacity(
+              opacity: line,
+              child: Transform.translate(offset: Offset(0, 6 * (1 - line)), child: const _IdentityLine()),
+            ),
+          ]),
+        ),
       ),
     ]);
   }
 }
 
 /// "Zad X" in the platform's default font (bundled with the OS, nothing downloaded).
-class _Wordmark extends StatelessWidget {
-  const _Wordmark();
+class _PlayWordmark extends StatelessWidget {
+  const _PlayWordmark();
 
   @override
   Widget build(BuildContext context) => const Text.rich(
@@ -314,7 +360,128 @@ class _Wordmark extends StatelessWidget {
       );
 }
 
-/// One soft light band sweeping across the wordmark.
+/// The Zad X Play identity line: a fine gold rule, then Arabic over English.
+/// Warm cream on navy/purple: ≥ 8.4:1 (Arabic) and ≥ 7.8:1 (English) at every point of the gradient.
+class _IdentityLine extends StatelessWidget {
+  const _IdentityLine();
+
+  static const _cream = Color(0xFFFFEFC7);
+  static const _soft = Color(0xFFE9E4FF);
+
+  @override
+  Widget build(BuildContext context) => Column(mainAxisSize: MainAxisSize.min, children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 28, height: 1.2, color: AppColors.yellow.withValues(alpha: 0.7)),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Transform.rotate(
+              angle: 0.785398, // a small gold diamond
+              child: Container(width: 6, height: 6, color: AppColors.yellow),
+            ),
+          ),
+          Container(width: 28, height: 1.2, color: AppColors.yellow.withValues(alpha: 0.7)),
+        ]),
+        const SizedBox(height: 12),
+        const Text(
+          IslamicBrand.identityAr,
+          textDirection: TextDirection.rtl,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: _cream, height: 1.3, decoration: TextDecoration.none),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          IslamicBrand.identityEn,
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 2.4,
+            color: _soft,
+            height: 1.3,
+            decoration: TextDecoration.none,
+          ),
+        ),
+      ]);
+}
+
+/// Zad X Kids: the Latin "ZAD X KIDS" wordmark on a white badge, with soft sun and coral light.
+class _KidsContent extends StatelessWidget {
+  const _KidsContent({required this.t, required this.animate});
+
+  final double t;
+  final bool animate;
+
+  @override
+  Widget build(BuildContext context) {
+    final light = _interval(t, 0, 0.6, Curves.easeOutCubic);
+    final badge = _interval(t, 0.1, 0.65, Curves.easeOutBack);
+    final shine = animate ? _interval(t, 0.55, 1, Curves.easeInOut) : 1.0;
+    final size = MediaQuery.sizeOf(context);
+    final logoWidth = _logoWidth(context);
+
+    Widget glow(Alignment at, double d, Color c, double alpha) => Align(
+          alignment: at,
+          child: Opacity(
+            opacity: light,
+            child: Container(
+              width: d,
+              height: d,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(colors: [c.withValues(alpha: alpha), c.withValues(alpha: 0)]),
+              ),
+            ),
+          ),
+        );
+
+    return Stack(fit: StackFit.expand, children: [
+      // Sun-yellow light top-end, coral light bottom-start, a hint of mint in the middle.
+      glow(const Alignment(0.95, -0.85), size.shortestSide * 0.9, KidsColors.sun, 0.45),
+      glow(const Alignment(-1.0, 0.95), size.shortestSide * 0.8, KidsColors.coral, 0.4),
+      glow(Alignment.center, logoWidth * 1.6, KidsColors.mint, 0.22),
+      // A few playful dots (static, fade in with the light).
+      for (final (x, y, d, c) in const [
+        (-0.7, -0.55, 14.0, KidsColors.sun),
+        (0.78, 0.42, 18.0, KidsColors.coral),
+        (-0.55, 0.62, 10.0, KidsColors.mint),
+        (0.6, -0.5, 9.0, KidsColors.mint),
+      ])
+        Align(
+          alignment: Alignment(x, y),
+          child: Opacity(
+            opacity: 0.8 * light,
+            child: Container(width: d, height: d, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+          ),
+        ),
+      Center(
+        child: Opacity(
+          opacity: badge.clamp(0.0, 1.0),
+          child: Transform.scale(
+            scale: 0.88 + 0.12 * badge,
+            child: _Shimmer(
+              progress: shine,
+              enabled: animate,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 30, offset: Offset(0, 12))],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: BrandLogo(width: logoWidth, height: logoWidth * 0.62, variant: AppVariant.kids),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
+  }
+}
+
+/// One soft light band sweeping across [child].
 class _Shimmer extends StatelessWidget {
   const _Shimmer({required this.progress, required this.enabled, required this.child});
 
@@ -325,13 +492,13 @@ class _Shimmer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!enabled || progress <= 0 || progress >= 1) return child;
-    final x = -1.0 + 3.0 * progress; // band centre moves from -1 to 2 (beyond the text)
+    final x = -1.0 + 3.0 * progress; // band centre moves from -1 to 2 (beyond the child)
     return ShaderMask(
       blendMode: BlendMode.srcATop,
       shaderCallback: (rect) => LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
-        colors: const [Color(0x00FFFFFF), Color(0xCCFFFFFF), Color(0x00FFFFFF)],
+        colors: const [Color(0x00FFFFFF), Color(0x99FFFFFF), Color(0x00FFFFFF)],
         stops: [
           (x - 0.25).clamp(0.0, 1.0),
           x.clamp(0.0, 1.0),

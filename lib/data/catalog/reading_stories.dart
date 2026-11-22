@@ -130,7 +130,7 @@ const readingStories = <ReadingStory>[
   ReadingStory(
     id: 'broken_vase',
     level: ReadingLevel.age8to10,
-    title: Localized('المزهرية المكسورة', 'The Broken Vase'),
+    title: Localized('المزهرية التي انكسرت', 'The Broken Vase'),
     paragraphs: [
       Localized(
         'كان عمر يلعب بالكرة داخل غرفة الجلوس، مع أن أمه طلبت منه أن يلعب في الحديقة.',

@@ -181,6 +181,12 @@ splash, which fades out once both the reveal (1.3 s + 0.3 s exit) and the app ar
 (`MediaQuery.disableAnimations`) → no animation, 0.5 s hold, no fade. Wordmark "Zad X" is always Latin/LTR,
 default platform font (no font download). Native splash colour `#0A225E` (Android `zadx_splash_bg`,
 `values*/styles.xml`; iOS `LaunchScreen.storyboard`) = `AppColors.navy`, so there is no white flash.
+Variant-aware (docs/decisions/ZADX-KIDS-VARIANT.md): the logo always comes from `BrandLogo`.
+**Zad X Play** shows the logo, "Zad X" and the identity line `IslamicBrand.identityAr/En`
+("لأطفال المسلمين" / "For Muslim Kids", also in Help → About); screen-reader label "Zad X — <line>".
+**Zad X Kids** shows only the Latin "ZAD X KIDS" wordmark on a white badge over a navy → teal sky with
+sun-yellow and coral light: no Arabic, no religious line, no artwork logo; label "Zad X Kids". Both start
+from the native navy. The splash source holds no Arabic text (checked by test/kids_artwork_test.dart).
 
 ## Reading homework (owner request 2026-11-22)
 Task kind `reading` (`TaskDefinition.readingMode` story | paperBook, `readingLevel`, `readingMinutes`).

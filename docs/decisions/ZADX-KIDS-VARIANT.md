@@ -113,7 +113,7 @@ flutter test
 
 # Zad X Kids
 flutter run --dart-define=ZADX_VARIANT=kids
-flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/kids_artwork_test.dart test/schedule_test.dart
+flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/kids_artwork_test.dart test/launch_splash_test.dart test/schedule_test.dart
 
 # Zad X Kids APK (CI or a throw-away clone: the first step deletes the Islamic assets)
 python3 tools/kids_variant_prepare.py --apply

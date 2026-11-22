@@ -16,7 +16,10 @@ import 'package:zadx/core/localized.dart';
 import 'package:zadx/data/catalog/default_tasks.dart';
 import 'package:zadx/data/catalog/games.dart';
 import 'package:zadx/data/catalog/praise.dart';
+import 'package:zadx/data/catalog/reading_stories.dart';
+import 'package:zadx/data/models/family_task.dart';
 import 'package:zadx/data/models/plan.dart';
+import 'package:zadx/features/reading/reading_tasks.dart';
 import 'package:zadx/features/schedule/scheduled_lock.dart';
 import 'package:zadx/router.dart';
 import 'package:zadx/variant/kids_localizations.dart';
@@ -215,7 +218,10 @@ void main() {
       expect(KidsBrand.storeName, 'Zad X Kids');
       expect(KidsBrand.androidPackage, 'com.zadx.kids');
       expect(KidsBrand.iosBundleId, 'com.zadx.kids');
-      for (final t in [KidsBrand.storeName, KidsBrand.storeSubtitleAr, KidsBrand.storeSubtitleEn]) {
+      for (final t in [
+        KidsBrand.storeName, KidsBrand.storeSubtitleAr, KidsBrand.storeSubtitleEn,
+        KidsBrand.storeShortDescriptionAr, KidsBrand.storeShortDescriptionEn,
+      ]) {
         _expectNeutral('KidsBrand', t);
       }
       final kidsProducts = {
@@ -285,6 +291,24 @@ void main() {
 
     test('learning games: none in Kids (no prophets, no mosque, no Arabic Letters)', () {
       expect(zadGamesFor(AppVariant.kids), isEmpty);
+    });
+
+    test('reading homework (shared with Zad X Play) is neutral; its English text has no Arabic script', () {
+      final arabic = RegExp('[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]');
+      final texts = <Localized>[
+        for (final s in readingStories) ...[
+          s.title,
+          ...s.paragraphs,
+          for (final q in s.questions) ...[q.prompt, ...q.options],
+        ],
+        for (final t in [ReadingTasks.story(ReadingLevel.age5to7), ReadingTasks.book(15)]) ...[t.title, t.subtitle],
+      ];
+      expect(texts, isNotEmpty);
+      for (final t in texts) {
+        _expectNeutral('reading', t.ar);
+        _expectNeutral('reading', t.en);
+        expect(arabic.hasMatch(t.en), isFalse, reason: t.en);
+      }
     });
 
     test('schedules replace prayer locks', () {

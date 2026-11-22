@@ -108,7 +108,7 @@ jobs:
       - name: Unit tests
         run: flutter test --coverage
       - name: Zad X Kids tests (ZADX_VARIANT=kids constants)
-        run: flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/kids_artwork_test.dart test/schedule_test.dart
+        run: flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/kids_artwork_test.dart test/launch_splash_test.dart test/schedule_test.dart
       - name: Build Android APK (debug, installable for testing)
         run: flutter build apk --debug
       - name: Kotlin rule tests (LockRules - device lock + protection)
