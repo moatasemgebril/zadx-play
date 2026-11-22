@@ -15,6 +15,10 @@ The font files could **not** be downloaded in the build environment (the network
 `false` and the app uses the **platform fonts** (the device's default Latin and Arabic fonts) with the same sizes and
 weights. Nothing is fetched.
 
+Retried on 2026-11-22 during PR integration (zadx-cto-architect): `raw.githubusercontent.com` and
+`fonts.gstatic.com` are still blocked (proxy 403). **Owner action:** add the six TTFs from a machine
+with normal internet access, following the steps below.
+
 Known effect: Quran verses and adhan phrases are shown in the platform Arabic font instead of
 Amiri Quran until the files are added (listed for the Islamic Content Reviewer in
 docs/localization/REVIEW-QUEUE.md).
