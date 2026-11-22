@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../data/catalog/locations.dart';
+import '../../features/prayer/city_time_zone.dart';
 import '../../features/prayer/prayer_calculator.dart';
+import '../../features/prayer/prayer_schedule.dart';
 import '../../features/settings/settings_controller.dart';
 
 /// Schedules adhan notifications for today and tomorrow.
@@ -34,44 +36,36 @@ class PrayerNotificationService {
   Future<void> scheduleFor(AppSettings s, {required String Function(Prayer) prayerName, required String title}) async {
     await _plugin.cancelAll();
     final city = cityById(s.cityId);
-    final location = tz.getLocation(city.timeZone);
-    final calc = const PrayerCalculator();
-
-    for (var dayOffset = 0; dayOffset < 2; dayOffset++) {
-      final base = tz.TZDateTime.now(location).add(Duration(days: dayOffset));
-      final times = calc.compute(
-        date: base,
-        lat: city.lat,
-        lng: city.lng,
-        utcOffsetHours: base.timeZoneOffset.inMinutes / 60,
-        method: methodById(s.methodId),
-        asrFactor: s.asrFactor,
-      );
-      for (final p in Prayer.values) {
-        final h = times.of(p);
-        if (!h.isFinite) continue;
-        final when = tz.TZDateTime(location, base.year, base.month, base.day).add(Duration(minutes: (h * 60).round()));
-        if (when.isBefore(tz.TZDateTime.now(location))) continue;
-        await _plugin.zonedSchedule(
-          dayOffset * 10 + p.index,
-          title,
-          prayerName(p),
-          when,
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              _channelId,
-              'Adhan',
-              importance: Importance.max,
-              priority: Priority.high,
-              sound: RawResourceAndroidNotificationSound('adhan_short'),
-              playSound: true,
-            ),
-            iOS: DarwinNotificationDetails(sound: 'adhan_short.caf', presentSound: true),
+    // DST-safe plan (see planAdhanNotifications): the old "midnight + hours" and
+    // "now + 24 h" arithmetic put every adhan one hour off on clock-change days.
+    final slots = planAdhanNotifications(
+      now: tz.TZDateTime.now(cityLocation(city)),
+      lat: city.lat,
+      lng: city.lng,
+      method: methodById(s.methodId),
+      asrFactor: s.asrFactor,
+      highLatitudeRule: resolveHighLatitudeRule(s.highLatitude, city.lat),
+    );
+    for (final slot in slots) {
+      await _plugin.zonedSchedule(
+        slot.id,
+        title,
+        prayerName(slot.prayer),
+        slot.when,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            'Adhan',
+            importance: Importance.max,
+            priority: Priority.high,
+            sound: RawResourceAndroidNotificationSound('adhan_short'),
+            playSound: true,
           ),
-          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        );
-      }
+          iOS: DarwinNotificationDetails(sound: 'adhan_short.caf', presentSound: true),
+        ),
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+      );
     }
   }
 }

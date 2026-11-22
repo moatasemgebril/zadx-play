@@ -148,8 +148,9 @@ class _ApprovalsCard extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () {
-                  ref.read(walletProvider.notifier).reject(t.id);
-                  showToast(context, l10n.toastRejected(t.title.of(lang)));
+                  // Synced family: a paired child device cannot decide, even with the PIN (R-32).
+                  final ok = ref.read(walletProvider.notifier).reject(t.id);
+                  showToast(context, ok ? l10n.toastRejected(t.title.of(lang)) : l10n.approveOnParentPhone);
                 },
                 child: Text(l10n.reject),
               ),
@@ -157,8 +158,8 @@ class _ApprovalsCard extends ConsumerWidget {
               FilledButton(
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
                 onPressed: () {
-                  ref.read(walletProvider.notifier).approve(t.id);
-                  showToast(context, l10n.toastApproved(t.title.of(lang)));
+                  final ok = ref.read(walletProvider.notifier).approve(t.id);
+                  showToast(context, ok ? l10n.toastApproved(t.title.of(lang)) : l10n.approveOnParentPhone);
                 },
                 child: Text(l10n.approve),
               ),
@@ -198,7 +199,7 @@ class _ConsolesCard extends ConsumerWidget {
         if (!hasFeature(ent, AppFeature.consoleLinks))
           FilledButton(onPressed: () => context.push(Routes.subscription), child: Text(l10n.plusName))
         else ...[
-          Banner2(text: l10n.psEarned(Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
+          Banner2(text: l10n.psEarned(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
           const SizedBox(height: 12),
           _CompanionSection(
             icon: Icons.sports_esports_rounded,

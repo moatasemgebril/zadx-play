@@ -100,7 +100,7 @@ class _DhikrCard extends StatelessWidget {
           Expanded(
             child: Text(
               // "0 / 1" rather than "0 / 1 times" (EN) or "٠ / ١ مرات" (AR): the plural word is wrong for 1.
-              '${Fmt.digits(count, lang)} / ${dhikr.times == 1 ? Fmt.digits(1, lang) : l10n.dhikrTimes(Fmt.digits(dhikr.times, lang))}',
+              '${Fmt.digits(count, lang)} / ${dhikr.times == 1 ? Fmt.digits(1, lang) : l10n.dhikrTimes(dhikr.times, Fmt.digits(dhikr.times, lang))}',
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.purpleDark),
             ),
           ),

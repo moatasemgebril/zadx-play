@@ -35,8 +35,8 @@ class HomeScreen extends ConsumerWidget {
       scene: ZadScene.home,
       child: ListView(padding: const EdgeInsets.all(16), children: [
         _Hero(),
-        const SizedBox(height: 12),
-        _PromoButton(onTap: () => context.push(Routes.subscription), text: l10n.promoBanner),
+        // No upsell on the child's screens (store kids/families policy): plans are
+        // reached only from the parent area behind the PIN.
         const SizedBox(height: 14),
         // Zad X Play: prayer times + adhan. Zad X Kids: today's study / bedtime / reading schedule.
         if (kIsKids) ...[
@@ -101,30 +101,6 @@ class _Hero extends StatelessWidget {
             Text(context.l10n.homeHeroSub, style: const TextStyle(fontSize: 16, color: AppColors.mintText, fontWeight: FontWeight.w700)),
           ]),
         ]),
-      );
-}
-
-class _PromoButton extends StatelessWidget {
-  const _PromoButton({required this.onTap, required this.text});
-  final VoidCallback onTap;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: AppColors.yellow,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            child: Row(children: [
-              const Icon(Icons.workspace_premium_rounded, color: AppColors.purple, size: 28),
-              const SizedBox(width: 10),
-              Expanded(child: Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
-            ]),
-          ),
-        ),
       );
 }
 

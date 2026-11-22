@@ -155,7 +155,7 @@ class _ProtectionCardState extends ConsumerState<ProtectionCard> with WidgetsBin
           const SizedBox(height: 8),
           if (_windowSeconds > 0) ...[
             Banner2(
-              text: l10n.protectWindowOpen(Fmt.digits((_windowSeconds / 60).ceil(), lang)),
+              text: l10n.protectWindowOpen((_windowSeconds / 60).ceil(), Fmt.digits((_windowSeconds / 60).ceil(), lang)),
               bg: AppColors.pendingBg,
               fg: AppColors.pendingText,
               icon: Icons.lock_open_rounded,

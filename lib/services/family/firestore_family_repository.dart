@@ -13,7 +13,8 @@ import '../../data/models/plan.dart';
 ///   members: [uid...]          parents + paired child devices
 ///   childDevices: {uid: childId} paired child devices (Cloud Functions only)
 ///   children/{childId}         {nickname, avatar} — no other personal data
-///     days/{yyyy-MM-dd}        FamilyDay
+///     days/{yyyy-MM-dd}        FamilyDay (`approved`, `earnedMinutes`, `requiredDone` are
+///                              written only by the approveTask Cloud Function, R-32)
 class FirestoreFamilyRepository implements FamilyRepository {
   FirestoreFamilyRepository({
     required this.familyId,
@@ -26,15 +27,36 @@ class FirestoreFamilyRepository implements FamilyRepository {
   final FirebaseFirestore _db;
   final FirebaseFunctions _functions;
 
+  /// Used minutes last known to be on the server, per "childId/day". The app sends only the
+  /// minutes added since then (FieldValue.increment), so it never lowers the server value (the
+  /// rules refuse that for child devices) and never overwrites minutes the Windows guard added.
+  final Map<String, int> _usedOnServer = {};
+
   DocumentReference<Map<String, dynamic>> _dayDoc(String childId, String day) =>
       _db.doc('families/$familyId/children/$childId/days/$day');
 
   @override
   Stream<FamilyDay> watchDay(String childId, String day) {
+    final key = '$childId/$day';
     return _dayDoc(childId, day)
         .snapshots(includeMetadataChanges: false)
-        .where((s) => s.exists && !s.metadata.hasPendingWrites)
-        .map((s) => FamilyDay.fromJson(s.data()!));
+        .where((s) => !s.metadata.hasPendingWrites)
+        .map((s) {
+          _usedOnServer[key] = (s.data()?['usedMinutes'] as num?)?.toInt() ?? 0;
+          return s;
+        })
+        .where((s) => s.exists)
+        .map((s) {
+          final data = Map<String, dynamic>.from(s.data()!);
+          final lockAt = data.remove('prayerLockAt');
+          if (lockAt is Timestamp) data['prayerLockAtMs'] = lockAt.millisecondsSinceEpoch;
+          // Legacy device-clock value from older builds: never trusted, only the server time counts.
+          data.remove('prayerLockSinceMs');
+          data.remove('updatedAt');
+          // Server-only credits: an absent map means "nothing approved yet" (never null here).
+          data['approved'] = FamilyDay.parseCredits(data['approved']) ?? <String, int>{};
+          return FamilyDay.fromJson(data);
+        });
   }
 
   @override
@@ -64,12 +86,68 @@ class FirestoreFamilyRepository implements FamilyRepository {
   }
 
   @override
-  Future<void> saveDay(String childId, FamilyDay day) async {
-    await _dayDoc(childId, day.day).set({
-      ...day.toJson(),
+  bool get serverApprovals => true;
+
+  @override
+  Future<void> saveDay(String childId, FamilyDay day, {bool lockChanged = false}) async {
+    final key = '$childId/${day.day}';
+    final data = <String, Object?>{
+      'day': day.day,
+      'progress': day.progress,
       'updatedAt': FieldValue.serverTimestamp(),
       'updatedBy': FirebaseAuth.instance.currentUser?.uid,
-    }, SetOptions(merge: true));
+    };
+    final onServer = _usedOnServer[key];
+    if (onServer != null && day.usedMinutes > onServer) {
+      data['usedMinutes'] = FieldValue.increment(day.usedMinutes - onServer);
+      _usedOnServer[key] = day.usedMinutes;
+    }
+    if (lockChanged) {
+      data['prayerLock'] = day.prayerLock;
+      if (day.prayerLock) {
+        // Server time of the lock: the rules end a child's lock only after the window from here.
+        // The device-clock start (`prayerLockSinceMs`) stays on this device: the rules refuse it,
+        // because a child could back-date it to shorten the lock.
+        data['prayerLockAt'] = FieldValue.serverTimestamp();
+      }
+    }
+    await _dayDoc(childId, day.day).set(data, SetOptions(merge: true));
+  }
+
+  @override
+  Future<void> approveTask({
+    required String childId,
+    required String day,
+    required String taskId,
+    required int minutes,
+    required List<String> requiredTaskIds,
+    required bool isPrayer,
+  }) =>
+      _callApproval('approveTask', {
+        'familyId': familyId,
+        'childId': childId,
+        'day': day,
+        'taskId': taskId,
+        'minutes': minutes,
+        'requiredTaskIds': requiredTaskIds,
+        'isPrayer': isPrayer,
+      });
+
+  @override
+  Future<void> rejectTask({required String childId, required String day, required String taskId}) =>
+      _callApproval('rejectTask', {'familyId': familyId, 'childId': childId, 'day': day, 'taskId': taskId});
+
+  /// Errors that will not go away by retrying become [ApprovalRejected]; the rest (offline,
+  /// timeouts, server busy) are rethrown so the caller queues the approval.
+  static const _transient = {'unavailable', 'deadline-exceeded', 'internal', 'unknown', 'aborted', 'resource-exhausted', 'cancelled'};
+
+  Future<void> _callApproval(String name, Map<String, Object?> payload) async {
+    try {
+      await _functions.httpsCallable(name).call(payload);
+    } on FirebaseFunctionsException catch (e) {
+      if (_transient.contains(e.code)) rethrow;
+      throw ApprovalRejected(e.code);
+    }
   }
 
   @override

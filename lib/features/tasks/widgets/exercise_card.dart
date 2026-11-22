@@ -47,7 +47,7 @@ class ExerciseCard extends ConsumerWidget {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(title, style: Theme.of(context).textTheme.titleMedium),
             Text(
-              '${l10n.exReps(Fmt.digits(target, lang))} · ${l10n.minsPlus(Fmt.digits(task.rewardMinutes, lang))}',
+              '${l10n.exReps(target, Fmt.digits(target, lang))} · ${l10n.minsPlus(Fmt.digits(task.rewardMinutes, lang))}',
               style: const TextStyle(fontSize: 15, color: AppColors.muted),
             ),
             const SizedBox(height: 6),

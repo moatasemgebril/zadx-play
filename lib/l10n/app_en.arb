@@ -6,7 +6,7 @@
   "tabQuran": "Quran",
   "tabTasks": "Tasks",
   "tabParent": "Parent",
-  "minutesLeft": "{n} min left",
+  "minutesLeft": "{count, plural, one{1 min left} other{{n} min left}}",
   "greet": "Assalamu alaikum, champ!",
   "homeHeroSub": "Let's start the day with prayer and tasks",
   "promoBanner": "For parents: see the Zad X plans",
@@ -37,7 +37,7 @@
   "zadGameMasjid": "Build Your Masjid",
   "deviceGames": "Device games",
   "deviceGamesNote": "Unlock after tasks, lock at the adhan",
-  "gamesOpen": "Games are open — {n} min left",
+  "gamesOpen": "{count, plural, one{Games are open — 1 min left} other{Games are open — {n} min left}}",
   "lockPrayer": "Prayer time — games are locked until you pray",
   "lockRequired": "Finish the must-do tasks first: prayer and homework",
   "lockTime": "Out of time — do a bonus task to earn more",
@@ -50,7 +50,7 @@
   "gamesCount": "{n} of the most popular kids' games",
   "quran": "The Holy Quran",
   "chooseReciter": "Choose the reciter",
-  "ayatCount": "{n} verses",
+  "ayatCount": "{count, plural, one{1 verse} other{{n} verses}}",
   "playSurah": "Play {name}",
   "tasks": "Tasks",
   "tasksNote": "Must-do tasks unlock your screen time; bonus tasks add more.",
@@ -62,7 +62,7 @@
   "minsPlus": "+{n} min",
   "exTitle": "Exercise",
   "exNote": "Each exercise earns screen time. Go slowly and rest if you get tired.",
-  "exReps": "{n} reps",
+  "exReps": "{count, plural, one{1 rep} other{{n} reps}}",
   "exCount": "{a} of {b}",
   "exPending": "Awaiting approval",
   "exCountOne": "Count one {name}",
@@ -77,7 +77,7 @@
   "plans": "Plans",
   "playstation": "PlayStation",
   "psSub": "Smart link with the PlayStation Family app",
-  "psEarned": "Time your child earned today: {n} min",
+  "psEarned": "{count, plural, one{Time your child earned today: 1 min} other{Time your child earned today: {n} min}}",
   "psOpen": "Open PlayStation Family",
   "psNotifyTasks": "Notify me when tasks are done",
   "psNotifyAdhan": "Notify me at the adhan if my child is playing",
@@ -109,7 +109,7 @@
   "pairJoin": "Link this device",
   "pairDone": "Device linked to your family",
   "pairError": "Invalid or expired code. Ask for a new one.",
-  "pairOffline": "Linking requires Firebase to be configured.",
+  "pairOffline": "Linking isn't available right now. Try again soon.",
   "afterDhuhr": "After Dhuhr",
   "afterAsr": "After Asr",
   "afterMaghrib": "After Maghrib",
@@ -175,7 +175,7 @@
   "faq10A": "You subscribe inside the app through Google Play or the App Store with your store account; no code or password is sent to you. Renew or cancel from the store's Subscriptions page.",
   "faq11Q": "New phone: will my subscription come back?",
   "faq11A": "Sign in with the same store account you paid with, open Plans and tap \"Restore purchases\".",
-  "faq12Q": "I forgot my PIN?",
+  "faq12Q": "Forgot your PIN?",
   "faq12A": "Your PIN is stored only on this device, and nobody can see it, not even us. Choose one you'll remember and keep it away from your child.",
   "subTitle": "Zad X subscription",
   "subIntro": "Pick the plan that fits your family",
@@ -202,13 +202,13 @@
   "copied": "Code copied",
   "inviteFriend": "Invite a friend",
   "invitedOf": "{n} of 3 invited",
-  "rewardMonths": "Reward: {n} months free",
+  "rewardMonths": "{count, plural, one{Reward: 1 month free} other{Reward: {n} months free}}",
   "noRewardYet": "No reward yet",
   "inviteShareText": "Try Zad X for your kids and use my code {code}",
   "pricesNote": "Prices are set by the store per country.",
   "featTasks": "Tasks & rewards wallet",
   "featPrayer": "Prayer times & adhan (all voices)",
-  "featQuran": "Quran (approved reciters)",
+  "featQuran": "Quran (available reciters)",
   "featGames": "Screen time unlocked by tasks",
   "featPs": "PlayStation & Microsoft family links",
   "featAi": "AI assistant",
@@ -227,7 +227,7 @@
   "eveningAdhkar": "Evening adhkar",
   "salawat": "Blessings on the Prophet ﷺ",
   "tapToCount": "Tap to count",
-  "dhikrTimes": "{n} times",
+  "dhikrTimes": "{count, plural, one{once} other{{n} times}}",
   "sectionDone": "MashaAllah! You finished your adhkar. Sent to your parent for approval.",
   "loadingText": "Loading verses...",
   "textError": "Couldn't load the verses. Check your connection and try again.",
@@ -250,10 +250,10 @@
   "removeChildTitle": "Remove {name}?",
   "removeChildBody": "This deletes {name}'s tasks, minutes and progress on this device and in family sync. It can't be undone.",
   "childLimitTitle": "Your plan is full",
-  "childLimitBody": "Your plan includes up to {max} children. Zad X Plus lets you add up to {plus}.",
+  "childLimitBody": "{count, plural, one{Your plan includes 1 child. Zad X Plus lets you add up to {plus}.} other{Your plan includes up to {max} children. Zad X Plus lets you add up to {plus}.}}",
   "childDefaultName": "My child",
   "viewingChild": "Showing: {name}",
-  "childSummary": "{done}/{total} tasks • {mins} min left",
+  "childSummary": "{count, plural, one{{done}/{total} tasks • 1 min left} other{{done}/{total} tasks • {mins} min left}}",
   "childPrayerLocked": "Prayer time — games locked",
   "childDeviceBound": "This device belongs to {name}",
   "pairForChild": "Which child is this device for?",
@@ -361,16 +361,19 @@
   "lockDisclosureAgree": "I agree, continue",
   "lockDisclosureCancel": "Not now",
   "deviceLockDailyLimit": "Daily screen time (free plan)",
-  "deviceLockMinutes": "{n} min",
+  "deviceLockMinutes": "{count, plural, one{1 min} other{{n} min}}",
   "@deviceLockMinutes": {
     "placeholders": {
+      "count": {
+        "type": "int"
+      },
       "n": {
         "type": "String"
       }
     }
   },
   "subscribeNow": "Subscribe",
-  "trialDaysLeft": "{count, plural, =1{Plus free trial: 1 day left} other{Plus free trial: {days} days left}}",
+  "trialDaysLeft": "{count, plural, =0{Last day of your trial} =1{Plus free trial: 1 day left} other{Plus free trial: {days} days left}}",
   "@trialDaysLeft": {
     "placeholders": {
       "count": {
@@ -396,9 +399,12 @@
   "protectSettingsDesc": "The phone's Settings app opens only for you, with your PIN, for 5 minutes, then locks again by itself. Phone and emergency calls always work.",
   "protectSettingsDescIos": "On iPhone the Settings app itself can't be locked, but Screen Time stops changes to accounts, the device passcode and the date and time. For the best protection, set up Screen Time through Family Sharing.",
   "protectOpenSettings": "Open phone Settings for 5 minutes",
-  "protectWindowOpen": "Settings are open for {n} min, then they lock again by themselves.",
+  "protectWindowOpen": "{count, plural, one{Settings are open for 1 min, then they lock again by themselves.} other{Settings are open for {n} min, then they lock again by themselves.}}",
   "@protectWindowOpen": {
     "placeholders": {
+      "count": {
+        "type": "int"
+      },
       "n": {
         "type": "String"
       }
@@ -416,6 +422,12 @@
   "protectTamperNote": "If protection is turned off on the child's device, or the device stops checking in for a day, you'll get an alert on your phone.",
   "protectDisclosureExtra": "Zad X also keeps the phone's Settings app for you only (you open it with your PIN) and can stop apps being deleted without you.",
   "deviceLockAlwaysOpenProtected": "Always open: phone and emergency calls, Zad X, home screen and keyboard. Settings open for the parent with the PIN.",
-  "startTrial": "Start your 14-day free trial",
-  "gamesN": "{n} games"
+  "highLatitudeRule": "High-latitude rule (Fajr & Isha)",
+  "highLatitudeAuto": "Automatic (twilight angle from 48°)",
+  "highLatitudeMiddleOfNight": "Middle of the night",
+  "highLatitudeSeventhOfNight": "One-seventh of the night",
+  "highLatitudeTwilightAngle": "Twilight angle",
+  "highLatitudeHelp": "Far from the equator (e.g. London, Berlin) Fajr and Isha can disappear for weeks in summer. This rule sets their time then.",
+  "pendingScholarReview": "Pending scholar review",
+  "approveOnParentPhone": "Approve tasks from the parent phone. This is the child's device."
 }
