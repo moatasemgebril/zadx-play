@@ -6,6 +6,8 @@
  *  verifyPurchase   – validates store receipts, stores the entitlement, records referrals
  *  referralStatus   – the caller's invite code + number of friends who paid
  *  playNotifications– Google Play RTDN webhook: credits referrers on a friend's first payment
+ *  appStoreNotifications – App Store Server Notifications v2: keeps iOS entitlements current
+ *  approveTask / rejectTask – parent devices approve a child's task; minutes are credited only here (R-32)
  *  createPairingCode / redeemPairingCode – link child phones and Windows PCs to a family
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
@@ -26,6 +28,14 @@ import {
 } from "./security";
 // Purchase ownership (verifyPurchase) + parent codes (redeemPairingCode).
 import { oldFamilyAction, purchaseOwnerDecision } from "./security";
+// Server-side task approval (R-32).
+import { applyApproval, isApprovalDay, parseApprovalRequest } from "./security";
+// App Store receipt verification (signed JWS, verified against Apple's root CA chain).
+import {
+  AppleEntitlement, AppleNotification, AppleTransaction, appleNotificationAction, appleOwnershipKey, isFirstPaidRenewal,
+  latestAppleEntitlement, verifyAppleSubscription,
+} from "./apple-logic";
+import { APPLE_PRIVATE_KEY, appleDeps } from "./apple";
 
 initializeApp();
 const db = getFirestore();
@@ -227,11 +237,19 @@ async function androidPublisher() {
   return google.androidpublisher({ version: "v3", auth });
 }
 
-export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => {
+/** Tier of a store product id we sell; null for anything else. */
+function tierOf(productId: string): "basic" | "plus" | null {
+  return isKnownProduct(productId) ? PRODUCTS[productId].tier : null;
+}
+
+export const verifyPurchase = onCall({ region: "europe-west1", secrets: [APPLE_PRIVATE_KEY] }, async (req) => {
   const uid = requireUid(req.auth);
   const { platform, productId, verificationData, referralCode } = req.data ?? {};
   if (typeof productId !== "string" || !isKnownProduct(productId)) throw new HttpsError("invalid-argument", "Unknown product.");
-  if (typeof verificationData !== "string" || verificationData.length < 10 || verificationData.length > 4096) {
+  if (platform !== "android" && platform !== "ios") throw new HttpsError("invalid-argument", "Unknown platform.");
+  // iOS app receipts and signed transactions (with their x5c chain) are larger than Play tokens.
+  const maxReceipt = platform === "ios" ? 65536 : 4096;
+  if (typeof verificationData !== "string" || verificationData.length < 10 || verificationData.length > maxReceipt) {
     throw new HttpsError("invalid-argument", "Bad receipt.");
   }
   await enforceRateLimit("purchase", uid, 20, 60 * 60_000);
@@ -239,6 +257,8 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
 
   let expiresAt: string | null = null;
   let inTrial = false;
+  // What proves ownership of this subscription across renewals (purchases/{sha256(key)}).
+  let ownershipKey: string = verificationData;
 
   if (platform === "android") {
     const publisher = await androidPublisher();
@@ -253,9 +273,22 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
       throw new HttpsError("failed-precondition", "Subscription not active.");
     }
   } else {
-    // TODO(ios): verify `verificationData` (JWS transaction) with Apple's App Store Server API
-    // using @apple/app-store-server-library, then read expiresDate / offerType.
-    throw new HttpsError("unimplemented", "iOS verification not configured yet.");
+    // iOS: only Apple-signed data decides (apple-logic.ts). Not configured → fail closed.
+    const deps = appleDeps();
+    if (!deps) throw new HttpsError("unavailable", "iOS verification not configured.");
+    let result: AppleEntitlement;
+    try {
+      result = await verifyAppleSubscription(deps, verificationData, Date.now(), tierOf);
+    } catch (e) {
+      // Bad signature / chain / bundle / environment, or Apple unreachable. Never log the receipt.
+      console.error("verifyPurchase ios: verification failed", e instanceof Error ? e.name : typeof e);
+      throw new HttpsError("failed-precondition", "Receipt not verified.");
+    }
+    if (!result.ok) throw new HttpsError("failed-precondition", result.reason === "expired" ? "Subscription expired." : "Receipt not verified.");
+    tier = result.tier; // from the verified productId, never from the client
+    expiresAt = result.expiresAt;
+    inTrial = result.inTrial;
+    ownershipKey = appleOwnershipKey(result.originalTransactionId);
   }
 
   if (!expiresAt || !(Date.parse(expiresAt) > Date.now())) throw new HttpsError("failed-precondition", "Subscription expired.");
@@ -269,8 +302,8 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
   // The raw token is never stored on the family doc (every member, child devices included, can
   // read that doc): ownership lives in purchases/{sha256(token)}, the raw token (needed for the
   // referral deferral) in families/{id}/private/billing. Both are server-only (firestore.rules).
-  const purchaseRef = db.doc(`purchases/${sha256Hex(verificationData)}`);
-  const legacy = await db.collection("families").where("purchaseToken", "==", verificationData).limit(2).get();
+  const purchaseRef = db.doc(`purchases/${sha256Hex(ownershipKey)}`);
+  const legacy = await db.collection("families").where("purchaseToken", "==", ownershipKey).limit(2).get();
   await db.runTransaction(async (tx) => {
     const owner = await tx.get(purchaseRef);
     const decision = purchaseOwnerDecision({
@@ -284,7 +317,7 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
     if (owner.exists) tx.set(purchaseRef, ownership);
     else tx.create(purchaseRef, ownership);
     tx.set(family.ref, { plan: tier, planExpiresAt: expiresAt, inTrial, store: platform, purchaseToken: FieldValue.delete() }, { merge: true });
-    tx.set(family.ref.collection("private").doc("billing"), { purchaseToken: verificationData }, { merge: true });
+    tx.set(family.ref.collection("private").doc("billing"), { purchaseToken: ownershipKey }, { merge: true });
   });
 
   // Record the referral now; the referrer is credited only after the friend's first PAID period.
@@ -833,4 +866,168 @@ export const checkHeartbeats = onSchedule({ schedule: "every 6 hours", region: "
       await doc.ref.set({ staleAlerted: true }, { merge: true });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// App Store Server Notifications v2 (App Store Connect → App Information → Production/Sandbox
+// Server URL = the appStoreNotifications URL). Same job as playNotifications for Google Play.
+// ---------------------------------------------------------------------------
+
+const APPLE_TX_ID_RE = /^[0-9]{1,30}$/;
+
+export const appStoreNotifications = onRequest({ region: "europe-west1", secrets: [APPLE_PRIVATE_KEY] }, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).send();
+      return;
+    }
+    const deps = appleDeps();
+    if (!deps) {
+      res.status(503).send(); // not configured (logged in appleDeps): Apple retries later
+      return;
+    }
+    const signedPayload = req.body?.signedPayload;
+    if (typeof signedPayload !== "string" || signedPayload.length > 100_000) {
+      res.status(400).send();
+      return;
+    }
+    let n: AppleNotification;
+    let tx: AppleTransaction;
+    try {
+      // Signature, x5c chain to Apple's root CA, bundle id and environment are checked here.
+      n = await deps.verifyNotification(signedPayload);
+      const signedTx = n.data?.signedTransactionInfo;
+      if (appleNotificationAction(n) === "ignore" || typeof signedTx !== "string") {
+        res.status(200).send();
+        return;
+      }
+      tx = await deps.verifyTransaction(signedTx);
+    } catch (e) {
+      console.error("appStoreNotifications: not verified", e instanceof Error ? e.name : typeof e);
+      res.status(403).send();
+      return;
+    }
+    const otid = tx.originalTransactionId;
+    if (typeof otid !== "string" || !APPLE_TX_ID_RE.test(otid)) {
+      res.status(200).send();
+      return;
+    }
+    // Only subscriptions verifyPurchase already tied to a family (purchases/{sha256(apple:otid)}).
+    const familyId = await familyIdForToken(appleOwnershipKey(otid));
+    const familyRef = familyId ? db.doc(`families/${familyId}`) : null;
+    const family = familyRef ? await familyRef.get() : null;
+    if (!familyRef || !family?.exists || family.get("store") !== "ios") {
+      res.status(200).send();
+      return;
+    }
+
+    if (appleNotificationAction(n) === "revoke") {
+      // Refund / Family Sharing revoked: the plan ends now.
+      await familyRef.set({ planExpiresAt: new Date().toISOString(), inTrial: false }, { merge: true });
+    } else {
+      // Never trust the notification alone: read the latest state from Apple.
+      const latest = await latestAppleEntitlement(deps, otid, Date.now(), tierOf);
+      if (latest.ok) {
+        await familyRef.set({ plan: latest.tier, planExpiresAt: latest.expiresAt, inTrial: latest.inTrial, store: "ios" }, { merge: true });
+      } else if (latest.reason === "revoked" || latest.reason === "expired") {
+        const current = Date.parse(String(family.get("planExpiresAt") ?? ""));
+        if (!Number.isFinite(current) || current > Date.now()) {
+          await familyRef.set({ planExpiresAt: new Date().toISOString(), inTrial: false }, { merge: true });
+        }
+      }
+    }
+
+    // Referral: the friend's first paid renewal counts once (iOS free months: TODO in playNotifications).
+    const referrerId = family.get("referredBy");
+    if (isFirstPaidRenewal(n, tx) && family.get("referralPaid") === false && isSafeId(referrerId)) {
+      const year = new Date().getUTCFullYear();
+      const referrerRef = db.doc(`families/${referrerId}`);
+      await db.runTransaction(async (t) => {
+        const friend = await t.get(familyRef);
+        const referrer = await t.get(referrerRef);
+        if (friend.get("referralPaid") !== false || !referrer.exists) return;
+        const count = Math.min((referrer.get(`referrals.${year}`) ?? 0) + 1, MAX_REFERRALS_PER_YEAR);
+        t.set(referrerRef, { referrals: { [year]: count } }, { merge: true });
+        t.set(familyRef, { referralPaid: true }, { merge: true });
+      });
+    }
+    res.status(200).send();
+  } catch (e) {
+    console.error("appStoreNotifications failed", e instanceof Error ? e.name : typeof e);
+    res.status(500).send();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Task approval (R-32). A child device can only submit (progress "pending" on its own day doc);
+// the server-only fields `approved` {taskId: minutes}, `earnedMinutes` and `requiredDone` are
+// written here, after checking server-side that the caller is a PARENT device of the family
+// (a member that is not bound to a child in the server-written `childDevices` map).
+// ---------------------------------------------------------------------------
+
+function requireParentDevice(family: FirebaseFirestore.DocumentSnapshot, uid: string): void {
+  if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
+}
+
+async function approvalTarget(auth: { uid: string } | undefined, data: Record<string, unknown>) {
+  const uid = requireUid(auth);
+  const day = data.day;
+  if (!isApprovalDay(day, Date.now())) throw new HttpsError("invalid-argument", "Bad day.");
+  const family = await requireFamilyMember(data.familyId, uid);
+  requireParentDevice(family, uid);
+  const childId = parseChildId(data.childId);
+  await enforceRateLimit("approve", uid, 300, 60 * 60_000);
+  if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
+    throw new HttpsError("not-found", "Unknown child.");
+  }
+  return { uid, day, dayRef: family.ref.collection("children").doc(childId).collection("days").doc(day) };
+}
+
+function progressCount(snap: FirebaseFirestore.DocumentSnapshot, taskId: string): number {
+  const p = snap.get("progress");
+  const count = p && typeof p === "object" ? (p as Record<string, { count?: unknown } | undefined>)[taskId]?.count : undefined;
+  return typeof count === "number" && Number.isInteger(count) && count >= 0 && count <= 10_000 ? count : 0;
+}
+
+/** Parent approves a task: marks it done and credits its minutes once, within the daily cap. */
+export const approveTask = onCall({ region: "europe-west1" }, async (req) => {
+  const request = parseApprovalRequest(req.data);
+  if (!request) throw new HttpsError("invalid-argument", "Bad approval.");
+  const { uid, day, dayRef } = await approvalTarget(req.auth, req.data as Record<string, unknown>);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(dayRef);
+    const out = applyApproval(snap.get("approved"), request);
+    const update: Record<string, unknown> = {
+      day,
+      approved: out.approved,
+      earnedMinutes: out.earnedMinutes,
+      requiredDone: out.requiredDone,
+      progress: { [request.taskId]: { status: "done", count: progressCount(snap, request.taskId) } },
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: uid,
+    };
+    // Approving "I prayed" ends the prayer lock (before the window, only a parent can end it).
+    if (request.isPrayer) {
+      update.prayerLock = false;
+      update.prayerLockSinceMs = FieldValue.delete();
+      update.prayerLockAt = FieldValue.delete();
+    }
+    tx.set(dayRef, update, { merge: true });
+    return { credited: out.credited, earnedMinutes: out.earnedMinutes, requiredDone: out.requiredDone };
+  });
+});
+
+/** Parent rejects a submission: the task goes back to "todo" (credits already given stay). */
+export const rejectTask = onCall({ region: "europe-west1" }, async (req) => {
+  const data = (req.data ?? {}) as Record<string, unknown>;
+  const taskId = data.taskId;
+  if (!isSafeId(taskId) || taskId.length > 64) throw new HttpsError("invalid-argument", "Bad task.");
+  const { uid, day, dayRef } = await approvalTarget(req.auth, data);
+  await dayRef.set({
+    day,
+    progress: { [taskId]: { status: "todo", count: 0 } },
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: uid,
+  }, { merge: true });
+  return { ok: true };
 });

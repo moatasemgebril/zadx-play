@@ -238,6 +238,17 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --audit-level=high
+      # Firestore rules tests (R-32 / R-33) on the emulator. firebase-tools is installed globally
+      # (not a package dependency, so `npm audit` above stays about what we deploy).
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-v14
+      - run: npm install -g firebase-tools@14 --no-audit --no-fund
+      - name: Firestore rules tests (emulator)
+        run: npm run test:rules
 
   # 6) Windows "Zad X Guard" builds
   #    Windows minutes cost x2: weekly (Sunday) / manual, or on main when windows_guard/** changed.

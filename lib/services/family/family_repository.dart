@@ -16,6 +16,8 @@ class FamilyDay {
     this.earnedMinutes = 0,
     this.requiredDone = false,
     this.prayerLockSinceMs,
+    this.approved,
+    this.prayerLockAtMs,
   });
 
   final String day; // yyyy-MM-dd in the family's city
@@ -31,6 +33,15 @@ class FamilyDay {
   /// after the prayer window, measured from this time.
   final int? prayerLockSinceMs;
 
+  /// Server-only credits {taskId: minutes}, written by the `approveTask` Cloud Function after it
+  /// checked that the caller is a parent device (R-32). Null for a local-only family, where the
+  /// approval stays on this device. Never written by the app to Firestore.
+  final Map<String, int>? approved;
+
+  /// Server time (UTC ms) the current prayer lock reached Firestore (`prayerLockAt`). The rules
+  /// let a child device end a lock only after the prayer window counted from this time.
+  final int? prayerLockAtMs;
+
   Map<String, dynamic> toJson() => {
         'earnedMinutes': earnedMinutes,
         'requiredDone': requiredDone,
@@ -39,6 +50,8 @@ class FamilyDay {
         'usedMinutes': usedMinutes,
         'prayerLock': prayerLock,
         if (prayerLockSinceMs != null) 'prayerLockSinceMs': prayerLockSinceMs,
+        if (approved != null) 'approved': approved,
+        if (prayerLockAtMs != null) 'prayerLockAtMs': prayerLockAtMs,
       };
 
   factory FamilyDay.fromJson(Map<String, dynamic> j) => FamilyDay(
@@ -50,7 +63,27 @@ class FamilyDay {
         earnedMinutes: j['earnedMinutes'] as int? ?? 0,
         requiredDone: j['requiredDone'] as bool? ?? false,
         prayerLockSinceMs: j['prayerLockSinceMs'] as int?,
+        approved: parseCredits(j['approved']),
+        prayerLockAtMs: j['prayerLockAtMs'] as int?,
       );
+
+  /// {taskId: minutes} from server data; malformed entries are dropped. Null when absent.
+  static Map<String, int>? parseCredits(Object? raw) {
+    if (raw is! Map) return null;
+    final out = <String, int>{};
+    raw.forEach((k, v) {
+      if (k is String && v is num && v >= 0) out[k] = v.toInt();
+    });
+    return out;
+  }
+}
+
+/// The server refused an approval for good (not a parent device, bad input, ...): do not retry.
+class ApprovalRejected implements Exception {
+  const ApprovalRejected(this.code);
+  final String code;
+  @override
+  String toString() => 'ApprovalRejected($code)';
 }
 
 /// The plan `verifyPurchase` (backend/functions/src/index.ts) stores on families/{id}:
@@ -85,7 +118,29 @@ abstract class FamilyRepository {
   /// EntitlementCache grace instead). Emits nothing for local-only.
   Stream<Entitlement> watchEntitlement();
 
-  Future<void> saveDay(String childId, FamilyDay day);
+  /// Saves this device's part of the day: submissions (`progress`), used minutes and, when
+  /// [lockChanged], the prayer lock state. Never the server-only credits (`approved`,
+  /// `earnedMinutes`, `requiredDone`): those come from [approveTask].
+  Future<void> saveDay(String childId, FamilyDay day, {bool lockChanged = false});
+
+  /// True when approvals and minute credits are decided by the server ([approveTask]), i.e. the
+  /// family is synced. False for a local-only family: the approval stays on this device.
+  bool get serverApprovals;
+
+  /// Parent device only (the server checks the role): approves [taskId] for [childId] on [day]
+  /// and credits [minutes] once, within the daily cap. Throws [ApprovalRejected] when the server
+  /// refuses for good; any other error is transient (offline): the caller queues and retries.
+  Future<void> approveTask({
+    required String childId,
+    required String day,
+    required String taskId,
+    required int minutes,
+    required List<String> requiredTaskIds,
+    required bool isPrayer,
+  });
+
+  /// Parent device only: sends a submission back to "todo". Same errors as [approveTask].
+  Future<void> rejectTask({required String childId, required String day, required String taskId});
 
   /// Settings other devices need (city, method, controlled games for Windows Guard).
   Future<void> saveSettings(Map<String, Object?> settings);
@@ -114,7 +169,23 @@ class LocalFamilyRepository implements FamilyRepository {
   Stream<Entitlement> watchEntitlement() => const Stream<Entitlement>.empty();
 
   @override
-  Future<void> saveDay(String childId, FamilyDay day) async {}
+  Future<void> saveDay(String childId, FamilyDay day, {bool lockChanged = false}) async {}
+
+  @override
+  bool get serverApprovals => false;
+
+  @override
+  Future<void> approveTask({
+    required String childId,
+    required String day,
+    required String taskId,
+    required int minutes,
+    required List<String> requiredTaskIds,
+    required bool isPrayer,
+  }) async {}
+
+  @override
+  Future<void> rejectTask({required String childId, required String day, required String taskId}) async {}
 
   @override
   Future<void> saveSettings(Map<String, Object?> settings) async {}

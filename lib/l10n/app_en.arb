@@ -417,5 +417,6 @@
   "protectDisclosureExtra": "Zad X also keeps the phone's Settings app for you only (you open it with your PIN) and can stop apps being deleted without you.",
   "deviceLockAlwaysOpenProtected": "Always open: phone and emergency calls, Zad X, home screen and keyboard. Settings open for the parent with the PIN.",
   "startTrial": "Start your 14-day free trial",
-  "gamesN": "{n} games"
+  "gamesN": "{n} games",
+  "approveOnParentPhone": "Approve tasks from the parent phone. This is the child's device."
 }
