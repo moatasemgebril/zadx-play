@@ -120,11 +120,18 @@ class _TaskCard extends ConsumerWidget {
               ),
               onPressed: () {
                 ref.read(walletProvider.notifier).submit(task.id);
-                showPraiseDialog(context, ref, note: l10n.toastSent(task.title.of(lang)));
+                final sent = l10n.toastSent(task.title.of(lang));
+                showPraiseDialog(context, ref, note: task.kind == TaskKind.prayer ? '$sent\n${l10n.prayerIkhlas}' : sent);
               },
               child: Text(l10n.doneBtn),
             ),
           TaskStatus.pending => Banner2(text: l10n.pendingApproval, bg: AppColors.pendingBg, fg: AppColors.pendingText),
+          TaskStatus.done when task.kind == TaskKind.prayer => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Banner2(text: l10n.completed, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.check_rounded),
+              const SizedBox(height: 6),
+              // Ikhlas reminder: the prayer is for Allah; the minutes are only encouragement.
+              Text(l10n.prayerIkhlas, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: AppColors.purpleDark)),
+            ]),
           TaskStatus.done => Banner2(text: l10n.completed, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.check_rounded),
         },
       ]),

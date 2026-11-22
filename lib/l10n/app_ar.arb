@@ -96,7 +96,14 @@
       }
     }
   },
-  "prayerSub": "قوم اتوضى وصلّي، وبعدها اضغط الزرار",
+  "prayerSub": "{form, select, feminine{توضّئي إن لم تكوني على وضوء، ثم صلّي، واضغطي الزر بعدها} masculine{توضّأ إن لم تكن على وضوء، ثم صلِّ، واضغط الزر بعدها} other{توضّأ إن لم تكن على وضوء، ثم صلِّ، واضغط الزر بعدها}}",
+  "@prayerSub": {
+    "placeholders": {
+      "form": {
+        "type": "String"
+      }
+    }
+  },
   "iPrayed": "صلّيت",
   "waitParent": "مستني موافقة ولي الأمر",
   "play": "العب",
@@ -111,6 +118,8 @@
   },
   "quran": "القرآن الكريم",
   "chooseReciter": "اختار القارئ",
+  "quranRiwaya": "رواية حفص عن عاصم",
+  "prayerIkhlas": "الصلاة لله، والجائزة تشجيعٌ لك",
   "ayatCount": "{count, plural, zero{{n} آية} one{آية واحدة} two{آيتين} few{{n} آيات} many{{n} آية} other{{n} آية}}",
   "@ayatCount": {
     "placeholders": {
@@ -265,8 +274,8 @@
   "city": "المدينة",
   "method": "طريقة حساب المواقيت",
   "asrCalc": "حساب العصر",
-  "asrStandard": "الجمهور (شافعي)",
-  "asrHanafi": "حنفي",
+  "asrStandard": "الجمهور (المالكي والشافعي والحنبلي)",
+  "asrHanafi": "الحنفي (ظلّ المِثلين)",
   "soon": "قريباً",
   "useMyLocation": "استخدم موقعي",
   "helpTitle": "المساعدة",
@@ -614,7 +623,7 @@
   "eduGoBuild": "ابنِ مسجدك بنجومك",
   "lettersLevel1": "أول ١٠ حروف: إيه اسم الحرف؟",
   "lettersLevel2": "١٨ حرف: دوّر على الحرف",
-  "lettersLevel3": "الحروف الـ٢٨ كلها",
+  "lettersLevel3": "حروف الهجاء الثمانية والعشرون كلها",
   "lettersLevel4": "حروف شبه بعض: ركّز في النقط!",
   "lettersLevel5": "أشكال الحروف في أول ونص وآخر الكلمة (للكبار)",
   "lettersAskName": "إيه اسم الحرف ده؟",
