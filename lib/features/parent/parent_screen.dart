@@ -191,7 +191,7 @@ class _ConsolesCard extends ConsumerWidget {
         if (!hasFeature(ent, AppFeature.consoleLinks))
           FilledButton(onPressed: () => context.push(Routes.subscription), child: Text(l10n.plusName))
         else ...[
-          Banner2(text: l10n.psEarned(Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
+          Banner2(text: l10n.psEarned(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
           const SizedBox(height: 12),
           _CompanionSection(
             icon: Icons.sports_esports_rounded,
