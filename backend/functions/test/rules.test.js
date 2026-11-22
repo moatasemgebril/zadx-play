@@ -1,5 +1,7 @@
 // Firestore rules tests (R-32 / R-33) against the Firestore emulator.
-// Run: npm run test:rules   (firebase emulators:exec starts the emulator; needs Java + firebase-tools)
+// Run: npm run test:rules:deps && npm run test:rules
+// (firebase emulators:exec starts the emulator; needs Java + `npm i -g firebase-tools`). The test SDKs
+// are not in package.json so `npm audit` covers only what we deploy.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { readFileSync } = require("fs");

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "test": "tsc && node --test test/security.test.js test/approvals.test.js test/apple.test.js",
+    "test:rules:deps": "npm install --no-save --no-audit --no-fund @firebase/rules-unit-testing@4 firebase@11",
     "test:rules": "firebase emulators:exec --only firestore --project demo-zadx \"node --test test/rules.test.js\"",
     "serve": "npm run build && firebase emulators:start --only functions,firestore",
     "deploy": "firebase deploy --only functions,firestore:rules,firestore:indexes"
@@ -17,9 +18,7 @@
     "googleapis": "^144.0.0"
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^4.0.0",
     "@types/node": "^20.17.6",
-    "firebase": "^11.0.0",
     "typescript": "^5.6.3"
   }
 }

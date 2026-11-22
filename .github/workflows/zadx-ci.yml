@@ -238,8 +238,9 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --audit-level=high
-      # Firestore rules tests (R-32 / R-33) on the emulator. firebase-tools is installed globally
-      # (not a package dependency, so `npm audit` above stays about what we deploy).
+      # Firestore rules tests (R-32 / R-33) on the emulator. firebase-tools and the rules-testing SDK
+      # are installed after the audit and never saved to package.json: `npm audit` above stays about
+      # what we deploy (the client SDK's grpc-js advisories do not ship to production).
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: "21" }
       - uses: actions/cache@v4
@@ -247,6 +248,7 @@ jobs:
           path: ~/.cache/firebase/emulators
           key: firebase-emulators-${{ runner.os }}-v14
       - run: npm install -g firebase-tools@14 --no-audit --no-fund
+      - run: npm run test:rules:deps
       - name: Firestore rules tests (emulator)
         run: npm run test:rules
 
