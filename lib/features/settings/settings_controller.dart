@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/catalog/locations.dart';
 import '../../services/app_lock/lock_rules.dart';
+import '../prayer/hijri_ramadan.dart';
+import '../prayer/prayer_calculator.dart';
 
 /// Overridden in main() with the real instance.
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -23,6 +25,8 @@ class AppSettings {
     this.cityId = 'cairo',
     this.methodId = 'egypt',
     this.asrFactor = 1,
+    this.highLatitude = HighLatitudeSetting.auto,
+    this.hijriAdjustmentDays = 0,
     this.muezzinId = 'madinah_rec',
     this.reciterId = 'afasy',
     this.lockAtAdhan = true,
@@ -46,6 +50,13 @@ class AppSettings {
   final String cityId;
   final String methodId;
   final int asrFactor;
+
+  /// High-latitude rule for Fajr/Isha (ECFR, see docs/decisions/PRAYER-TIMES-ACCURACY.md). See [HighLatitudeSetting].
+  final HighLatitudeSetting highLatitude;
+
+  /// Parent's Hijri date adjustment for the Umm al-Qura Ramadan Isha rule: -1, 0 or +1 day
+  /// (lib/features/prayer/hijri_ramadan.dart).
+  final int hijriAdjustmentDays;
   final String muezzinId;
   final String reciterId;
   final bool lockAtAdhan;
@@ -92,6 +103,8 @@ class AppSettings {
     String? cityId,
     String? methodId,
     int? asrFactor,
+    HighLatitudeSetting? highLatitude,
+    int? hijriAdjustmentDays,
     String? muezzinId,
     String? reciterId,
     bool? lockAtAdhan,
@@ -115,6 +128,8 @@ class AppSettings {
         cityId: cityId ?? this.cityId,
         methodId: methodId ?? this.methodId,
         asrFactor: asrFactor ?? this.asrFactor,
+        highLatitude: highLatitude ?? this.highLatitude,
+        hijriAdjustmentDays: hijriAdjustmentDays ?? this.hijriAdjustmentDays,
         muezzinId: muezzinId ?? this.muezzinId,
         reciterId: reciterId ?? this.reciterId,
         lockAtAdhan: lockAtAdhan ?? this.lockAtAdhan,
@@ -149,6 +164,8 @@ class SettingsController extends Notifier<AppSettings> {
       cityId: p.getString('${_k}city') ?? d.cityId,
       methodId: p.getString('${_k}method') ?? d.methodId,
       asrFactor: p.getInt('${_k}asr') ?? d.asrFactor,
+      highLatitude: HighLatitudeSetting.parse(p.getString('${_k}highLatitude')),
+      hijriAdjustmentDays: clampHijriAdjustment(p.getInt('${_k}hijriAdjust') ?? d.hijriAdjustmentDays),
       muezzinId: p.getString('${_k}muezzin') ?? d.muezzinId,
       reciterId: p.getString('${_k}reciter') ?? d.reciterId,
       lockAtAdhan: p.getBool('${_k}lockAtAdhan') ?? d.lockAtAdhan,
@@ -209,6 +226,18 @@ class SettingsController extends Notifier<AppSettings> {
   void setAsrFactor(int factor) {
     state = state.copyWith(asrFactor: factor);
     _prefs.setInt('${_k}asr', factor);
+  }
+
+  void setHighLatitude(HighLatitudeSetting v) {
+    state = state.copyWith(highLatitude: v);
+    _prefs.setString('${_k}highLatitude', v.name);
+  }
+
+  /// Parent only (inside the parent area): see [AppSettings.hijriAdjustmentDays].
+  void setHijriAdjustmentDays(int days) {
+    final v = clampHijriAdjustment(days);
+    state = state.copyWith(hijriAdjustmentDays: v);
+    _prefs.setInt('${_k}hijriAdjust', v);
   }
 
   void setMuezzin(String id) {

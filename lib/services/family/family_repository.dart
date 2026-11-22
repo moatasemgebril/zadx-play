@@ -18,6 +18,7 @@ class FamilyDay {
     this.prayerLockSinceMs,
     this.approved,
     this.prayerLockAtMs,
+    this.prayerPaused = false,
   });
 
   final String day; // yyyy-MM-dd in the family's city
@@ -42,6 +43,10 @@ class FamilyDay {
   /// let a child device end a lock only after the prayer window counted from this time.
   final int? prayerLockAtMs;
 
+  /// Parent-only (behind the PIN, and parent devices only in firestore.rules): prayer tasks and
+  /// the prayer lock are paused for this child today (excused). No reason is stored anywhere.
+  final bool prayerPaused;
+
   Map<String, dynamic> toJson() => {
         'earnedMinutes': earnedMinutes,
         'requiredDone': requiredDone,
@@ -52,6 +57,7 @@ class FamilyDay {
         if (prayerLockSinceMs != null) 'prayerLockSinceMs': prayerLockSinceMs,
         if (approved != null) 'approved': approved,
         if (prayerLockAtMs != null) 'prayerLockAtMs': prayerLockAtMs,
+        if (prayerPaused) 'prayerPaused': true,
       };
 
   factory FamilyDay.fromJson(Map<String, dynamic> j) => FamilyDay(
@@ -65,6 +71,7 @@ class FamilyDay {
         prayerLockSinceMs: j['prayerLockSinceMs'] as int?,
         approved: parseCredits(j['approved']),
         prayerLockAtMs: j['prayerLockAtMs'] as int?,
+        prayerPaused: j['prayerPaused'] == true,
       );
 
   /// {taskId: minutes} from server data; malformed entries are dropped. Null when absent.
@@ -139,6 +146,11 @@ abstract class FamilyRepository {
     required bool isPrayer,
   });
 
+  /// Parent device only (firestore.rules refuse child devices): pauses or resumes prayer tasks and
+  /// the prayer lock for [childId] on [day]. Pausing also ends a running prayer lock. Never sends
+  /// a notification or log entry.
+  Future<void> setPrayerPaused({required String childId, required String day, required bool paused});
+
   /// Parent device only: sends a submission back to "todo". Same errors as [approveTask].
   Future<void> rejectTask({required String childId, required String day, required String taskId});
 
@@ -183,6 +195,9 @@ class LocalFamilyRepository implements FamilyRepository {
     required List<String> requiredTaskIds,
     required bool isPrayer,
   }) async {}
+
+  @override
+  Future<void> setPrayerPaused({required String childId, required String day, required bool paused}) async {}
 
   @override
   Future<void> rejectTask({required String childId, required String day, required String taskId}) async {}

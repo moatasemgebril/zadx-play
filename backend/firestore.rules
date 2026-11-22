@@ -22,6 +22,7 @@ service cloud.firestore {
         && (!('prayerLock' in d) || d.prayerLock is bool)
         && (!('prayerLockSinceMs' in d) || (d.prayerLockSinceMs is int && d.prayerLockSinceMs >= 0))
         && (!('prayerLockAt' in d) || d.prayerLockAt is timestamp)
+        && (!('prayerPaused' in d) || d.prayerPaused is bool)
         && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
     }
 
@@ -59,6 +60,8 @@ service cloud.firestore {
     function serverOnlyDayKeys() {
       return ['approved', 'earnedMinutes', 'requiredDone', 'prayerLockSinceMs'];
     }
+    // `prayerPaused` (excused today: prayer tasks + prayer lock paused) is written only by a parent
+    // device: it is not in childDayKeys(), so a child device can neither set nor clear it.
     // What a paired child device may write on its own day doc: its submissions (`progress`,
     // status "pending"; "done" counts for nothing without a server `approved` entry), more used
     // minutes, and a prayer lock that it may START but end only after the Free prayer window.

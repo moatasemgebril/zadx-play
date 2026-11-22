@@ -21,11 +21,13 @@ class TasksScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final wallet = ref.watch(walletProvider);
-    final regular = wallet.tasks.where((t) => !t.isExercise).toList();
-    final exercises = wallet.tasks.where((t) => t.isExercise).toList();
+    // Excused today (parent-only setting): prayer tasks are simply not listed, with no reason shown.
+    final active = wallet.activeTasks;
+    final regular = active.where((t) => !t.isExercise).toList();
+    final exercises = active.where((t) => t.isExercise).toList();
 
     // Read-only: the garden grows with the share of today's tasks done.
-    final progress = wallet.tasks.isEmpty ? 0.0 : wallet.doneCount / wallet.tasks.length;
+    final progress = active.isEmpty ? 0.0 : wallet.doneCount / active.length;
 
     return ZadSceneBackground(
       scene: ZadScene.tasks,
@@ -36,6 +38,10 @@ class TasksScreen extends ConsumerWidget {
         child: ListView(padding: const EdgeInsets.all(16), children: [
           PageTitle(l10n.tasks, subtitle: l10n.tasksNote),
           const SizedBox(height: 12),
+          if (wallet.prayerPaused) ...[
+            Banner2(text: l10n.otherTasksOpenToday, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.wb_sunny_rounded),
+            const SizedBox(height: 10),
+          ],
           PaidFeatureGate(
             feature: AppFeature.tasksRewards,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

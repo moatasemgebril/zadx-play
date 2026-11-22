@@ -32,6 +32,10 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   timezone: ^0.10.0
 
+  # Umm al-Qura Hijri calendar, only for the Ramadan Isha rule (Isha = Maghrib + 120 min).
+  # docs/decisions/PRAYER-TIMES-ACCURACY.md section 3. Offline, no network access.
+  hijri: ^3.0.1
+
   # Subscriptions
   in_app_purchase: ^3.2.0
 

@@ -13,7 +13,9 @@ public sealed record PrayerSettings(
     [property: JsonPropertyName("ishaAngle")] double? IshaAngle,
     [property: JsonPropertyName("ishaMinutes")] int? IshaMinutes,
     [property: JsonPropertyName("asrFactor")] int AsrFactor,
-    [property: JsonPropertyName("lockAtAdhan")] bool LockAtAdhan);
+    [property: JsonPropertyName("lockAtAdhan")] bool LockAtAdhan,
+    // High-latitude rule synced by the app (absent from older backends/apps).
+    [property: JsonPropertyName("highLatRule")] string? HighLatRule = null);
 
 /// <summary>Mirror of the `devicePolicy` Cloud Function response.</summary>
 public sealed record DevicePolicy(
@@ -27,7 +29,9 @@ public sealed record DevicePolicy(
     [property: JsonPropertyName("prayer")] PrayerSettings Prayer,
     // Device-wide lock (absent from older backends → legacy "selectedGames" behaviour).
     [property: JsonPropertyName("mode")] string? Mode = null,
-    [property: JsonPropertyName("allowBrowsers")] bool AllowBrowsers = false);
+    [property: JsonPropertyName("allowBrowsers")] bool AllowBrowsers = false,
+    // Excused today (set by a parent): no lock at the adhan (absent from older backends → false).
+    [property: JsonPropertyName("prayerPaused")] bool PrayerPaused = false);
 
 public sealed class PolicyClient
 {

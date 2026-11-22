@@ -41,6 +41,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
             prev.cityId != next.cityId ||
             prev.methodId != next.methodId ||
             prev.asrFactor != next.asrFactor ||
+            prev.highLatitude != next.highLatitude ||
+            prev.hijriAdjustmentDays != next.hijriAdjustmentDays ||
             prev.language != next.language) {
           _reschedule(ref, next);
         }
@@ -100,6 +102,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
       'ishaAngle': method.ishaAngle,
       'ishaMinutes': method.ishaMinutesAfterMaghrib,
       'asrFactor': s.asrFactor,
+      // Effective high-latitude rule ('none' or a HighLatitudeRule name) for Windows Guard.
+      'highLatRule': resolveHighLatitudeRule(s.highLatitude, city.lat)?.name ?? 'none',
       'lockAtAdhan': s.lockAtAdhan,
       'notifyOnTasks': s.notifyParentOnTasks,
       'notifyOnAdhan': s.notifyParentOnAdhan,
