@@ -47,7 +47,8 @@ Future<void> tapNow(WidgetTester tester, String key) async {
 
 Future<void> tapKey(WidgetTester tester, String key) async {
   final finder = find.byKey(Key(key));
-  await tester.ensureVisible(finder);
+  // The screens are lazy ListViews: scroll until the widget is built and on screen.
+  await tester.scrollUntilVisible(finder, 200, scrollable: find.byType(Scrollable).last);
   await tester.pumpAndSettle();
   await tester.tap(finder);
   await tester.pumpAndSettle();

@@ -68,8 +68,7 @@ void main() {
     expect(find.text('APP'), findsNothing);
 
     app.complete(const _FakeApp());
-    await tester.pump();
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('Zad X'), findsNothing);
     expect(find.text('APP'), findsOneWidget);
   });
