@@ -45,6 +45,25 @@ void main() {
     expect(d.note?.ar, contains('ﷺ'));
   });
 
+  test('asbahna / amsayna: full Muslim 2723 narration, said once', () {
+    const evening = 'أمسينا وأمسى الملك لله، والحمد لله، لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير، ربِّ أسألك خير ما في هذه الليلة وخير ما بعدها، وأعوذ بك من شر ما في هذه الليلة وشر ما بعدها، رب أعوذ بك من الكسل، وسوء الكبر، رب أعوذ بك من عذاب في النار، وعذاب في القبر';
+    const morning = 'أصبحنا وأصبح الملك لله، والحمد لله، لا إله إلا الله وحده لا شريك له، له الملك وله الحمد وهو على كل شيء قدير، ربِّ أسألك خير ما في هذا اليوم وخير ما بعده، وأعوذ بك من شر ما في هذا اليوم وشر ما بعده، رب أعوذ بك من الكسل، وسوء الكبر، رب أعوذ بك من عذاب في النار، وعذاب في القبر';
+    final e = _byId('e_amsayna');
+    final m = _byId('m_asbahna');
+    expect(e.text, evening);
+    expect(m.text, morning);
+    expect(e.times, 1);
+    expect(m.times, 1);
+    expect(e.source, 'رواه مسلم (2723)');
+    expect(m.source, 'رواه مسلم (2723)');
+    expect(m.sourceOf('en'), 'Muslim (2723)');
+    expect(adhkar[AdhkarSection.evening], contains(e));
+    expect(adhkar[AdhkarSection.morning], contains(m));
+    // The morning form must not mention the night, and the evening form not the day.
+    expect(m.text, isNot(contains('الليلة')));
+    expect(e.text, isNot(contains('اليوم')));
+  });
+
   test('kalimat is attributed to At-Tirmidhi (Hisn al-Muslim 97)', () {
     expect(_byId('e_kalimat').source, 'الترمذي');
   });
