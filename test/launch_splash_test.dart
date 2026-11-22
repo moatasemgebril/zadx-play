@@ -213,6 +213,10 @@ void main() {
   });
 
   group('start-up never leaves the splash up forever', () {
+    // A start-up that already failed before the host listens (like LaunchSplashHandle.fail, which
+    // also marks its future as handled so the error is not reported as unhandled meanwhile).
+    Future<Widget> failed(Object error) => Future<Widget>.error(error)..ignore();
+
     for (final variant in [AppVariant.islamic, AppVariant.kids]) {
       final shown = kIsKids ? AppVariant.kids : variant;
       testWidgets('a start-up error shows a friendly retry screen, retry starts the app (${variant.name})', (tester) async {
@@ -224,7 +228,7 @@ void main() {
         }
 
         await tester.pumpWidget(LaunchSplashHost(
-          app: Future<Widget>.error(StateError('prefs broken')),
+          app: failed(StateError('prefs broken')),
           retry: retry,
           variant: variant,
           language: 'ar',
@@ -275,7 +279,7 @@ void main() {
     testWidgets('a failing retry shows the error screen again', (tester) async {
       _reduceMotion(tester);
       await tester.pumpWidget(LaunchSplashHost(
-        app: Future<Widget>.error(Exception('offline')),
+        app: failed(Exception('offline')),
         retry: () => Future<Widget>.error(Exception('still offline')),
         language: 'en',
       ));
