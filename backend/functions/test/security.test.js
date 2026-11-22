@@ -189,3 +189,44 @@ test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
   // Junk in the stored map is dropped.
   assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
 });
+
+// Free plan = one child (owner decision 2026-11-21, docs/decisions/FREE-ONE-CHILD.md).
+test("childPaused: Free keeps only the first child (child-1) active", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const old = now - 30 * 24 * 60 * 60_000; // family created a month ago: trial over
+  const base = { plan: undefined, planExpiresAt: undefined, createdAtMs: old, freeChildId: undefined, now };
+  assert.equal(s.childPaused({ ...base, childId: "child-1" }), false);
+  assert.equal(s.childPaused({ ...base, childId: "cabc123" }), true);
+});
+
+test("childPaused: the parent's chosen child stays active instead", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const base = { plan: null, planExpiresAt: null, createdAtMs: 0, freeChildId: "cabc123", now };
+  assert.equal(s.childPaused({ ...base, childId: "cabc123" }), false);
+  assert.equal(s.childPaused({ ...base, childId: "child-1" }), true);
+  // A malformed choice falls back to child-1, never to "everyone active".
+  assert.equal(s.childPaused({ ...base, freeChildId: "../x", childId: "child-1" }), false);
+  assert.equal(s.childPaused({ ...base, freeChildId: "../x", childId: "cabc123" }), true);
+});
+
+test("childPaused: nobody is paused on a paid plan or during the first 7 days", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const future = new Date(now + 86_400_000).toISOString();
+  const past = new Date(now - 1).toISOString();
+  assert.equal(s.childPaused({ plan: "basic", planExpiresAt: future, createdAtMs: 0, freeChildId: undefined, childId: "c2", now }), false);
+  assert.equal(s.childPaused({ plan: "plus", planExpiresAt: future, createdAtMs: 0, freeChildId: undefined, childId: "c2", now }), false);
+  // Expired plan: paused again (data is kept; resumes when the family subscribes).
+  assert.equal(s.childPaused({ plan: "plus", planExpiresAt: past, createdAtMs: 0, freeChildId: undefined, childId: "c2", now }), true);
+  // Server-side 7-day trial from the family's creation time.
+  assert.equal(s.childPaused({ plan: null, planExpiresAt: null, createdAtMs: now - 6 * 86_400_000, freeChildId: undefined, childId: "c2", now }), false);
+  assert.equal(s.childPaused({ plan: null, planExpiresAt: null, createdAtMs: now - 7 * 86_400_000, freeChildId: undefined, childId: "c2", now }), true);
+  // Missing or bad creation time: no trial.
+  assert.equal(s.childPaused({ plan: null, planExpiresAt: null, createdAtMs: "x", freeChildId: undefined, childId: "c2", now }), true);
+});
+
+test("freeChildIdOf defaults to child-1", () => {
+  assert.equal(s.freeChildIdOf(undefined), "child-1");
+  assert.equal(s.freeChildIdOf("cAbc_1"), "cAbc_1");
+  assert.equal(s.freeChildIdOf("a/b"), "child-1");
+  assert.equal(s.freeChildIdOf(42), "child-1");
+});

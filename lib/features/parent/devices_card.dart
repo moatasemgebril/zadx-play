@@ -6,6 +6,7 @@ import '../../core/app_config.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/models/child_profile.dart';
 import '../../services/family/children_controller.dart';
 import '../../services/family/family_repository.dart';
 import '../../services/family/pairing_service.dart';
@@ -30,7 +31,10 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
     final l10n = context.l10n;
     if (!ref.read(firebaseReadyProvider)) return showToast(context, l10n.pairOffline);
     final children = ref.read(childrenProvider);
-    final child = children.byId(_childId ?? children.activeId) ?? children.active;
+    final child = _pairable(children)
+            .where((c) => c.id == (_childId ?? ref.read(activeChildIdProvider)))
+            .firstOrNull ??
+        _pairable(children).first;
     setState(() => _busy = true);
     try {
       final code = await ref.read(pairingServiceProvider).createCode(_target, child);
@@ -42,11 +46,22 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
     }
   }
 
+  /// Children a device can be linked to: a child paused on the Free plan cannot (the server
+  /// refuses it too). The free child is never paused, so the list is never empty.
+  List<ChildProfile> _pairable(ChildrenState children) {
+    final pause = ref.read(childPauseProvider);
+    final list = children.children.where((c) => !pause.isPaused(c.id)).toList();
+    return list.isEmpty ? [children.active] : list;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final children = ref.watch(childrenProvider);
-    final selectedChild = children.byId(_childId ?? children.activeId) ?? children.active;
+    ref.watch(childPauseProvider);
+    final pairable = _pairable(children);
+    final wanted = _childId ?? ref.watch(activeChildIdProvider);
+    final selectedChild = pairable.where((c) => c.id == wanted).firstOrNull ?? pairable.first;
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.pairTitle, style: Theme.of(context).textTheme.titleMedium),
@@ -62,12 +77,12 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
             _code = null;
           }),
         ),
-        if (children.children.length > 1) ...[
+        if (pairable.length > 1) ...[
           const SizedBox(height: 10),
           Text(l10n.pairForChild, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
           ChoiceGrid<String>(
-            items: [for (final c in children.children) c.id],
+            items: [for (final c in pairable) c.id],
             selected: selectedChild.id,
             columns: 2,
             label: (id) => childDisplayName(children.byId(id) ?? children.active, l10n),

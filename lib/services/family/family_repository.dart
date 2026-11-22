@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/child_profile.dart';
+import 'child_pause.dart';
 import 'firestore_family_repository.dart';
 
 /// Snapshot of a child's day that both the child and parent devices share.
@@ -78,6 +79,14 @@ abstract class FamilyRepository {
   /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
   /// `accessibility_off`. The backend alerts the parent devices once per new reason.
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
+
+  /// Server-written plan fields of the family (read on paired child devices to know whether
+  /// their child is paused on Free). Emits nothing for local-only.
+  Stream<FamilyPlanStatus> watchFamilyStatus();
+
+  /// Parent device: tells the server which child stays active on Free (`setFreeChild`).
+  /// Returns true once the server stored it; false when there is no server (local mode).
+  Future<bool> setFreeChild(String childId);
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -103,6 +112,12 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {}
+
+  @override
+  Stream<FamilyPlanStatus> watchFamilyStatus() => const Stream.empty();
+
+  @override
+  Future<bool> setFreeChild(String childId) async => false;
 }
 
 /// True when Firebase initialised (overridden in main()).

@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/backend.dart';
 import '../../data/models/child_profile.dart';
+import 'child_pause.dart';
 import 'family_repository.dart';
 
 /// Firestore layout (see backend/firestore.rules):
@@ -88,6 +89,20 @@ class FirestoreFamilyRepository implements FamilyRepository {
       'childId': childId,
       'status': {'platform': platform, 'reasons': reasons},
     });
+  }
+
+  @override
+  Stream<FamilyPlanStatus> watchFamilyStatus() => _db.doc('families/$familyId').snapshots().where((s) => s.exists).map((s) {
+        final d = Map<String, dynamic>.from(s.data()!);
+        final created = d['createdAt'];
+        if (created is Timestamp) d['createdAt'] = created.millisecondsSinceEpoch;
+        return FamilyPlanStatus.fromFamilyDoc(d);
+      });
+
+  @override
+  Future<bool> setFreeChild(String childId) async {
+    await _functions.httpsCallable('setFreeChild').call({'familyId': familyId, 'childId': childId});
+    return true;
   }
 
   /// Signs in anonymously and creates a family for this device on first launch.

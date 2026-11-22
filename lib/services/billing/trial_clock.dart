@@ -100,6 +100,6 @@ final trialClockProvider = Provider<TrialClock>((ref) => TrialClock(ref.watch(sh
 Entitlement resolveEntitlement({Entitlement? store, PlanTier? cachedTier, required TrialStatus trial}) {
   if (store != null && !store.isFree) return store;
   if (cachedTier != null) return Entitlement(tier: cachedTier);
-  if (trial.active) return Entitlement(tier: PlanTier.plus, inTrial: true, trialDaysLeft: trial.daysLeft);
+  if (trial.active) return Entitlement(tier: PlanTier.plus, inTrial: true, trialDaysLeft: trial.daysLeft, deviceTrial: true);
   return const Entitlement();
 }

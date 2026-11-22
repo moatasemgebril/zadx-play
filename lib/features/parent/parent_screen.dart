@@ -124,7 +124,7 @@ class _ApprovalsCard extends ConsumerWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.pendingTitle, style: Theme.of(context).textTheme.titleMedium),
         if (children.children.length > 1)
-          Text(l10n.viewingChild(childDisplayName(children.active, l10n)),
+          Text(l10n.viewingChild(childDisplayName(children.byId(ref.watch(activeChildIdProvider)) ?? children.active, l10n)),
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.purpleDark)),
         const SizedBox(height: 6),
         if (pending.isEmpty) Text(l10n.noPending, style: const TextStyle(fontSize: 16, color: AppColors.muted)),

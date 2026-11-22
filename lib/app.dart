@@ -7,6 +7,7 @@ import 'data/catalog/locations.dart';
 import 'services/family/family_repository.dart';
 import 'core/platform.dart';
 import 'core/theme/app_theme.dart';
+import 'features/onboarding/onboarding_pin_screen.dart';
 import 'features/prayer/prayer_calculator.dart';
 import 'features/shell/sound_coordinator.dart';
 import 'features/settings/settings_controller.dart';
@@ -15,6 +16,7 @@ import 'router.dart';
 import 'services/app_lock/app_lock_service.dart';
 import 'services/app_lock/protection_monitor.dart';
 import 'services/audio/sfx_service.dart';
+import 'services/family/children_controller.dart';
 import 'services/notifications/prayer_notification_service.dart';
 
 class ZadXApp extends ConsumerStatefulWidget {
@@ -47,6 +49,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
       },
       fireImmediately: true,
     );
+    // Free plan = one child: tell the server which child stays active, only if it changed.
+    ref.read(childrenProvider.notifier).syncFreeChild();
   }
 
   @override
@@ -79,6 +83,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: appRouter,
+      // First run: the parent creates the PIN before child mode is reachable.
+      builder: (context, child) => FirstRunGate(child: child ?? const SizedBox.shrink()),
     );
   }
 

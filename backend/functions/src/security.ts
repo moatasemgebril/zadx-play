@@ -112,6 +112,38 @@ export function hasActivePlan(plan: unknown, planExpiresAt: unknown, now: number
 }
 
 // ---------------------------------------------------------------------------
+// Free plan = one child (owner decision 2026-11-21, docs/decisions/FREE-ONE-CHILD.md)
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_CHILD_ID = "child-1";
+export const FAMILY_TRIAL_MS = 7 * 24 * 60 * 60_000;
+const CHILD_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+
+/** The child that stays active on Free: the parent's choice (`setFreeChild`) or `child-1`. */
+export function freeChildIdOf(freeChildId: unknown): string {
+  return typeof freeChildId === "string" && CHILD_ID_PATTERN.test(freeChildId) ? freeChildId : DEFAULT_CHILD_ID;
+}
+
+/** True during the first 7 days after the family was created (server time, like the app's trial). */
+export function familyTrialActive(createdAtMs: unknown, now: number): boolean {
+  return typeof createdAtMs === "number" && Number.isFinite(createdAtMs) && now < createdAtMs + FAMILY_TRIAL_MS;
+}
+
+/**
+ * True when [childId] is paused: the family has no active paid plan, is past its first 7 days,
+ * and the child is not the one kept active on Free. Paused children keep all their data; they
+ * are only not locked, monitored or paired as separate children. Same rule as
+ * `FamilyPlanStatus.childPaused` in lib/services/family/child_pause.dart.
+ */
+export function childPaused(input: {
+  plan: unknown; planExpiresAt: unknown; createdAtMs: unknown; freeChildId: unknown; childId: string; now: number;
+}): boolean {
+  if (hasActivePlan(input.plan, input.planExpiresAt, input.now)) return false;
+  if (familyTrialActive(input.createdAtMs, input.now)) return false;
+  return input.childId !== freeChildIdOf(input.freeChildId);
+}
+
+// ---------------------------------------------------------------------------
 // AI assistant input
 // ---------------------------------------------------------------------------
 

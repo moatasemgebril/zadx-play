@@ -21,6 +21,8 @@ final protectionMonitorProvider = Provider<void>((ref) {
 
   Future<void> report() async {
     try {
+      // A child paused on the Free plan is not monitored (docs/decisions/FREE-ONE-CHILD.md).
+      if (ref.read(thisDevicePausedProvider)) return;
       final status = await service.protectionStatus();
       if (!status.wasSetUp) return;
       final reasons = protectionTamperReasons(
