@@ -209,8 +209,15 @@ void main() {
           for (var i = 1; i <= days; i++) {
             final d = DateTime.utc(start.year, start.month, start.day + i);
             final cur = on(d);
+            // The Umm al-Qura Ramadan rule (Isha 90 -> 120 min) is an intended calendar step, not
+            // an astronomy jump: remove it before comparing (tested on its own below).
+            final yesterday = DateTime.utc(d.year, d.month, d.day - 1);
+            final ruleStep = c.method.ishaMinutesAfterMaghrib == null
+                ? 0
+                : ishaIntervalOn(c.method, d.year, d.month, d.day)! -
+                    ishaIntervalOn(c.method, yesterday.year, yesterday.month, yesterday.day)!;
             for (final p in Prayer.values) {
-              final step = cur[p]!.difference(prev[p]!).inSeconds / 60 - 1440;
+              final step = cur[p]!.difference(prev[p]!).inSeconds / 60 - 1440 - (p == Prayer.isha ? ruleStep : 0);
               if (step.abs() > 4) problems.add('$c ${_d(d)} $p moved ${step.toStringAsFixed(1)} min vs previous day');
             }
             prev = cur;
