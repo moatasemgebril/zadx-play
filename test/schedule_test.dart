@@ -78,7 +78,7 @@ void main() {
   });
 
   group('lock policy', () {
-    final wallet = WalletState(day: '2026-11-23', tasks: defaultTasks, progress: const {}, usedMinutes: 10);
+    const wallet = WalletState(day: '2026-11-23', tasks: defaultTasks, progress: {}, usedMinutes: 10);
 
     test('an active schedule locks with its kind as the reason, on every plan', () {
       final free = lockStateFor(tasksEnabled: false, wallet: wallet, dailyLimitMinutes: 60, schedule: bedtime);
