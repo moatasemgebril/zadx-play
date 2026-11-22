@@ -44,6 +44,7 @@ Length: the English is exactly 30. The Arabic as decided is **37 characters with
 without)**, over Apple's 30, so the store value is «للأطفال المسلمين: صلِّ وتعلَّم» (30; "Play" is already in
 the app name "Zad X Play"). If the owner prefers the full three verbs in Arabic, it fits only in the
 promotional text or the description, not the subtitle.
+**Owner approved «للأطفال المسلمين: صلِّ وتعلَّم» as the Arabic App Store subtitle on 2026-11-22.**
 
 **Identity wording (unified 2026-11-22):** the Arabic identity is «للأطفال المسلمين» everywhere (splash,
 Help → About, `IslamicBrand.identityAr`, store fields), matching "For Muslim Kids".
