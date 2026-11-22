@@ -207,17 +207,24 @@ class FirestoreFamilyRepository implements FamilyRepository {
     });
   }
 
-  /// Signs in anonymously and creates a family for this device on first launch.
-  /// Pairing a second device (parent ⇄ child) adds its uid to `members`
-  /// via a short pairing code — see docs/ARCHITECTURE.md.
-  static Future<String> ensureFamily(String? existingFamilyId) async {
+  /// Signs in anonymously (cached after the first launch) and returns the uid.
+  static Future<String> signIn() async {
     final auth = FirebaseAuth.instance;
     final user = auth.currentUser ?? (await auth.signInAnonymously()).user!;
-    if (existingFamilyId != null) return existingFamilyId;
-    final doc = await FirebaseFirestore.instance.collection('families').add({
-      'members': [user.uid],
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    return doc.id;
+    return user.uid;
   }
+
+  /// A new family id, generated on the device (no network): FamilyBootstrap saves it locally
+  /// before the family doc is written, so a timed-out write can never leave an orphan family.
+  static String newFamilyId() => FirebaseFirestore.instance.collection('families').doc().id;
+
+  /// Creates families/[familyId] with this device as its only member. Idempotent, so start-up can
+  /// retry it with the same id: on a new doc this is a create (`members == [uid]` in
+  /// firestore.rules); when an earlier, timed-out attempt already landed, `arrayUnion` of a uid
+  /// that is already there changes nothing. Pairing a second device (parent ⇄ child) adds its uid
+  /// to `members` via a short pairing code — see docs/ARCHITECTURE.md.
+  static Future<void> createFamily(String familyId, String uid) =>
+      FirebaseFirestore.instance.doc('families/$familyId').set({
+        'members': FieldValue.arrayUnion([uid]),
+      }, SetOptions(merge: true));
 }

@@ -3,8 +3,27 @@ import 'app_variant.dart';
 /// Brand + store constants of the Islamic app, "Zad X Play".
 abstract final class IslamicBrand {
   static const storeName = 'Zad X Play';
-  static const storeSubtitleAr = 'ألعاب بعد الصلاة والمهام';
-  static const storeSubtitleEn = 'Games after prayer & tasks';
+
+  /// Who Zad X Play is for (owner request 2026-11-22): shown on the launch splash and in Help,
+  /// in both languages. Short and dignified; never used in Zad X Kids.
+  static const identityAr = 'للأطفال المسلمين';
+  static const identityEn = 'For Muslim Kids';
+
+  /// The identity line in [lang] (Arabic unless English).
+  static String identityFor(String lang) => lang == 'en' ? identityEn : identityAr;
+
+  /// App Store subtitle (≤ 30 characters, checked by test/launch_splash_test.dart).
+  /// Owner decision 2026-11-22: Arabic store text must NOT contain «المسلمين», so the Arabic subtitle
+  /// is «صلِّ وتعلَّم» ("Play" is already in the app name). English stays "Muslim kids: pray, learn,
+  /// play". The in-app identity line ([identityAr], splash and Help) is unchanged.
+  /// See docs/marketing/STORE-LISTING.md.
+  static const storeSubtitleAr = 'صلِّ وتعلَّم';
+  static const storeSubtitleEn = 'Muslim kids: pray, learn, play';
+
+  /// Google Play short description (≤ 80 characters): what the app does. The Arabic has no
+  /// «للأطفال المسلمين:» prefix (owner decision 2026-11-22); the English keeps "For Muslim kids".
+  static const storeShortDescriptionAr = 'ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل';
+  static const storeShortDescriptionEn = 'For Muslim kids: games unlock after prayer & tasks. Prayer times, adhan, Quran';
   static const androidPackage = 'com.zadx.app';
   static const iosBundleId = 'com.zadx.app';
   static const iosAppGroup = 'group.com.zadx.app';
@@ -19,8 +38,10 @@ abstract final class IslamicBrand {
 /// Scanned for religious words by test/kids_variant_test.dart.
 abstract final class KidsBrand {
   static const storeName = 'Zad X Kids';
-  static const storeSubtitleAr = 'وقت الشاشة بعد المهام والمذاكرة';
-  static const storeSubtitleEn = 'Screen time after tasks & homework';
+  static const storeSubtitleAr = 'وقت الشاشة بعد المهام والواجب'; // ≤ 30 (App Store)
+  static const storeSubtitleEn = 'Tasks first, then screen time'; // ≤ 30 (App Store)
+  static const storeShortDescriptionAr = 'وقت الشاشة بعد المهام والمذاكرة، مع مواعيد للمذاكرة والقراءة والنوم';
+  static const storeShortDescriptionEn = 'Screen time after tasks & homework, with study, reading and bedtime schedules';
   static const androidPackage = 'com.zadx.kids';
   static const iosBundleId = 'com.zadx.kids';
   static const iosAppGroup = 'group.com.zadx.kids';
@@ -45,9 +66,15 @@ class AppConfig {
   /// Keep in sync with android:label and CFBundleDisplayName (android/scripts/integrate_native.py).
   static const storeName = kIsKids ? KidsBrand.storeName : IslamicBrand.storeName;
 
-  /// App Store subtitle / Google Play short description.
+  /// App Store subtitle (≤ 30 characters). Zad X Play says it is for Muslim kids.
   static const storeSubtitleAr = kIsKids ? KidsBrand.storeSubtitleAr : IslamicBrand.storeSubtitleAr;
   static const storeSubtitleEn = kIsKids ? KidsBrand.storeSubtitleEn : IslamicBrand.storeSubtitleEn;
+
+  /// Google Play short description (≤ 80 characters).
+  static const storeShortDescriptionAr =
+      kIsKids ? KidsBrand.storeShortDescriptionAr : IslamicBrand.storeShortDescriptionAr;
+  static const storeShortDescriptionEn =
+      kIsKids ? KidsBrand.storeShortDescriptionEn : IslamicBrand.storeShortDescriptionEn;
 
   static const androidPackage = kIsKids ? KidsBrand.androidPackage : IslamicBrand.androidPackage;
   static const iosBundleId = kIsKids ? KidsBrand.iosBundleId : IslamicBrand.iosBundleId;

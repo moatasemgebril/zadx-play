@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const { readFileSync } = require("fs");
 const { join } = require("path");
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require("@firebase/rules-unit-testing");
-const { doc, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, increment } = require("firebase/firestore");
+const { doc, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, increment, arrayUnion } = require("firebase/firestore");
 
 const DAY = "2026-11-22";
 const PARENT = "parentUid";
@@ -167,6 +167,23 @@ test("per-app plans (plans.<app>, planApp) are server-only (Zad X Kids / Zad X P
   await assertFails(setDoc(doc(as(STRANGER), "families/f2"), { members: [STRANGER], plans: { play: { plan: "plus" } } }));
   await assertFails(setDoc(doc(as(STRANGER), "families/f3"), { members: [STRANGER], planApp: "play" }));
   await assertSucceeds(setDoc(doc(as(STRANGER), "families/f4"), { members: [STRANGER] }));
+});
+
+test("family create is idempotent (FirestoreFamilyRepository.createFamily, retried by FamilyBootstrap)", async () => {
+  await env.clearFirestore();
+  const NEW = "newPhoneUid";
+  const fam = doc(as(NEW), "families/local-id-1");
+  const create = () => setDoc(fam, { members: arrayUnion(NEW) }, { merge: true });
+  await assertSucceeds(create()); // first write: a create with members == [uid]
+  await assertSucceeds(create()); // retry after a timeout that did land: no change
+  let members;
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    members = (await getDoc(doc(ctx.firestore(), "families/local-id-1"))).get("members");
+  });
+  assert.deepEqual(members, [NEW]);
+  // The same call cannot add a device to someone else's family.
+  await seed();
+  await assertFails(setDoc(doc(as(STRANGER), "families/f1"), { members: arrayUnion(STRANGER) }, { merge: true }));
 });
 
 // ---- parents ---------------------------------------------------------------------------------

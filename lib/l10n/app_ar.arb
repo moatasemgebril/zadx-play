@@ -827,6 +827,67 @@
   "protectTamperNote": "لو الحماية اتقفلت على جهاز الطفل، أو الجهاز بطّل يتواصل مع Zad X لمدة يوم، هيوصلك تنبيه على تليفونك.",
   "protectDisclosureExtra": "وكمان Zad X بيخلي تطبيق الإعدادات ليك انت بس (بتفتحه بالرقم السري)، ويقدر يمنع مسح التطبيقات من غيرك.",
   "deviceLockAlwaysOpenProtected": "مفتوح دايمًا: التليفون ومكالمات الطوارئ وZad X والشاشة الرئيسية والكيبورد. الإعدادات بتتفتح لولي الأمر بالرقم السري.",
+  "readingStartBtn": "يلا نقرا",
+  "readingPickStory": "اختار قصة تقراها",
+  "readingLevel5to7": "من ٥ لـ ٧ سنين",
+  "readingLevel8to10": "من ٨ لـ ١٠ سنين",
+  "readingLevel11to12": "من ١١ لـ ١٢ سنة",
+  "readingDoneReading": "خلّصت القراءة",
+  "readingQuestionOf": "سؤال {a} من {b}",
+  "@readingQuestionOf": {
+    "placeholders": {
+      "a": {
+        "type": "String"
+      },
+      "b": {
+        "type": "String"
+      }
+    }
+  },
+  "readingCorrect": "إجابة صح! برافو عليك",
+  "readingTryAgain": "قرّبت! جرّب إجابة تانية",
+  "readingNext": "السؤال اللي بعده",
+  "readingFinish": "خلّصت",
+  "readingFinishTitle": "قريت القصة وجاوبت على الأسئلة!",
+  "readingSentToParent": "اتبعتت لولي الأمر عشان يأكّد.",
+  "readingBackToTasks": "رجوع للمهام",
+  "readingBookTitle": "اقرا في كتاب ورقي",
+  "readingBookNote": "اقرا في كتابك بهدوء لمدة {n} دقيقة. لما الوقت يخلص، ولي الأمر هيأكّد.",
+  "@readingBookNote": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
+  "readingTimerStart": "ابدأ القراءة",
+  "readingTimerPause": "استراحة",
+  "readingTimerResume": "كمّل القراءة",
+  "readingTimeLeft": "باقي {t}",
+  "@readingTimeLeft": {
+    "placeholders": {
+      "t": {
+        "type": "String"
+      }
+    }
+  },
+  "readingTimeUp": "الوقت خلص! قراءة جميلة",
+  "readingSendToParent": "ابعت لولي الأمر",
+  "readingTaskMissing": "المهمة دي مش موجودة النهارده.",
+  "readingSetupTitle": "واجب القراءة",
+  "readingSetupNote": "قصص قصيرة شغّالة من غير إنترنت، أو قراءة في كتاب ورقي. انت بتأكّد في الآخر زي باقي المهام.",
+  "readingStorySwitch": "قراءة قصة وأسئلة عليها",
+  "readingBookSwitch": "قراءة في كتاب ورقي",
+  "readingLevelLabel": "المستوى",
+  "readingMinutesLabel": "مدة القراءة",
+  "readingMinutesN": "{n} دقيقة",
+  "@readingMinutesN": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      }
+    }
+  },
   "highLatitudeRule": "قاعدة البلاد الشمالية (الفجر والعشاء)",
   "highLatitudeAuto": "تلقائي (التقدير النسبي من خط عرض 45° للبلاد من 48° فأعلى)",
   "highLatitudeRelative45": "التقدير النسبي من خط عرض 45° (المجلس الأوروبي للإفتاء والمجمع الفقهي)",

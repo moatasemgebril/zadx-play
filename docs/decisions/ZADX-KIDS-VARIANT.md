@@ -113,7 +113,7 @@ flutter test
 
 # Zad X Kids
 flutter run --dart-define=ZADX_VARIANT=kids
-flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/kids_artwork_test.dart test/schedule_test.dart
+flutter test --dart-define=ZADX_VARIANT=kids test/kids_variant_test.dart test/kids_artwork_test.dart test/launch_splash_test.dart test/schedule_test.dart
 
 # Zad X Kids APK (CI or a throw-away clone: the first step deletes the Islamic assets)
 python3 tools/kids_variant_prepare.py --apply
@@ -141,7 +141,7 @@ CI (`.github/workflows/zadx-ci.yml`, light PR job): after the Zad X Play steps i
 
 ## 6. Store and compliance notes
 
-* **Separate listings**: Google Play `com.zadx.kids`, App Store bundle `com.zadx.kids` (App Group `group.com.zadx.kids`). Store text must follow the same rule (no religious words); proposed subtitle: "وقت الشاشة بعد المهام والمذاكرة" / "Screen time after tasks & homework".
+* **Separate listings**: Google Play `com.zadx.kids`, App Store bundle `com.zadx.kids` (App Group `group.com.zadx.kids`). Store text must follow the same rule (no religious words); proposed subtitle (≤ 30 characters): "وقت الشاشة بعد المهام والواجب" / "Tasks first, then screen time"; Play short description: "Screen time after tasks & homework, with study, reading and bedtime schedules". English is the primary listing language (US / Europe).
 * **Children's privacy**: same principles as Zad X Play: COPPA (verifiable parental consent before any personal data, no ads, no third-party trackers), GDPR-K, nickname-only child profiles, no location by default (`FeatureFlags.locationMap` stays off). Needs its **own privacy-policy page** naming Zad X Kids and its own Google Play Data safety form and Families policy declaration (same answers).
 * **Accessibility prominent disclosure** (Google Play): the Kids text (in-app and the native service description) mentions study time, reading time and bedtime instead of prayer time. The Play declaration video must be recorded again for `com.zadx.kids`.
 * **Products**: create the four `zadx_kids_*` subscriptions in Play Console / App Store Connect with the same prices and the same 7-day on-device trial rule; point the Kids app's Real-time developer notifications to the same `playNotifications` endpoint; give the backend service account access to the Kids app.

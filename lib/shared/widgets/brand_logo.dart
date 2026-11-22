@@ -11,7 +11,7 @@ import '../../core/theme/app_colors.dart';
 ///   Islamic Values", so it must never appear in Kids. TODO(owner): a neutral Kids artwork logo +
 ///   launcher icon (docs/decisions/ZADX-KIDS-VARIANT.md).
 class BrandLogo extends StatelessWidget {
-  const BrandLogo({super.key, this.width = 150, this.height = 99});
+  const BrandLogo({super.key, this.width = 150, this.height = 99, this.variant = appVariant});
 
   /// Zad X Play only. Removed from the Kids bundle by tools/kids_variant_prepare.py.
   static const islamicAsset = 'assets/images/zadx_logo.jpg';
@@ -19,12 +19,27 @@ class BrandLogo extends StatelessWidget {
   final double width;
   final double height;
 
+  /// Which app's logo (default: this build). The Kids build always draws the Kids wordmark,
+  /// whatever is passed (`kIsKids` is a compile-time constant, so the artwork logo is tree-shaken).
+  final AppVariant variant;
+
+  /// True when this widget shows the Zad X Play artwork logo.
+  bool get showsArtwork => !kIsKids && variant == AppVariant.islamic;
+
   @override
   Widget build(BuildContext context) {
-    if (!kIsKids) {
+    if (!kIsKids && variant == AppVariant.islamic) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(16),
-        child: Image.asset(islamicAsset, width: width, height: height, fit: BoxFit.cover, semanticLabel: 'Zad X'),
+        child: Image.asset(
+          islamicAsset,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          semanticLabel: 'Zad X',
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => SizedBox(width: width, height: height),
+        ),
       );
     }
     return const KidsWordmark().sized(width, height);
