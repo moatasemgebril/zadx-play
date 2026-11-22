@@ -160,3 +160,4 @@ Flow today: same Zad X app on the parent phone and the child device (Windows = Z
 - **P1:** no PIN recovery (store-account or email-based reset that a child can't trigger).
 - **P1:** even after PR #28, the paid-plan assistant lives on the Help screen, which children can open → put it behind the parent PIN.
 - FAQ faq6–faq12 + new step 1 added (help/faq-setup-payment); faq8/10/11 describe the launch flow and depend on the P0 fixes + Firebase.
+- PR #32 AppSec re-review (B → A after fixes): `parentDevices` added to serverOnlyFamilyKeys (done). Open P2: remove/revoke a linked phone (parent-only action); parent link code → 8–10 chars + confirmation on the issuing phone; server-side PIN check for code creation. Legacy child phones without `childDevices` would count as parents — no production families exist yet (Firebase not live), so no backfill needed; re-check before launch.
