@@ -148,7 +148,7 @@ class _SurahCardState extends ConsumerState<_SurahCard> {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(name, style: Theme.of(context).textTheme.titleMedium),
-              Text(l10n.ayatCount(Fmt.digits(surah.ayahCount, lang)), style: const TextStyle(fontSize: 15, color: AppColors.muted)),
+              Text(l10n.ayatCount(surah.ayahCount, Fmt.digits(surah.ayahCount, lang)), style: const TextStyle(fontSize: 15, color: AppColors.muted)),
             ]),
           ),
           if (!widget.canPlay)
