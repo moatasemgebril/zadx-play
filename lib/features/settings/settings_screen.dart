@@ -24,7 +24,7 @@ class SettingsScreen extends ConsumerWidget {
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
 
-    final langItems = [...supportedLanguages, ...upcomingLanguages.keys];
+    final langItems = [...languagePickerOrder, ...upcomingLanguages.keys];
     String langLabel(String code) => switch (code) {
           'ar' => 'العربية',
           'en' => 'English',

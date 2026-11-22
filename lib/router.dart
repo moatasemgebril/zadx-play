@@ -33,9 +33,12 @@ abstract class Routes {
   static const eduMasjid = '/edu/masjid';
   static String eduGame(String id) => '/edu/$id';
 
-  /// Routes that exist only in Zad X Play. Zad X Kids has no route for them at all
+  /// Islamic routes. Zad X Kids has no route for them at all
   /// (docs/decisions/ZADX-KIDS-VARIANT.md); a link to one goes to [home].
   static const islamicOnly = {quran, eduProphets, eduMasjid};
+
+  /// Every route that exists only in Zad X Play: the Islamic ones + the Arabic Letters game.
+  static const playOnly = {...islamicOnly, eduLetters};
 }
 
 /// The bottom-bar tabs, in order. The shell branches in [appRoutes] follow this list.
@@ -63,8 +66,9 @@ final _rootKey = GlobalKey<NavigatorState>();
 
 /// Every route of [variant] (default: this build).
 ///
-/// Islamic-only routes are added behind `!kIsKids`, a compile-time constant: in the Kids build
-/// the Quran, prophets and mosque screens are not reachable from any route (and are tree-shaken).
+/// Zad X Play-only routes are added behind `!kIsKids`, a compile-time constant: in the Kids build
+/// the Quran, prophets, mosque and Arabic Letters screens are not reachable from any route (and
+/// are tree-shaken).
 List<RouteBase> appRoutes({AppVariant variant = appVariant, GlobalKey<NavigatorState>? rootKey}) {
   final key = rootKey ?? _rootKey;
   return [
@@ -82,17 +86,17 @@ List<RouteBase> appRoutes({AppVariant variant = appVariant, GlobalKey<NavigatorS
     GoRoute(parentNavigatorKey: key, path: Routes.settings, builder: (_, __) => const SettingsScreen()),
     GoRoute(parentNavigatorKey: key, path: Routes.help, builder: (_, __) => const HelpScreen()),
     GoRoute(parentNavigatorKey: key, path: Routes.subscription, builder: (_, __) => const SubscriptionScreen()),
-    GoRoute(parentNavigatorKey: key, path: Routes.eduLetters, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: LettersGameScreen())),
     if (!kIsKids && variant == AppVariant.islamic) ...[
+      GoRoute(parentNavigatorKey: key, path: Routes.eduLetters, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: LettersGameScreen())),
       GoRoute(parentNavigatorKey: key, path: Routes.eduProphets, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: ProphetsGameScreen())),
       GoRoute(parentNavigatorKey: key, path: Routes.eduMasjid, builder: (_, __) => const PaidFeatureGate(feature: AppFeature.eduGames, fullScreen: true, child: MosqueGameScreen())),
     ],
   ];
 }
 
-/// Zad X Kids: a link to a Zad X Play-only page (e.g. an old `/quran` deep link) opens Home.
+/// Zad X Kids: a link to a Zad X Play-only page (e.g. an old `/quran` or `/edu/letters` link) opens Home.
 String? kidsRedirect(String path, {AppVariant variant = appVariant}) =>
-    variant == AppVariant.kids && Routes.islamicOnly.any((r) => path == r || path.startsWith('$r/')) ? Routes.home : null;
+    variant == AppVariant.kids && Routes.playOnly.any((r) => path == r || path.startsWith('$r/')) ? Routes.home : null;
 
 GoRouter buildAppRouter({AppVariant variant = appVariant, GlobalKey<NavigatorState>? rootKey}) {
   final key = rootKey ?? _rootKey;

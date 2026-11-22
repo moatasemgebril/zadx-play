@@ -10,7 +10,7 @@ import 'scenes/tasks_scene.dart';
 
 /// The background mood of each area of the app.
 enum ZadScene {
-  /// Sunrise sky over a little town with a mosque.
+  /// Sunrise sky over a little town with a mosque (Zad X Kids: a treehouse oak instead).
   home,
 
   /// Floating islands, bright but calm.
@@ -20,12 +20,15 @@ enum ZadScene {
   tasks,
 
   /// Quran & Adhkar: calm night sky, crescent, stars, lanterns.
+  /// Never shown in Zad X Kids; there it would paint a neutral space sky (full moon, planet, rocket).
   quran,
 
   /// Sky that follows the prayer day (see [PrayerSkyPhase]).
+  /// Never shown in Zad X Kids; there it has a full moon and a little house, no crescent or dome.
   prayer,
 
-  /// Parent area, settings, help, subscription: light geometric pattern.
+  /// Parent area, settings, help, subscription: light geometric pattern
+  /// (Zad X Kids: rounded squares and dots instead of the eight-point star).
   parent,
 }
 

@@ -31,7 +31,7 @@ extension ScheduleKindText on ScheduleKind {
       };
 
   IconData get icon => switch (this) {
-        ScheduleKind.bedtime => Icons.bedtime_rounded,
+        ScheduleKind.bedtime => Icons.bed_rounded, // a bed, not a crescent (Kids artwork rules)
         ScheduleKind.study => Icons.menu_book_rounded,
         ScheduleKind.reading => Icons.auto_stories_rounded,
       };

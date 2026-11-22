@@ -43,19 +43,22 @@ class GamesScreen extends ConsumerWidget {
       child: ListView(padding: const EdgeInsets.all(16), children: [
         _GamesHero(title: l10n.gamesHeroTitle, sub: l10n.gamesHeroSub),
         const SizedBox(height: 16),
-        Text(l10n.zadGames, style: Theme.of(context).textTheme.titleMedium),
-        Text(l10n.zadGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
-        const SizedBox(height: 10),
-        PaidFeatureGate(
-          feature: AppFeature.eduGames,
-          child: Row(children: [
-            for (final g in activeZadGames) ...[
-              Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
-              if (g != activeZadGames.last) const SizedBox(width: 10),
-            ],
-          ]),
-        ),
-        const SizedBox(height: 18),
+        // Built-in learning games (Zad X Play). Zad X Kids has none yet, so no empty section.
+        if (activeZadGames.isNotEmpty) ...[
+          Text(l10n.zadGames, style: Theme.of(context).textTheme.titleMedium),
+          Text(l10n.zadGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
+          const SizedBox(height: 10),
+          PaidFeatureGate(
+            feature: AppFeature.eduGames,
+            child: Row(children: [
+              for (final g in activeZadGames) ...[
+                Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
+                if (g != activeZadGames.last) const SizedBox(width: 10),
+              ],
+            ]),
+          ),
+          const SizedBox(height: 18),
+        ],
         Text(l10n.deviceGames, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.deviceGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
         const SizedBox(height: 10),

@@ -58,6 +58,9 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get zadGameLetters => _text('zadGameLetters');
 
   @override
+  String get avatarMoon => _text('avatarMoon');
+
+  @override
   String get deviceGamesNote => _text('deviceGamesNote');
 
   @override

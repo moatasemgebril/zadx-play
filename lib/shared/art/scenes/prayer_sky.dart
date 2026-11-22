@@ -82,9 +82,12 @@ class PrayerSkyStyle {
   };
 }
 
+/// The sky strip. Zad X Kids never shows prayer times; with [religiousMotifs] false (Kids) the
+/// night moon is full instead of a crescent and a little house replaces the dome.
 class PrayerSkyStaticPainter extends CustomPainter {
-  const PrayerSkyStaticPainter(this.phase);
+  const PrayerSkyStaticPainter(this.phase, {this.religiousMotifs = artReligiousMotifs});
   final PrayerSkyPhase phase;
+  final bool religiousMotifs;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -94,21 +97,33 @@ class PrayerSkyStaticPainter extends CustomPainter {
     canvas.drawRect(rect, vGradient(rect, s.sky));
     final c = Offset(size.width * s.sunAt.dx, size.height * s.sunAt.dy);
     canvas.drawCircle(c, 50 * u, glow(c, 50 * u, s.sunColor, 0.45));
-    if (s.moon) {
+    if (s.moon && religiousMotifs) {
       canvas.drawPath(ArtShapes.crescent(c, 13 * u), fill(s.sunColor));
     } else {
       canvas.drawCircle(c, 15 * u, fill(s.sunColor));
     }
     canvas.drawPath(ArtShapes.hill(size, size.height - 14 * u, amp: 5 * u, waves: 1.3), fill(s.hill));
-    // A small dome on the hill.
+    // A small dome on the hill (Kids: a little pitched-roof house).
     final dx = size.width * 0.62;
     final base = size.height - 14 * u;
     canvas.drawRect(Rect.fromLTWH(dx - 14 * u, base - 10 * u, 28 * u, 24 * u), fill(s.hill));
-    canvas.drawPath(ArtShapes.dome(Offset(dx - 11 * u, base - 9 * u), 22 * u, base - 30 * u), fill(s.hill));
+    if (religiousMotifs) {
+      canvas.drawPath(ArtShapes.dome(Offset(dx - 11 * u, base - 9 * u), 22 * u, base - 30 * u), fill(s.hill));
+    } else {
+      canvas.drawPath(
+        Path()
+          ..moveTo(dx - 18 * u, base - 9 * u)
+          ..lineTo(dx, base - 26 * u)
+          ..lineTo(dx + 18 * u, base - 9 * u)
+          ..close(),
+        fill(s.hill),
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(PrayerSkyStaticPainter oldDelegate) => oldDelegate.phase != phase;
+  bool shouldRepaint(PrayerSkyStaticPainter oldDelegate) =>
+      oldDelegate.phase != phase || oldDelegate.religiousMotifs != religiousMotifs;
 }
 
 class PrayerSkyMotionPainter extends CustomPainter {

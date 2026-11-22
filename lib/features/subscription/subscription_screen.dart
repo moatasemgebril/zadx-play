@@ -9,6 +9,7 @@ import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/catalog/games.dart';
 import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/billing/subscription_service.dart';
@@ -146,7 +147,8 @@ class _PlanCard extends ConsumerWidget {
       // No "N games" here: with the device-wide lock every non-allowed app is locked
       // (maxGames only limits the Games screen picker).
       (l10n.featGames, has(AppFeature.tasksRewards)),
-      (l10n.featEduGames, has(AppFeature.eduGames)),
+      // Zad X Kids has no built-in learning game yet: do not advertise one.
+      if (activeZadGames.isNotEmpty) (l10n.featEduGames, has(AppFeature.eduGames)),
       (l10n.featExercises, has(AppFeature.exercises)),
       if (!kIsKids) (l10n.featAdhkar, has(AppFeature.adhkar)),
       (l10n.featCustomTasks, has(AppFeature.customUnlockTasks)),

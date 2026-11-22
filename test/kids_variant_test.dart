@@ -187,8 +187,8 @@ void main() {
       }
     });
 
-    test('learning games: the letters game only (no prophets, no mosque)', () {
-      expect(zadGamesFor(AppVariant.kids).map((g) => g.id), ['letters']);
+    test('learning games: none in Kids (no prophets, no mosque, no Arabic Letters)', () {
+      expect(zadGamesFor(AppVariant.kids), isEmpty);
     });
 
     test('schedules replace prayer locks', () {
@@ -200,9 +200,9 @@ void main() {
   group('Kids routes and plans', () {
     test('no route reaches Quran, prayer, adhan, adhkar, prophets or the mosque game', () {
       final paths = _paths(appRoutes(variant: AppVariant.kids, rootKey: GlobalKey<NavigatorState>()));
-      expect(paths, containsAll([Routes.home, Routes.games, Routes.tasks, Routes.parent, Routes.eduLetters]));
+      expect(paths, containsAll([Routes.home, Routes.games, Routes.tasks, Routes.parent]));
       for (final p in paths) {
-        expect(Routes.islamicOnly, isNot(contains(p)));
+        expect(Routes.playOnly, isNot(contains(p)));
         expect(RegExp('quran|prayer|adhan|adhkar|prophet|masjid|mosque', caseSensitive: false).hasMatch(p), isFalse, reason: p);
       }
       expect(shellTabsFor(variant: AppVariant.kids), isNot(contains(ShellTab.quran)));
@@ -242,9 +242,9 @@ void main() {
         expect(featuresOf(null), {AppFeature.appLock});
         expect(hasFeature(const Entitlement(), AppFeature.quran), isFalse);
         expect(shellTabsFor(), isNot(contains(ShellTab.quran)));
-        expect(_paths(appRoutes(rootKey: GlobalKey<NavigatorState>())).toSet().intersection(Routes.islamicOnly), isEmpty);
+        expect(_paths(appRoutes(rootKey: GlobalKey<NavigatorState>())).toSet().intersection(Routes.playOnly), isEmpty);
         expect(activePraisePhrases, same(kidsPraisePhrases));
-        expect(activeZadGames.map((g) => g.id), ['letters']);
+        expect(activeZadGames, isEmpty);
         expect(starterTasks.where((t) => islamicTaskKinds.contains(t.kind)), isEmpty);
       });
     } else {
@@ -254,7 +254,7 @@ void main() {
         expect(AppConfig.androidPackage, 'com.zadx.app');
         expect(featuresOf(null), contains(AppFeature.quran));
         expect(shellTabsFor(), contains(ShellTab.quran));
-        expect(_paths(appRoutes(rootKey: GlobalKey<NavigatorState>())), containsAll(Routes.islamicOnly));
+        expect(_paths(appRoutes(rootKey: GlobalKey<NavigatorState>())), containsAll(Routes.playOnly));
         expect(activePraisePhrases, same(praisePhrases));
       });
     }

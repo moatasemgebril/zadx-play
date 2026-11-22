@@ -45,9 +45,14 @@ const zadGames = <ZadGame>[
 /// Learning games of Zad X Play only (prophets quiz, mosque builder).
 const islamicOnlyZadGameIds = {'prophets', 'masjid'};
 
-/// Built-in games of [variant]: Zad X Kids keeps the Arabic letters game only.
+/// Learning games that are not in Zad X Kids: the Islamic ones and the Arabic Letters game
+/// (Arabic-language content; Zad X Kids targets the US / Europe, owner decision 2026-11-22).
+const playOnlyZadGameIds = {...islamicOnlyZadGameIds, 'letters'};
+
+/// Built-in games of [variant]. Zad X Kids has none for now (the Games tab hides the section);
+/// a neutral learning game can be added here later.
 List<ZadGame> zadGamesFor(AppVariant variant) =>
-    variant == AppVariant.kids ? [for (final g in zadGames) if (!islamicOnlyZadGameIds.contains(g.id)) g] : zadGames;
+    variant == AppVariant.kids ? [for (final g in zadGames) if (!playOnlyZadGameIds.contains(g.id)) g] : zadGames;
 
 /// Built-in games of this build.
 final List<ZadGame> activeZadGames = zadGamesFor(appVariant);

@@ -21,7 +21,8 @@ import '../tasks/wallet_controller.dart';
 extension ChildAvatarLook on ChildAvatar {
   IconData get icon => switch (this) {
         ChildAvatar.star => Icons.star_rounded,
-        ChildAvatar.moon => Icons.nightlight_round,
+        // Zad X Kids: no crescent anywhere; the "moon" avatar is a planet there.
+        ChildAvatar.moon => kIsKids ? Icons.public_rounded : Icons.nightlight_round,
         ChildAvatar.sun => Icons.wb_sunny_rounded,
         ChildAvatar.rocket => Icons.rocket_launch_rounded,
         ChildAvatar.flower => Icons.local_florist_rounded,

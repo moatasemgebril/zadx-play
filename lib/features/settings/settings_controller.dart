@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/app_variant.dart';
 import '../../data/catalog/locations.dart';
 import '../../services/app_lock/lock_rules.dart';
 
@@ -12,13 +13,28 @@ final sharedPrefsProvider = Provider<SharedPreferences>(
 
 const supportedLanguages = ['ar', 'en'];
 
-/// Languages shown as "coming soon" in the picker.
-const upcomingLanguages = {'fr': 'Français', 'tr': 'Türkçe', 'ur': 'اردو', 'id': 'Indonesia'};
+/// Languages shown as "coming soon" in the picker. Zad X Kids (US / Europe) lists Western
+/// languages; Zad X Play lists the languages of its Muslim audience.
+const upcomingLanguages = kIsKids
+    ? {'es': 'Español', 'fr': 'Français', 'de': 'Deutsch'}
+    : {'fr': 'Français', 'tr': 'Türkçe', 'ur': 'اردو', 'id': 'Indonesia'};
+
+/// Order of the language picker: English first in Zad X Kids (Arabic stays optional).
+const languagePickerOrder = kIsKids ? ['en', 'ar'] : supportedLanguages;
+
+/// The UI language on first run (nothing saved yet).
+/// * Zad X Kids: always English (US / Europe market, owner decision 2026-11-22); the parent can
+///   still pick Arabic in Settings.
+/// * Zad X Play: the device language when supported, else Arabic.
+String defaultLanguageFor(AppVariant variant, String deviceLanguage) {
+  if (variant == AppVariant.kids) return 'en';
+  return supportedLanguages.contains(deviceLanguage) ? deviceLanguage : 'ar';
+}
 
 @immutable
 class AppSettings {
   const AppSettings({
-    this.language = 'ar',
+    this.language = kIsKids ? 'en' : 'ar',
     this.countryId = 'eg',
     this.cityId = 'cairo',
     this.methodId = 'egypt',
@@ -168,10 +184,8 @@ class SettingsController extends Notifier<AppSettings> {
     );
   }
 
-  String _deviceLanguage() {
-    final code = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
-    return supportedLanguages.contains(code) ? code : 'ar';
-  }
+  String _deviceLanguage() =>
+      defaultLanguageFor(appVariant, WidgetsBinding.instance.platformDispatcher.locale.languageCode);
 
   void setLanguage(String code) {
     if (!supportedLanguages.contains(code)) return;

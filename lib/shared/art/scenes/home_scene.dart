@@ -1,14 +1,15 @@
 import 'package:flutter/widgets.dart';
 
-import '../../../core/app_variant.dart';
 import '../art_shapes.dart';
 import '../scene_palettes.dart';
 import 'scene_common.dart';
 
-/// Home: a friendly sunrise sky over a little town with a mosque.
-/// Zad X Kids draws the same town without the mosque ([withMosque] false).
+/// Home: a friendly sunrise sky over a little town.
+/// * Zad X Play: the town has a mosque (dome, minaret, crescents).
+/// * Zad X Kids: the same spot holds a big oak with a treehouse, a rope ladder and a tyre swing
+///   ([withMosque] false). No religious motif, no lettering.
 class HomeStaticPainter extends CustomPainter {
-  const HomeStaticPainter({this.withMosque = !kIsKids});
+  const HomeStaticPainter({this.withMosque = artReligiousMotifs});
 
   /// Draw the mosque (dome, minaret, crescents). Never in Zad X Kids.
   final bool withMosque;
@@ -46,8 +47,8 @@ class HomeStaticPainter extends CustomPainter {
     while (x < size.width) {
       final hw = (34 + (i % 3) * 6) * u;
       final hh = heights[i % heights.length] * u;
-      // Leave room for the mosque.
-      if (!withMosque || (x + hw / 2 - mosqueX).abs() > 60 * u) {
+      // Leave room for the mosque (Play) or the treehouse oak (Kids).
+      if ((x + hw / 2 - mosqueX).abs() > (withMosque ? 60 : 56) * u) {
         final body = Rect.fromLTWH(x, ground - hh, hw, hh + 20 * u);
         canvas.drawRRect(RRect.fromRectAndRadius(body, Radius.circular(8 * u)), fill(houses[i % houses.length]));
         final win = Rect.fromLTWH(x + hw * 0.32, ground - hh + 12 * u, hw * 0.36, 14 * u);
@@ -57,7 +58,10 @@ class HomeStaticPainter extends CustomPainter {
       i++;
     }
 
-    if (!withMosque) return;
+    if (!withMosque) {
+      _treehouse(canvas, Offset(mosqueX, ground), u);
+      return;
+    }
 
     // Mosque: main hall, dome, one minaret, crescents. Architecture only.
     final hallW = 92 * u;
@@ -81,6 +85,93 @@ class HomeStaticPainter extends CustomPainter {
     );
     canvas.drawPath(ArtShapes.dome(Offset(minX, minaret.top + 1), 16 * u, minaret.top - 18 * u), fill(ArtColors.lavender));
     canvas.drawPath(ArtShapes.crescent(Offset(minX + 8 * u, minaret.top - 24 * u), 4.5 * u), fill(ArtColors.gold));
+  }
+
+  /// Zad X Kids focal point: a big round oak holding a little treehouse, a rope ladder and a
+  /// tyre swing. Same footprint and palette as the mosque, so contrast and balance are unchanged.
+  void _treehouse(Canvas canvas, Offset base, double u) {
+    final cx = base.dx;
+    final ground = base.dy;
+    // Trunk with two branches.
+    final trunk = Path()
+      ..moveTo(cx - 13 * u, ground + 20 * u)
+      ..cubicTo(cx - 10 * u, ground - 30 * u, cx - 9 * u, ground - 60 * u, cx - 7 * u, ground - 92 * u)
+      ..lineTo(cx + 7 * u, ground - 92 * u)
+      ..cubicTo(cx + 9 * u, ground - 60 * u, cx + 10 * u, ground - 30 * u, cx + 13 * u, ground + 20 * u)
+      ..close();
+    canvas.drawPath(trunk, fill(ArtColors.peach));
+    final branch = Paint()
+      ..color = ArtColors.peach
+      ..strokeWidth = 7 * u
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(Offset(cx - 4 * u, ground - 58 * u), Offset(cx - 38 * u, ground - 82 * u), branch);
+    canvas.drawLine(Offset(cx + 4 * u, ground - 66 * u), Offset(cx + 40 * u, ground - 88 * u), branch);
+
+    // Leafy crown: overlapping soft circles.
+    for (final (dx, dy, r) in const [
+      (-40.0, -104.0, 30.0), (40.0, -106.0, 30.0), (-18.0, -128.0, 34.0), (22.0, -130.0, 32.0), (0.0, -104.0, 34.0),
+    ]) {
+      canvas.drawCircle(Offset(cx + dx * u, ground + dy * u), r * u, fill(ArtColors.leaf));
+    }
+    canvas.drawCircle(Offset(cx - 30 * u, ground - 136 * u), 12 * u, fill(ArtColors.hillNear));
+    canvas.drawCircle(Offset(cx + 34 * u, ground - 124 * u), 9 * u, fill(ArtColors.hillNear));
+
+    // The treehouse on its platform.
+    final deck = RRect.fromRectAndRadius(Rect.fromLTWH(cx - 34 * u, ground - 86 * u, 68 * u, 7 * u), Radius.circular(3 * u));
+    canvas.drawRRect(deck, fill(ArtColors.lavender));
+    final house = Rect.fromLTWH(cx - 24 * u, ground - 120 * u, 48 * u, 34 * u);
+    canvas.drawRRect(RRect.fromRectAndRadius(house, Radius.circular(5 * u)), fill(ArtColors.iceBlue));
+    final roof = Path()
+      ..moveTo(house.left - 8 * u, house.top + 2 * u)
+      ..lineTo(cx, house.top - 22 * u)
+      ..lineTo(house.right + 8 * u, house.top + 2 * u)
+      ..close();
+    canvas.drawPath(roof, fill(ArtColors.gold));
+    // Round window and a little door.
+    canvas.drawCircle(Offset(cx - 9 * u, house.top + 14 * u), 6 * u, fill(ArtColors.windowGold));
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx + 5 * u, house.top + 10 * u, 12 * u, 24 * u), Radius.circular(4 * u)),
+      fill(ArtColors.lilac),
+    );
+    // Tiny pennant on the roof (plain triangle flag, no symbol).
+    final pole = Paint()
+      ..color = ArtColors.peach
+      ..strokeWidth = 2 * u
+      ..strokeCap = StrokeCap.round;
+    canvas.drawLine(Offset(cx, house.top - 22 * u), Offset(cx, house.top - 40 * u), pole);
+    canvas.drawPath(
+      Path()
+        ..moveTo(cx, house.top - 40 * u)
+        ..lineTo(cx + 15 * u, house.top - 35 * u)
+        ..lineTo(cx, house.top - 30 * u)
+        ..close(),
+      fill(ArtColors.sunGold),
+    );
+
+    // Rope ladder down the trunk side.
+    final rope = Paint()
+      ..color = ArtColors.lavender
+      ..strokeWidth = 2 * u
+      ..strokeCap = StrokeCap.round;
+    final lx = cx - 30 * u;
+    canvas.drawLine(Offset(lx, ground - 80 * u), Offset(lx, ground + 4 * u), rope);
+    canvas.drawLine(Offset(lx + 12 * u, ground - 80 * u), Offset(lx + 12 * u, ground + 4 * u), rope);
+    for (var y = ground - 70 * u; y < ground + 4 * u; y += 12 * u) {
+      canvas.drawLine(Offset(lx, y), Offset(lx + 12 * u, y), rope);
+    }
+
+    // Tyre swing from the right branch.
+    final sx = cx + 34 * u;
+    canvas.drawLine(Offset(sx, ground - 84 * u), Offset(sx, ground - 22 * u), rope);
+    canvas.drawCircle(
+      Offset(sx, ground - 12 * u),
+      10 * u,
+      Paint()
+        ..color = ArtColors.lavender
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 5 * u,
+    );
   }
 
   void _trees(Canvas canvas, Size size, double y, double u) {

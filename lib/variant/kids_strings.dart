@@ -19,7 +19,7 @@ const Map<String, Map<String, String>> kidsRewrites = {
   'en': {
     'greet': 'Hello, champ!',
     'homeHeroSub': "Let's start the day with tasks and reading",
-    'zadGameLetters': 'Arabic Letters',
+    'avatarMoon': 'Planet',
     'deviceGamesNote': 'Unlock after tasks, lock at study time and bedtime',
     'lockRequired': 'Finish the must-do tasks first, like homework',
     'settingsTitle': 'Settings',
@@ -50,7 +50,7 @@ const Map<String, Map<String, String>> kidsRewrites = {
   'ar': {
     'greet': 'أهلاً يا بطل!',
     'homeHeroSub': 'يلا نبدأ يومنا بالمهام والقراية',
-    'zadGameLetters': 'الحروف العربية',
+    'avatarMoon': 'كوكب',
     'deviceGamesNote': 'بتتفتح بعد المهام وبتقفل وقت المذاكرة والنوم',
     'lockRequired': 'خلّص المهام الأساسية الأول، زي الواجب',
     'settingsTitle': 'الإعدادات',
@@ -79,7 +79,8 @@ const Map<String, Map<String, String>> kidsRewrites = {
   },
 };
 
-/// ARB keys used only by Islamic-only features. Empty in the Kids build.
+/// ARB keys used only by Zad X Play features (Islamic features + the Arabic Letters game).
+/// Empty in the Kids build.
 const Set<String> islamicOnlyL10nKeys = {
   // Tabs, home cards, prayer names and the adhan.
   'tabQuran', 'prayerToday', 'nextPrayer', 'fajr', 'dhuhr', 'asr', 'maghrib', 'isha',
@@ -98,8 +99,9 @@ const Set<String> islamicOnlyL10nKeys = {
   'lockAtAdhan', 'method', 'asrCalc', 'asrStandard', 'asrHanafi', 'soundSacredNote',
   // Plans: Islamic features and the Ramadan offer.
   'featPrayer', 'featQuran', 'featAdhkar', 'offer3',
-  // Learning games: mosque builder, prophets quiz, scholar-review note.
-  'zadGameProphets', 'zadGameMasjid', 'eduGoBuild', 'mosqueNext', 'mosqueBuild', 'mosqueCost',
+  // Learning games: mosque builder, prophets quiz, scholar-review note. The Arabic Letters game is
+  // Zad X Play only too (Zad X Kids targets the US / Europe; owner decision 2026-11-22).
+  'zadGameLetters', 'zadGameProphets', 'zadGameMasjid', 'eduGoBuild', 'mosqueNext', 'mosqueBuild', 'mosqueCost',
   'mosqueNeedStars', 'mosqueComplete', 'mosqueBuiltPart', 'mosquePartsDone', 'prophetsIntro',
   'prophetsDidYouKnow', 'prophetsRef', 'parentReviewNote',
 };
