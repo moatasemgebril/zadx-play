@@ -419,7 +419,7 @@ void main() {
             // of (slightly different) nights, so they may cross by half the day-to-day change
             // of sunrise + sunset (a few minutes at 64° N in July); the adhan plan handles it.
             final gapToNextFajr = next[Prayer.fajr.index] + 1440 - app[Prayer.isha.index];
-            if (rule == HighLatitudeRule.middleOfTheNight ? gapToNextFajr.abs() > 6 : gapToNextFajr <= 0) {
+            if (rule == HighLatitudeRule.middleOfTheNight ? gapToNextFajr < -6 : gapToNextFajr <= 0) {
               problems.add('$where: Isha ${_hm(app[Prayer.isha.index])} vs next Fajr ${_hm(next[Prayer.fajr.index])}');
             }
 
