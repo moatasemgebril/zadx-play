@@ -33,8 +33,6 @@ Set `CFBundleDisplayName` = `Zad X Play` in `Runner/Info.plist`, and add:
 </array>
 <key>UIBackgroundModes</key>
 <array><string>audio</string></array>
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>Zad X uses your city to calculate prayer times.</string>
 ```
 
 ## 3. Sounds

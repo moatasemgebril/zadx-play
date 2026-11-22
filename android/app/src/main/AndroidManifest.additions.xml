@@ -9,7 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- No location permission: removed 2026-11-22 (unused; Families policy) until the
+         location review in docs/LOCATION_PRIVACY.md is signed off. -->
 
     <!-- Android 11+: declare the games we launch/check instead of QUERY_ALL_PACKAGES -->
     <queries>
