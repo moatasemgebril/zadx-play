@@ -12,9 +12,12 @@ abstract final class IslamicBrand {
   /// The identity line in [lang] (Arabic unless English).
   static String identityFor(String lang) => lang == 'en' ? identityEn : identityAr;
 
-  /// App Store subtitle (≤ 30 characters, checked by test/launch_splash_test.dart).
-  static const storeSubtitleAr = 'للأطفال المسلمين: صلاة ثم لعب';
-  static const storeSubtitleEn = 'Muslim kids: pray, then play';
+  /// App Store subtitle (≤ 30 characters, checked by test/launch_splash_test.dart). Owner decision
+  /// 2026-11-22: «للأطفال المسلمين: صلِّ، تعلَّم، والعب» / "Muslim kids: pray, learn, play". The Arabic
+  /// is 37 characters with its tashkeel (33 without), so it is shortened to "pray and learn": "Play"
+  /// is already in the app name. See docs/marketing/STORE-LISTING.md.
+  static const storeSubtitleAr = 'للأطفال المسلمين: صلِّ وتعلَّم';
+  static const storeSubtitleEn = 'Muslim kids: pray, learn, play';
 
   /// Google Play short description (≤ 80 characters): the identity + what the app does.
   static const storeShortDescriptionAr = 'للأطفال المسلمين: ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل';

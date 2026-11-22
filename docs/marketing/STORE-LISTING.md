@@ -16,7 +16,7 @@ Tags used below: **[A1]–[A10]** = claim needs approval/verification before use
 | Field | Limit | Arabic | Chars | English | Chars |
 |---|---|---|---|---|---|
 | App name (both stores) | 30 | Zad X Play | 10 | Zad X Play | 10 |
-| Apple subtitle | 30 | للأطفال المسلمين: صلاة ثم لعب | 29 | Muslim kids: pray, then play | 28 |
+| Apple subtitle | 30 | للأطفال المسلمين: صلِّ وتعلَّم | 30 | Muslim kids: pray, learn, play | 30 |
 | Play short description | 80 | للأطفال المسلمين: ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل | 68 | For Muslim kids: games unlock after prayer & tasks. Prayer times, adhan, Quran | 78 |
 | In-app identity line (splash, Help) | — | للأطفال المسلمين | 16 | For Muslim Kids | 15 |
 
@@ -29,15 +29,24 @@ with the same line ("للأطفال المسلمين" / "For Muslim kids").
 Notes: keep the name clean (Play forbids "free", "no ads", "best", ranking or price words in the title/icon/
 developer name). **Needs approval [A10]:** Apple guideline 2.3.8 reserves "For Kids"/"For Children" for the
 Kids Category (we plan Lifestyle/Education). The Apple subtitle therefore avoids the exact phrase "For Kids"
-("Muslim kids: pray, then play" / "للأطفال المسلمين: صلاة ثم لعب"), but App Review may still read it as
-child-directed. Fallback if rejected: "For Muslim families: play" / "للأسر المسلمة: صلاة ثم لعب", keeping
-"For Muslim kids" in the description and in the app.
+("Muslim kids: pray, learn, play"), but App Review may still read it as child-directed. Fallback if
+rejected: "For Muslim families" / «للأسر المسلمة», keeping "For Muslim kids" in the description and in the app.
+
+**Apple subtitle (owner decision 2026-11-22, verified sources):** «للأطفال المسلمين: صلِّ، تعلَّم، والعب» /
+"Muslim kids: pray, learn, play". It replaces "pray, then play" / «صلاة ثم لعب», which put the game as the
+goal of the prayer. Rationale, briefly: parents are told to teach children to pray from age seven (Sunan
+Abi Dawud 495), and rewards to encourage children's worship are permissible as long as the child is taught
+to pray sincerely for Allah and the reward stays secondary (islamqa.info answer 570972,
+https://islamqa.info/ar/answers/570972). The app repeats that after a prayer task: «الصلاة لله، والجائزة
+تشجيعٌ لك». No reviewer sign-off is pending for this line any more.
+
+Length: the English is exactly 30. The Arabic as decided is **37 characters with its tashkeel (33
+without)**, over Apple's 30, so the store value is «للأطفال المسلمين: صلِّ وتعلَّم» (30; "Play" is already in
+the app name "Zad X Play"). If the owner prefers the full three verbs in Arabic, it fits only in the
+promotional text or the description, not the subtitle.
 
 **Identity wording (unified 2026-11-22):** the Arabic identity is «للأطفال المسلمين» everywhere (splash,
-Help → About, `IslamicBrand.identityAr`, store fields), matching "For Muslim Kids". The App Store subtitle
-stays "Muslim kids: pray, then play" / «للأطفال المسلمين: صلاة ثم لعب», but **"pray, then play" / «صلاة ثم
-لعب» needs Islamic Content Reviewer sign-off before submission** (it pairs prayer with a reward). Fallback
-if the reviewer or App Review says no: "For Muslim families" (+ ": play") / «للأسر المسلمة».
+Help → About, `IslamicBrand.identityAr`, store fields), matching "For Muslim Kids".
 
 ## 2. Apple promotional text (≤170) and keywords (≤100)
 
@@ -218,7 +227,7 @@ sign-off; no "free"/"No.1"/"best"/"download now" overlay text; same captions in 
 | A7 | Privacy claims (nickname only, on-device check) | Privacy officer sign-off; privacy policy must say the same. |
 | A8 | Windows Guard, iOS lock | Not yet tested on real devices; drop lines if not shipped at launch. |
 | A9 | Prices | Final per-country tiers pending; trial length conflict (in-app 7-day Plus trial vs 14-day store intro offer in STORE_CHECKLIST) → trial **not mentioned** until decided. |
-| A10 | "For Muslim kids" in the Apple subtitle / description | Owner request 2026-11-22. Apple 2.3.8 risk outside the Kids Category: owner/legal to accept the risk or use the fallback "For Muslim families: play" (25) / "للأسر المسلمة: صلاة ثم لعب" (26). Google Play: fine with the Families declaration. **Also needs Islamic Content Reviewer sign-off** for "pray, then play" / «صلاة ثم لعب»; fallback "For Muslim families". |
+| A10 | "For Muslim kids" in the Apple subtitle / description | Owner request 2026-11-22. Apple 2.3.8 risk outside the Kids Category: owner/legal to accept the risk or use the fallback "For Muslim families" / «للأسر المسلمة». Google Play: fine with the Families declaration. Wording "pray, learn, play" decided 2026-11-22 (see section 1); no reviewer sign-off pending. |
 
 Never use: "100% safe", "certified", "COPPA certified/compliant" (PRIVO pending), "scholar approved/
 reviewed", "halal certified", any endorsement by Quran Foundation (attribution line only), location/

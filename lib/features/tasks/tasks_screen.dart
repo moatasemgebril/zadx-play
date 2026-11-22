@@ -23,11 +23,13 @@ class TasksScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final wallet = ref.watch(walletProvider);
-    final regular = wallet.tasks.where((t) => !t.isExercise).toList();
-    final exercises = wallet.tasks.where((t) => t.isExercise).toList();
+    // Excused today (parent-only setting): prayer tasks are simply not listed, with no reason shown.
+    final active = wallet.activeTasks;
+    final regular = active.where((t) => !t.isExercise).toList();
+    final exercises = active.where((t) => t.isExercise).toList();
 
     // Read-only: the garden grows with the share of today's tasks done.
-    final progress = wallet.tasks.isEmpty ? 0.0 : wallet.doneCount / wallet.tasks.length;
+    final progress = active.isEmpty ? 0.0 : wallet.doneCount / active.length;
 
     return ZadSceneBackground(
       scene: ZadScene.tasks,
@@ -38,6 +40,10 @@ class TasksScreen extends ConsumerWidget {
         child: ListView(padding: const EdgeInsets.all(16), children: [
           PageTitle(l10n.tasks, subtitle: l10n.tasksNote),
           const SizedBox(height: 12),
+          if (wallet.prayerPaused) ...[
+            Banner2(text: l10n.otherTasksOpenToday, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.wb_sunny_rounded),
+            const SizedBox(height: 10),
+          ],
           PaidFeatureGate(
             feature: AppFeature.tasksRewards,
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -127,11 +133,18 @@ class _TaskCard extends ConsumerWidget {
                   return;
                 }
                 ref.read(walletProvider.notifier).submit(task.id);
-                showPraiseDialog(context, ref, note: l10n.toastSent(task.title.of(lang)));
+                final sent = l10n.toastSent(task.title.of(lang));
+                showPraiseDialog(context, ref, note: task.kind == TaskKind.prayer ? '$sent\n${l10n.prayerIkhlas}' : sent);
               },
               child: Text(task.isReading ? l10n.readingStartBtn : l10n.doneBtn),
             ),
           TaskStatus.pending => Banner2(text: l10n.pendingApproval, bg: AppColors.pendingBg, fg: AppColors.pendingText),
+          TaskStatus.done when task.kind == TaskKind.prayer => Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Banner2(text: l10n.completed, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.check_rounded),
+              const SizedBox(height: 6),
+              // Ikhlas reminder: the prayer is for Allah; the minutes are only encouragement.
+              Text(l10n.prayerIkhlas, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, color: AppColors.purpleDark)),
+            ]),
           TaskStatus.done => Banner2(text: l10n.completed, bg: AppColors.mintSoft, fg: AppColors.mintText, icon: Icons.check_rounded),
         },
       ]),

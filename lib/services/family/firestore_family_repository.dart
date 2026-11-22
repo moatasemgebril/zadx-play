@@ -115,6 +115,18 @@ class FirestoreFamilyRepository implements FamilyRepository {
   }
 
   @override
+  Future<void> setPrayerPaused({required String childId, required String day, required bool paused}) {
+    // Parent devices only (firestore.rules: `prayerPaused` is not a child-device key).
+    return _dayDoc(childId, day).set({
+      'day': day,
+      'prayerPaused': paused,
+      if (paused) 'prayerLock': false,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': FirebaseAuth.instance.currentUser?.uid,
+    }, SetOptions(merge: true));
+  }
+
+  @override
   Future<void> approveTask({
     required String childId,
     required String day,

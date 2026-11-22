@@ -76,6 +76,10 @@ class _SurahList extends ConsumerWidget {
     final selected = resolveReciter(s.reciterId, voices);
 
     return ListView(padding: const EdgeInsets.all(16), children: [
+      // Every recitation and the Mushaf text offered here are the Hafs 'an 'Asim reading.
+      Text(l10n.quranRiwaya,
+          textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.purpleDark)),
+      const SizedBox(height: 8),
       if (selected == null)
         Banner2(text: l10n.recitationComingSoon, bg: AppColors.pendingBg, fg: AppColors.pendingText, icon: Icons.menu_book_rounded)
       else

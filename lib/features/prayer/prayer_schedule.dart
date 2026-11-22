@@ -49,12 +49,43 @@ Map<Prayer, tz.TZDateTime?> prayerInstantsOn({
 
 /// One adhan notification to schedule.
 class AdhanSlot {
-  const AdhanSlot({required this.id, required this.prayer, required this.when});
+  const AdhanSlot({required this.id, required this.prayer, required this.when, this.sound = true});
 
   /// Notification id: `dayOffset * 10 + prayer.index` (stable, unique per run).
   final int id;
   final Prayer prayer;
   final tz.TZDateTime when;
+
+  /// False for a silent reminder (no adhan sound): see [planAdhanNotifications].
+  final bool sound;
+}
+
+/// True when, with [highLatitudeRule], the Isha of [year]-[month]-[day] is at or after the next
+/// day's Fajr (possible with the night-portion rules, e.g. "middle of the night" in July).
+/// The parent is then shown the ECFR note on combining Maghrib and Isha.
+bool ishaReachesNextFajr({
+  required tz.Location location,
+  required int year,
+  required int month,
+  required int day,
+  required double lat,
+  required double lng,
+  required CalcMethod method,
+  HighLatitudeRule? highLatitudeRule,
+}) {
+  Map<Prayer, tz.TZDateTime?> on(DateTime d) => prayerInstantsOn(
+        location: location,
+        year: d.year,
+        month: d.month,
+        day: d.day,
+        lat: lat,
+        lng: lng,
+        method: method,
+        highLatitudeRule: highLatitudeRule,
+      );
+  final isha = on(DateTime.utc(year, month, day))[Prayer.isha];
+  final nextFajr = on(DateTime.utc(year, month, day + 1))[Prayer.fajr];
+  return isha != null && nextFajr != null && !nextFajr.isAfter(isha);
 }
 
 /// The adhan notifications to schedule from [now] for [days] calendar days of the city
@@ -63,10 +94,12 @@ class AdhanSlot {
 ///
 /// With [HighLatitudeRule.middleOfTheNight], Isha of one day and Fajr of the next both
 /// fall around the middle of the night; while the nights grow or shrink (e.g. July in
-/// Oslo) the computed Isha can even be a few minutes AFTER the next Fajr. An Isha at or
-/// after the next day's Fajr is then not scheduled (Fajr time has already begun), so the
-/// child never gets an Isha adhan after Fajr, or two adhans at the same moment.
-/// PENDING SCHOLAR REVIEW (docs/decisions/PRAYER-TIMES-ACCURACY.md).
+/// Oslo) the computed Isha can even be a few minutes AFTER the next Fajr. Isha is then NOT
+/// dropped: only the adhan sound is skipped. A silent Isha reminder is planned one minute
+/// after that day's Maghrib, because combining Maghrib and Isha is permitted when Isha's sign
+/// is absent (ECFR resolution 3/3); the parent sees that note in Settings. So the child never
+/// gets an Isha adhan after Fajr, or two adhans at the same moment.
+/// Decision record: docs/decisions/PRAYER-TIMES-ACCURACY.md.
 List<AdhanSlot> planAdhanNotifications({
   required tz.TZDateTime now,
   required double lat,
@@ -101,7 +134,15 @@ List<AdhanSlot> planAdhanNotifications({
       if (when == null || !when.isAfter(now)) continue;
       if (p == Prayer.isha) {
         final nextFajr = perDay[dayOffset + 1][Prayer.fajr];
-        if (nextFajr != null && !nextFajr.isAfter(when)) continue;
+        final maghrib = instants[Prayer.maghrib];
+        if (nextFajr != null && !nextFajr.isAfter(when)) {
+          // Silent Isha with Maghrib (see above), never dropped.
+          final silentAt = maghrib?.add(const Duration(minutes: 1));
+          if (silentAt != null && silentAt.isAfter(now) && (slots.isEmpty || silentAt.isAfter(slots.last.when))) {
+            slots.add(AdhanSlot(id: dayOffset * 10 + p.index, prayer: p, when: silentAt, sound: false));
+          }
+          continue;
+        }
       }
       if (slots.isNotEmpty && !when.isAfter(slots.last.when)) continue;
       slots.add(AdhanSlot(id: dayOffset * 10 + p.index, prayer: p, when: when));

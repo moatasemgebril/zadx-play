@@ -217,3 +217,26 @@ test("prayerLockSinceMs is not writable by any client (lock window counts from s
   // Parents do not write it either (the app never sends it).
   await assertFails(setDoc(day(as(PARENT)), { prayerLockSinceMs: 0 }, { merge: true }));
 });
+
+// ---- Excused today (prayerPaused): parent devices only ---------------------------------------
+
+test("only a parent device pauses or resumes prayer (excused); a child device cannot", async () => {
+  await seed({ lockMinutesAgo: 1 });
+  // A child device can neither set nor clear it, alone or together with ending its own lock.
+  await assertFails(setDoc(day(as(KID1)), { prayerPaused: true }, { merge: true }));
+  await assertFails(setDoc(day(as(KID1)), { prayerPaused: true, prayerLock: false }, { merge: true }));
+  await assertFails(setDoc(day(as(KID1), "c1", "2026-11-23"), { day: "2026-11-23", prayerPaused: true }));
+  // A sibling's device cannot touch (or read) another child's pause.
+  await assertFails(setDoc(day(as(KID2), "c1"), { prayerPaused: true }, { merge: true }));
+  await assertFails(getDoc(day(as(KID2), "c1")));
+  // A parent device pauses (ending a running lock in the same write) and resumes.
+  await assertSucceeds(setDoc(day(as(PARENT)), { day: DAY, prayerPaused: true, prayerLock: false }, { merge: true }));
+  await assertSucceeds(setDoc(day(as(PARENT2)), { prayerPaused: false }, { merge: true }));
+  // Once set by the parent, the child device still cannot clear it.
+  await assertSucceeds(setDoc(day(as(PARENT)), { prayerPaused: true }, { merge: true }));
+  await assertFails(setDoc(day(as(KID1)), { prayerPaused: false }, { merge: true }));
+  // The child keeps writing its normal fields while paused.
+  await assertSucceeds(setDoc(day(as(KID1)), { progress: { homework: { status: "pending", count: 0 } } }, { merge: true }));
+  // Wrong type is refused for everyone.
+  await assertFails(setDoc(day(as(PARENT)), { prayerPaused: "yes" }, { merge: true }));
+});

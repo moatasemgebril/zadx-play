@@ -102,8 +102,11 @@ const Set<String> islamicOnlyL10nKeys = {
   'adhanTitle', 'chooseMuezzin', 'hearAdhan',
   // Prayer lock ("I prayed").
   'lockPrayer', 'prayerNow', 'prayerSub', 'iPrayed', 'childPrayerLocked', 'deviceLockFreePrayerNote',
+  // Ikhlas reminder after a prayer task, and the parent-only "excused" pause (#38, #35): the pause
+  // does not exist in Kids (no prayer tasks), so its title, help and child line are empty too.
+  'prayerIkhlas', 'prayerPauseTitle', 'prayerPauseHelp', 'otherTasksOpenToday',
   // Quran + adhkar screens.
-  'quran', 'chooseReciter', 'ayatCount', 'playSurah', 'readSurah', 'hideSurahText', 'juz30', 'juz29',
+  'quran', 'chooseReciter', 'quranRiwaya', 'ayatCount', 'playSurah', 'readSurah', 'hideSurahText', 'juz30', 'juz29',
   'adhkar', 'morningAdhkar', 'eveningAdhkar', 'salawat', 'sectionDone', 'loadingText', 'textError',
   'recitationComingSoon', 'licencePending',
   // Consoles: adhan alerts and play windows between prayers.
@@ -112,9 +115,10 @@ const Set<String> islamicOnlyL10nKeys = {
   'computerNote',
   // Settings: adhan lock, prayer calculation, sacred-audio note.
   'lockAtAdhan', 'method', 'asrCalc', 'asrStandard', 'asrHanafi', 'soundSacredNote',
-  // Settings: high-latitude rule for Fajr / Isha and its "pending scholar review" label (#35).
-  'highLatitudeRule', 'highLatitudeAuto', 'highLatitudeMiddleOfNight', 'highLatitudeSeventhOfNight',
-  'highLatitudeTwilightAngle', 'highLatitudeHelp', 'pendingScholarReview',
+  // Settings: high-latitude rule for Fajr / Isha, its ECFR source note and the Maghrib/Isha
+  // combining note (#35). Not offered in Kids.
+  'highLatitudeRule', 'highLatitudeAuto', 'highLatitudeRelative45', 'highLatitudeAngle12', 'highLatitudeMiddleOfNight',
+  'highLatitudeSeventhOfNight', 'highLatitudeTwilightAngle', 'highLatitudeHelp', 'highLatitudeSource', 'ishaCombineNote',
   // Plans: Islamic features and the Ramadan offer.
   'featPrayer', 'featQuran', 'featAdhkar', 'offer3',
   // Learning games: mosque builder, prophets quiz, scholar-review note. The Arabic Letters game is
