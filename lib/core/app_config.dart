@@ -12,15 +12,17 @@ abstract final class IslamicBrand {
   /// The identity line in [lang] (Arabic unless English).
   static String identityFor(String lang) => lang == 'en' ? identityEn : identityAr;
 
-  /// App Store subtitle (≤ 30 characters, checked by test/launch_splash_test.dart). Owner decision
-  /// 2026-11-22: «للأطفال المسلمين: صلِّ، تعلَّم، والعب» / "Muslim kids: pray, learn, play". The Arabic
-  /// is 37 characters with its tashkeel (33 without), so it is shortened to "pray and learn": "Play"
-  /// is already in the app name. See docs/marketing/STORE-LISTING.md.
-  static const storeSubtitleAr = 'للأطفال المسلمين: صلِّ وتعلَّم';
+  /// App Store subtitle (≤ 30 characters, checked by test/launch_splash_test.dart).
+  /// Owner decision 2026-11-22: Arabic store text must NOT contain «المسلمين», so the Arabic subtitle
+  /// is «صلِّ وتعلَّم» ("Play" is already in the app name). English stays "Muslim kids: pray, learn,
+  /// play". The in-app identity line ([identityAr], splash and Help) is unchanged.
+  /// See docs/marketing/STORE-LISTING.md.
+  static const storeSubtitleAr = 'صلِّ وتعلَّم';
   static const storeSubtitleEn = 'Muslim kids: pray, learn, play';
 
-  /// Google Play short description (≤ 80 characters): the identity + what the app does.
-  static const storeShortDescriptionAr = 'للأطفال المسلمين: ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل';
+  /// Google Play short description (≤ 80 characters): what the app does. The Arabic has no
+  /// «للأطفال المسلمين:» prefix (owner decision 2026-11-22); the English keeps "For Muslim kids".
+  static const storeShortDescriptionAr = 'ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل';
   static const storeShortDescriptionEn = 'For Muslim kids: games unlock after prayer & tasks. Prayer times, adhan, Quran';
   static const androidPackage = 'com.zadx.app';
   static const iosBundleId = 'com.zadx.app';

@@ -40,12 +40,15 @@ void main() {
       expect(IslamicBrand.identityEn, 'For Muslim Kids');
       expect(IslamicBrand.identityFor('ar'), IslamicBrand.identityAr);
       expect(IslamicBrand.identityFor('en'), IslamicBrand.identityEn);
-      // One Arabic wording everywhere (splash, Help, store), matching "For Muslim Kids".
-      expect(IslamicBrand.storeSubtitleAr, startsWith(IslamicBrand.identityAr));
-      expect(IslamicBrand.storeShortDescriptionAr, startsWith(IslamicBrand.identityAr));
+      // Owner decision 2026-11-22: Arabic store text never contains «المسلمين» (the in-app
+      // identity line above keeps it); English store text still says "Muslim kids".
+      expect(IslamicBrand.storeSubtitleAr, 'صلِّ وتعلَّم');
+      expect(IslamicBrand.storeShortDescriptionAr, 'ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل');
       for (final s in [IslamicBrand.storeSubtitleAr, IslamicBrand.storeShortDescriptionAr]) {
-        expect(s, contains('المسلمين'), reason: s);
+        expect(s, isNot(contains('المسلمين')), reason: s);
+        expect(s, isNot(startsWith(IslamicBrand.identityAr)), reason: s);
       }
+      expect(IslamicBrand.storeSubtitleEn, 'Muslim kids: pray, learn, play');
       for (final s in [IslamicBrand.storeSubtitleEn, IslamicBrand.storeShortDescriptionEn]) {
         expect(s, contains('Muslim'), reason: s);
       }
