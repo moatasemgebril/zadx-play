@@ -15,6 +15,21 @@ decision before the text changes. Opened 2026-11-22 by zadx-bug-fixer (branch
 | A5 | Quran font | Quran verses and adhan phrases currently render in the platform Arabic font (Amiri Quran is no longer downloaded at runtime; files to be bundled, see docs/FONTS.md). | Please check a few surahs on Android and iPhone for missing or misplaced marks (waqf signs, small high letters) until Amiri Quran is bundled. |
 | A6 | `featQuran` | ar «القرآن الكريم (القرّاء المتاحين)» · en "Quran (available reciters)" | Neutral wording (no "approved", no "licensed"): the Quality Gate (2026-11-22) asked that we not claim licensing while audio still streams from everyayah.com. Once audio moves to the Quran Foundation recitations API and the licence is confirmed (pre-launch blocker, BACKLOG "Quran Foundation approval"), the reviewer may approve «تلاوات مرخّصة عبر Quran Foundation» / "Licensed recitations via Quran Foundation". |
 
+## A′. Resolved 2026-11-22 (owner decision: verified official/trusted sources instead of a sheikh sign-off)
+
+| # | Decision | Source |
+|---|---|---|
+| A1 | `prayerSub` is now gender-aware (ICU select on the child's form of address; unset = masculine form): «توضّأ إن لم تكن على وضوء، ثم صلِّ، واضغط الزر بعدها» / «توضّئي إن لم تكوني على وضوء، ثم صلّي، واضغطي الزر بعدها» · en "Make wudu if you need to, pray, then tap the button". | Renewing wudu is not required for someone who still has it (owner's verified decisions report, 2026-11-22). |
+| A2 | `asrStandard` «الجمهور (المالكي والشافعي والحنبلي)» / "Majority (Maliki, Shafi'i, Hanbali)"; `asrHanafi` «الحنفي (ظلّ المِثلين)» / "Hanafi (shadow ×2)". | Owner's verified decisions report, 2026-11-22. |
+| A4 | "Excused" (menstruation) option: parent-only, per day, per child, no reason shown to the child or siblings. Implemented in PR #35 (`test/prayer-times-world`). | Dar al-Ifta al-Misriyya fatwa 7711 (https://dar-alifta.org/ar/fatwa/details/19049/); Ibn Baz fatwa 13476. |
+| Adhkar | `m_radeetu`: «رضيت بالله ربا، وبالإسلام دينا، وبمحمد نبيا» without «صلى الله عليه وسلم» inside the recited text (ﷺ shown as a note); source «الترمذي وغيره». `e_kalimat`: source «الترمذي». `s_short` ("ten salawat in the morning", At-Tabarani) removed: weak (al-Albani, Silsila ad-Da'ifa 5788); replaced by a count-free reminder «أكثِروا من الصلاة على النبي ﷺ». Counts verified: bismillah 3, hasbi 7, subhan 100, bika 1, ibrahimiya 1. | https://sunnah.com/hisn:87 · https://sunnah.com/hisn:97 |
+| Adhkar (open) | `m_asbahna` / `e_amsayna`: completing the Muslim narration of Ibn Mas'ud («رب أسألك خير ما في هذا اليوم…» / «…هذه الليلة…») is **still open**: the page could not be fetched verbatim on 2026-11-22, so the text was left unchanged. Copy it verbatim from the source, never from memory. | https://hadeethenc.com/ar/browse/hadith/3008 |
+| Letters | `lettersLevel3` «حروف الهجاء الثمانية والعشرون كلها». | Owner's verified decisions report, 2026-11-22. |
+| Riwaya | The Quran screen shows «رواية حفص عن عاصم» / "Hafs from 'Asim" above the reciter choice. | All offered reciters are Hafs (`lib/data/catalog/quran.dart`). |
+| Ikhlas | After a prayer task: «الصلاة لله، والجائزة تشجيعٌ لك» / "Prayer is for Allah; the reward is just encouragement." (no emoji). | Owner's verified decisions report, 2026-11-22. |
+
+Still open in section A: **A3 Warsh** (P2, must be done before any Maghreb launch), A5 (Quran font check), A6 (`featQuran` wording until the licence is confirmed).
+
 ## B. Legal / privacy review — text changed, sign-off required before release
 
 `lockDisclosureBody` and `protectAdminDisclosureBody` (Arabic) were rewritten from Egyptian
