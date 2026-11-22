@@ -29,6 +29,13 @@ class HelpScreen extends StatelessWidget {
       (l10n.faq3Q, l10n.faq3A),
       (l10n.faq4Q, l10n.faq4A),
       (l10n.faq5Q, l10n.faq5A),
+      (l10n.faq6Q, l10n.faq6A),
+      (l10n.faq7Q, l10n.faq7A),
+      (l10n.faq8Q, l10n.faq8A),
+      (l10n.faq9Q, l10n.faq9A),
+      (l10n.faq10Q, l10n.faq10A),
+      (l10n.faq11Q, l10n.faq11A),
+      (l10n.faq12Q, l10n.faq12A),
     ];
     const stepColors = [AppColors.yellow, AppColors.sky, AppColors.coral, Color(0xFF7ED9B8), Color(0xFFC4B5FD)];
 
