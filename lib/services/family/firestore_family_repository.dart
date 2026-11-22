@@ -70,6 +70,17 @@ class FirestoreFamilyRepository implements FamilyRepository {
       final data = Map<String, dynamic>.from(s.data()!);
       final expiry = data['planExpiresAt'];
       if (expiry is Timestamp) data['planExpiresAt'] = expiry.toDate();
+      final plans = data['plans'];
+      if (plans is Map) {
+        data['plans'] = {
+          for (final e in plans.entries)
+            e.key: e.value is Map
+                ? {
+                    for (final f in (e.value as Map).entries) f.key: f.value is Timestamp ? (f.value as Timestamp).toDate() : f.value,
+                  }
+                : e.value,
+        };
+      }
       return parseFamilyEntitlement(data);
     });
   }

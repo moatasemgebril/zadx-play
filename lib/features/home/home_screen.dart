@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
@@ -16,6 +17,7 @@ import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
 import '../prayer/prayer_sky_banner.dart';
+import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
@@ -36,10 +38,16 @@ class HomeScreen extends ConsumerWidget {
         // No upsell on the child's screens (store kids/families policy): plans are
         // reached only from the parent area behind the PIN.
         const SizedBox(height: 14),
-        const _PrayerCard(),
-        const SizedBox(height: 14),
-        const _AdhanCard(),
-        const SizedBox(height: 14),
+        // Zad X Play: prayer times + adhan. Zad X Kids: today's study / bedtime / reading schedule.
+        if (kIsKids) ...[
+          const ScheduleTodayCard(),
+          const SizedBox(height: 14),
+        ] else ...[
+          const _PrayerCard(),
+          const SizedBox(height: 14),
+          const _AdhanCard(),
+          const SizedBox(height: 14),
+        ],
         PaidFeatureGate(
           feature: AppFeature.tasksRewards,
           child: ZadCard(
@@ -81,9 +89,13 @@ class _Hero extends StatelessWidget {
           const PositionedDirectional(
             end: 0,
             bottom: 0,
-            child: ZadIcon(ZadIconKind.prayer, size: 84),
+            child: ZadIcon(kIsKids ? ZadIconKind.star : ZadIconKind.prayer, size: 84),
           ),
-          const PositionedDirectional(end: 70, top: 0, child: Icon(Icons.nightlight_round, size: 30, color: AppColors.yellow)),
+          const PositionedDirectional(
+            end: 70,
+            top: 0,
+            child: Icon(kIsKids ? Icons.wb_sunny_rounded : Icons.nightlight_round, size: 30, color: AppColors.yellow),
+          ),
           Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
             Text(context.l10n.greet, style: AppTheme.display(26)),
             Text(context.l10n.homeHeroSub, style: const TextStyle(fontSize: 16, color: AppColors.mintText, fontWeight: FontWeight.w700)),

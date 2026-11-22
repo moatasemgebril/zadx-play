@@ -99,6 +99,10 @@ final class AppLockPlugin: NSObject, FlutterStreamHandler {
                 "tamper": (ever && !approved) ? ["screen_time_off"] : [String](),
             ])
 
+        // IANA id of the phone's time zone, stored with the Zad X Kids schedules by the parent.
+        case "deviceTimeZone":
+            result(TimeZone.current.identifier)
+
         // Android-only (Settings window / Device Admin): iOS cannot lock the Settings app.
         case "openParentWindow", "parentWindowSeconds":
             result(0)

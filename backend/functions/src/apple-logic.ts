@@ -13,6 +13,8 @@
  *  - Not configured → fail closed (no entitlement) with a clear log line.
  */
 
+import type { StoreApp } from "./security";
+
 export type Tier = "basic" | "plus";
 
 /** The fields we read from a verified JWSTransactionDecodedPayload. */
@@ -37,8 +39,10 @@ export interface AppleNotification {
   data?: { signedTransactionInfo?: string; bundleId?: string; environment?: string };
 }
 
-/** Only these calls touch Apple; tests pass a fake. */
+/** Only these calls touch Apple; tests pass a fake. One set per app (bundle id). */
 export interface AppleDeps {
+  /** Bundle id the verifier and API client were built for (APPLE_BUNDLE_IDS); default Zad X Play. */
+  bundleId?: string;
   /** SignedDataVerifier.verifyAndDecodeTransaction: throws when the signature/chain/bundle/env is wrong. */
   verifyTransaction(jws: string): Promise<AppleTransaction>;
   /** SignedDataVerifier.verifyAndDecodeNotification. */
@@ -51,7 +55,14 @@ export interface AppleDeps {
   latestSignedTransactions(transactionId: string): Promise<string[]>;
 }
 
-export const APPLE_BUNDLE_ID = "com.zadx.app";
+/** iOS bundle id of each app. A transaction / notification is only accepted for its own app's bundle. */
+export const APPLE_BUNDLE_IDS: Readonly<Record<StoreApp, string>> = {
+  play: "com.zadx.app",
+  kids: "com.zadx.kids",
+};
+
+/** Zad X Play's bundle id (the default when [AppleDeps.bundleId] is not set). */
+export const APPLE_BUNDLE_ID = APPLE_BUNDLE_IDS.play;
 
 /** A compact JWS (header.payload.signature) as StoreKit 2 / notifications send it. */
 export function looksLikeJws(value: string): boolean {
@@ -92,13 +103,17 @@ export type AppleEntitlement =
   | { ok: true; tier: Tier; expiresAt: string; inTrial: boolean; originalTransactionId: string; productId: string }
   | { ok: false; reason: "unknown_product" | "revoked" | "expired" | "wrong_bundle" | "no_transaction" };
 
-/** Entitlement from ONE verified transaction. [tierOf] maps known product ids only. */
+/**
+ * Entitlement from ONE verified transaction. [tierOf] maps the product ids of the app being verified
+ * only (tierForApp), and [bundleId] is that app's bundle.
+ */
 export function appleEntitlement(
   tx: AppleTransaction,
   nowMs: number,
   tierOf: (productId: string) => Tier | null,
+  bundleId: string = APPLE_BUNDLE_ID,
 ): AppleEntitlement {
-  if (tx.bundleId !== APPLE_BUNDLE_ID) return { ok: false, reason: "wrong_bundle" };
+  if (tx.bundleId !== bundleId) return { ok: false, reason: "wrong_bundle" };
   if (typeof tx.originalTransactionId !== "string" || !/^[0-9]{1,30}$/.test(tx.originalTransactionId)) {
     return { ok: false, reason: "no_transaction" };
   }
@@ -140,7 +155,7 @@ export async function verifyAppleSubscription(
   if (looksLikeJws(verificationData)) {
     // Proves the JWS is ours (signature + chain + bundle + environment) before we trust its id.
     const tx = await deps.verifyTransaction(verificationData);
-    if (tx.bundleId !== APPLE_BUNDLE_ID) return { ok: false, reason: "wrong_bundle" };
+    if (tx.bundleId !== (deps.bundleId ?? APPLE_BUNDLE_ID)) return { ok: false, reason: "wrong_bundle" };
     transactionId = tx.originalTransactionId ?? tx.transactionId ?? null;
   } else {
     transactionId = deps.transactionIdFromReceipt(verificationData);
@@ -163,7 +178,7 @@ export async function latestAppleEntitlement(
   }
   const results: AppleEntitlement[] = [];
   for (const jws of signed.slice(0, 10)) {
-    results.push(appleEntitlement(await deps.verifyTransaction(jws), nowMs, tierOf));
+    results.push(appleEntitlement(await deps.verifyTransaction(jws), nowMs, tierOf, deps.bundleId ?? APPLE_BUNDLE_ID));
   }
   return bestAppleEntitlement(results);
 }

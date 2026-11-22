@@ -153,6 +153,22 @@ test("nobody writes server-only family fields from a client", async () => {
   }
 });
 
+test("per-app plans (plans.<app>, planApp) are server-only (Zad X Kids / Zad X Play entitlements)", async () => {
+  await seed();
+  for (const uid of [PARENT, PARENT2, KID1]) {
+    const fam = doc(as(uid), "families/f1");
+    await assertFails(setDoc(fam, { plans: { play: { plan: "plus", planExpiresAt: "2099-01-01T00:00:00Z", inTrial: false } } }, { merge: true }));
+    await assertFails(setDoc(fam, { plans: { kids: { plan: "plus" } } }, { merge: true }));
+    await assertFails(updateDoc(fam, { "plans.kids.plan": "plus" }));
+    await assertFails(setDoc(fam, { planApp: "kids" }, { merge: true }));
+    await assertFails(updateDoc(fam, { planApp: "play" }));
+  }
+  // A new family cannot be created with an entitlement either.
+  await assertFails(setDoc(doc(as(STRANGER), "families/f2"), { members: [STRANGER], plans: { play: { plan: "plus" } } }));
+  await assertFails(setDoc(doc(as(STRANGER), "families/f3"), { members: [STRANGER], planApp: "play" }));
+  await assertSucceeds(setDoc(doc(as(STRANGER), "families/f4"), { members: [STRANGER] }));
+});
+
 // ---- parents ---------------------------------------------------------------------------------
 
 test("parent manages the day but cannot credit minutes outside approveTask", async () => {

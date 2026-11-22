@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
@@ -20,7 +21,8 @@ import '../tasks/wallet_controller.dart';
 extension ChildAvatarLook on ChildAvatar {
   IconData get icon => switch (this) {
         ChildAvatar.star => Icons.star_rounded,
-        ChildAvatar.moon => Icons.nightlight_round,
+        // Zad X Kids: no crescent anywhere; the "moon" avatar is a planet there.
+        ChildAvatar.moon => kIsKids ? Icons.public_rounded : Icons.nightlight_round,
         ChildAvatar.sun => Icons.wb_sunny_rounded,
         ChildAvatar.rocket => Icons.rocket_launch_rounded,
         ChildAvatar.flower => Icons.local_florist_rounded,
@@ -218,7 +220,7 @@ class _ChildRow extends ConsumerWidget {
                         ),
                         style: const TextStyle(fontSize: 15, color: AppColors.muted),
                       ),
-                      if (wallet.prayerLock)
+                      if (!kIsKids && wallet.prayerLock)
                         Text(l10n.childPrayerLocked,
                             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.lockText)),
                     ]),
@@ -362,22 +364,25 @@ class _ChildEditorDialogState extends State<_ChildEditorDialog> {
                 ),
               ),
           ]),
-          const SizedBox(height: 12),
-          // Optional: only used to choose أحسنتَ / أحسنتِ in praise messages.
-          Text(l10n.formOfAddress, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final (value, label) in <(FormOfAddress?, String)>[
-              (null, l10n.addressNotSet),
-              (FormOfAddress.masculine, l10n.addressBoy),
-              (FormOfAddress.feminine, l10n.addressGirl),
-            ])
-              ChoiceChip(
-                label: Text(label),
-                selected: _address == value,
-                onSelected: (_) => setState(() => _address = value),
-              ),
-          ]),
+          // Optional: only used to choose أحسنتَ / أحسنتِ in praise messages. Not offered in Zad X
+          // Kids (English-first, Western market): its praise stays neutral.
+          if (!kIsKids) ...[
+            const SizedBox(height: 12),
+            Text(l10n.formOfAddress, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final (value, label) in <(FormOfAddress?, String)>[
+                (null, l10n.addressNotSet),
+                (FormOfAddress.masculine, l10n.addressBoy),
+                (FormOfAddress.feminine, l10n.addressGirl),
+              ])
+                ChoiceChip(
+                  label: Text(label),
+                  selected: _address == value,
+                  onSelected: (_) => setState(() => _address = value),
+                ),
+            ]),
+          ],
         ]),
       ),
       actions: [

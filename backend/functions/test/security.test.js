@@ -233,3 +233,147 @@ test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
   // Junk in the stored map is dropped.
   assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
 });
+
+// ---------------------------------------------------------------------------
+// Zad X Kids (docs/decisions/ZADX-KIDS-VARIANT.md)
+// ---------------------------------------------------------------------------
+
+test("PRODUCTS: both apps sell the same tiers under their own ids", () => {
+  const ids = Object.keys(s.PRODUCTS);
+  assert.equal(ids.length, 8);
+  for (const tier of ["basic", "plus"]) {
+    for (const period of ["monthly", "yearly"]) {
+      assert.deepEqual(s.productInfo(`zadx_${tier}_${period}`), { tier, app: "play" });
+      assert.deepEqual(s.productInfo(`zadx_kids_${tier}_${period}`), { tier, app: "kids" });
+    }
+  }
+  for (const bad of ["", "zadx_kids_gold_monthly", "__proto__", "constructor", "toString", 42, null, undefined]) {
+    assert.equal(s.productInfo(bad), null, String(bad));
+  }
+  assert.equal(s.productIdFor("plus", "kids"), "zadx_kids_plus_monthly");
+  assert.equal(s.productIdFor("basic", "play"), "zadx_basic_monthly");
+  assert.equal(s.productIdFor("gold", "play"), null);
+});
+
+test("verifiedLine: only a product of the SAME app counts", () => {
+  const kidsLine = { productId: "zadx_kids_plus_yearly" };
+  const playLine = { productId: "zadx_plus_yearly" };
+  assert.equal(s.verifiedLine("kids", [playLine, kidsLine]), kidsLine);
+  assert.equal(s.verifiedLine("play", [kidsLine, playLine]), playLine);
+  assert.equal(s.verifiedLine("kids", [playLine]), null);
+  assert.equal(s.verifiedLine("play", [kidsLine, { productId: "other_app_sub" }, { productId: null }]), null);
+  assert.equal(s.verifiedLine("play", undefined), null);
+});
+
+test("tierForApp: only the SAME app's products have a tier (App Store verification)", () => {
+  const play = s.tierForApp("play");
+  const kids = s.tierForApp("kids");
+  assert.equal(play("zadx_plus_yearly"), "plus");
+  assert.equal(play("zadx_basic_monthly"), "basic");
+  assert.equal(play("zadx_kids_plus_yearly"), null);
+  assert.equal(kids("zadx_kids_basic_monthly"), "basic");
+  assert.equal(kids("zadx_plus_yearly"), null);
+  for (const bad of ["", "toString", "__proto__", "zadx_gold_monthly"]) {
+    assert.equal(play(bad), null, bad);
+    assert.equal(kids(bad), null, bad);
+  }
+});
+
+test("packages: only our two apps", () => {
+  assert.equal(s.ANDROID_PACKAGES.play, "com.zadx.app");
+  assert.equal(s.ANDROID_PACKAGES.kids, "com.zadx.kids");
+  assert.equal(s.appForAndroidPackage("com.zadx.kids"), "kids");
+  assert.equal(s.appForAndroidPackage("com.zadx.app"), "play");
+  assert.equal(s.appForAndroidPackage("com.evil.app"), null);
+  assert.equal(s.appForAndroidPackage(undefined), null);
+});
+
+test("assistant: only the exact value 'kids' selects the Kids prompt", () => {
+  assert.equal(s.assistantVariant("kids"), "kids");
+  for (const v of ["KIDS", "islamic", "", null, undefined, {}]) assert.equal(s.assistantVariant(v), "islamic");
+});
+
+test("Kids assistant prompt contains no religious word (tools/kids_forbidden_words.json)", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const words = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../tools/kids_forbidden_words.json"), "utf8"));
+  const found = [
+    ...words.en.filter((w) => new RegExp(`(?<![A-Za-z'])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z'])`, "i").test(s.KIDS_ASSISTANT_PROMPT)),
+    ...words.ar.filter((w) => s.KIDS_ASSISTANT_PROMPT.includes(w)),
+  ];
+  assert.deepEqual(found, []);
+  // The safety rules are kept.
+  assert.match(s.KIDS_ASSISTANT_PROMPT, /A child may be reading/);
+  assert.match(s.KIDS_ASSISTANT_PROMPT, /Never ask for, store or repeat personal information/);
+});
+
+// ---------------------------------------------------------------------------
+// Separate entitlements per app (owner-safe default 2026-11-22)
+// ---------------------------------------------------------------------------
+
+test("planAppOf / requestingAppOf: unknown = Zad X Play, requests only narrow", () => {
+  assert.equal(s.planAppOf("kids"), "kids");
+  for (const v of ["play", undefined, null, "KIDS", 1]) assert.equal(s.planAppOf(v), "play");
+  assert.equal(s.requestingAppOf("kids"), "kids");
+  assert.equal(s.requestingAppOf("play"), "play");
+  assert.equal(s.requestingAppOf("islamic"), "play"); // the app's variant name
+  for (const v of [undefined, null, "", "both", {}]) assert.equal(s.requestingAppOf(v), null);
+});
+
+test("a Kids plan never unlocks Zad X Play and a Play plan never unlocks Kids", () => {
+  const future = new Date(Date.now() + 30 * 86_400_000).toISOString();
+  const now = Date.now();
+  const kidsOnly = { plans: { kids: { plan: "plus", planExpiresAt: future, inTrial: false } } };
+  const playLegacy = { plan: "plus", planExpiresAt: future, inTrial: false }; // before Zad X Kids: no planApp
+  const both = {
+    plan: "basic", planExpiresAt: future, planApp: "play",
+    plans: { play: { plan: "basic", planExpiresAt: future }, kids: { plan: "plus", planExpiresAt: future } },
+  };
+  const allows = (fam, app) => {
+    const p = s.planForRequest(fam, app);
+    return s.planAllows(p.plan, p.planExpiresAt, now, "assistant");
+  };
+  assert.equal(allows(kidsOnly, "kids"), true);
+  assert.equal(allows(kidsOnly, "islamic"), false);
+  assert.equal(allows(kidsOnly, undefined), false); // a caller that does not say it is Kids gets nothing
+  assert.equal(allows(playLegacy, "islamic"), true);
+  assert.equal(allows(playLegacy, undefined), true);
+  assert.equal(allows(playLegacy, "kids"), false);
+  assert.equal(s.planForRequest(both, "kids").plan, "plus");
+  assert.equal(s.planForRequest(both, "play").plan, "basic");
+  // A legacy top-level plan marked as Kids is not a Play plan.
+  assert.equal(s.familyPlanFor({ plan: "plus", planExpiresAt: future, planApp: "kids" }, "play").plan, null);
+  assert.equal(s.familyPlanFor(undefined, "play").plan, null);
+  assert.equal(s.familyPlanFor({ plans: [] }, "kids").plan, null);
+});
+
+test("productIdFor: the verified product id wins (yearly referral deferral)", () => {
+  assert.equal(s.productIdFor("plus", "play", "zadx_plus_yearly"), "zadx_plus_yearly");
+  assert.equal(s.productIdFor("basic", "kids", "zadx_kids_basic_yearly"), "zadx_kids_basic_yearly");
+  // Another app's or an unknown product id is ignored: fall back to the tier's monthly product.
+  assert.equal(s.productIdFor("plus", "play", "zadx_kids_plus_yearly"), "zadx_plus_monthly");
+  assert.equal(s.productIdFor("plus", "kids", "evil_product"), "zadx_kids_plus_monthly");
+  assert.equal(s.productIdFor("plus", "kids", undefined), "zadx_kids_plus_monthly");
+});
+
+test("Kids-visible parent notifications are neutral; Kids families never get the adhan push", () => {
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const words = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../tools/kids_forbidden_words.json"), "utf8"));
+  const religious = (t) => [
+    ...words.en.filter((w) => new RegExp(`(?<![A-Za-z'])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![A-Za-z'])`, "i").test(t)),
+    ...words.ar.filter((w) => t.includes(w)),
+  ];
+  for (const ar of [true, false]) {
+    assert.equal(s.parentNotificationBody("adhan", ar, "kids"), null);
+    assert.ok(s.parentNotificationBody("adhan", ar, "islamic"));
+    const task = s.parentNotificationBody("task_submitted", ar, "kids");
+    assert.deepEqual(religious(task), [], task);
+    for (const kind of ["tamper", "stale"]) assert.deepEqual(religious(s.protectionAlertText(kind, ar)), []);
+  }
+  assert.equal(s.parentNotificationBody("other", false, undefined), null);
+});
+
+test("clock_changed is a tamper reason", () => {
+  assert.deepEqual(s.parseProtectionReport({ platform: "android", reasons: ["clock_changed", "bogus"] }).reasons, ["clock_changed"]);
+});

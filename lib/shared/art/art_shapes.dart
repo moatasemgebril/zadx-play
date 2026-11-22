@@ -1,13 +1,35 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import '../../core/app_variant.dart';
+
+/// True when this build may draw religious motifs (mosque, dome, minaret, crescent, lantern,
+/// eight-point Islamic star). Compile-time constant: false in Zad X Kids, so every Kids painter
+/// takes its neutral branch (treehouse, full moon, planets, dot grid) and the religious drawing
+/// code is tree-shaken. docs/decisions/ZADX-KIDS-VARIANT.md, "Artwork rules".
+const bool artReligiousMotifs = !kIsKids;
+
 /// Small, original shape helpers shared by the Zad X scenes, icons and
 /// celebrations. Everything is drawn in code: no bitmaps, no third-party art.
 ///
 /// Islamic rule for every caller: scenery, objects and architecture only.
 /// Never draw a person, face, prophet, angel or companion, and never draw
 /// music notes or instruments.
+///
+/// Zad X Kids rule: no religious motif and no Arabic script in any artwork. [crescent], [dome] and
+/// [eightPointStar] assert [artReligiousMotifs], so a Kids test that paints them fails.
 abstract final class ArtShapes {
+  /// Debug/test only: how many religious motifs ([crescent], [dome], [eightPointStar]) were built
+  /// since the last reset. Tests paint a Kids scene and expect 0.
+  static int debugReligiousMotifCount = 0;
+
+  /// Debug-mode guard of every religious motif: counts it, and fails in a Zad X Kids build.
+  static bool _religiousMotif(String what) {
+    debugReligiousMotifCount++;
+    assert(artReligiousMotifs, '$what drawn in Zad X Kids (docs/decisions/ZADX-KIDS-VARIANT.md)');
+    return true;
+  }
+
   /// A star with [points] tips. [inner] is the inner radius as a fraction of [r].
   static Path star(Offset c, double r, {int points = 5, double inner = 0.48, double rotation = -math.pi / 2}) {
     final p = Path();
@@ -31,6 +53,7 @@ abstract final class ArtShapes {
   /// Eight-point star made of two overlapping squares (a classic Islamic
   /// geometric motif), as a single outline.
   static Path eightPointStar(Offset c, double r) {
+    assert(_religiousMotif('Islamic eight-point star'));
     final p = Path();
     final innerR = r * math.cos(math.pi / 4) / math.cos(math.pi / 8);
     for (var i = 0; i < 16; i++) {
@@ -51,6 +74,7 @@ abstract final class ArtShapes {
   /// Built analytically from two arcs (no path boolean ops, so it renders the
   /// same on every Flutter backend).
   static Path crescent(Offset c, double r, {double offset = 0.55, double innerScale = 0.9}) {
+    assert(_religiousMotif('Crescent'));
     final dx = r * offset;
     final ri = r * innerScale;
     final x0 = (r * r - ri * ri + dx * dx) / (2 * dx);
@@ -82,6 +106,7 @@ abstract final class ArtShapes {
 
   /// Onion dome sitting on [baseLeft]..[baseLeft + width], tip at [tipY].
   static Path dome(Offset baseLeft, double width, double tipY) {
+    assert(_religiousMotif('Dome'));
     final x0 = baseLeft.dx;
     final y0 = baseLeft.dy;
     final x1 = x0 + width;

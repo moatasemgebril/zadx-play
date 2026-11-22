@@ -80,6 +80,15 @@
 
         <receiver android:name=".PrayerLockReceiver" android:exported="false" />
 
+        <!-- Zad X Kids schedules: a time / time zone changed by hand cannot end bedtime; the parent
+             is alerted (ClockChangeReceiver). Both are protected system broadcasts. -->
+        <receiver android:name=".ClockChangeReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Optional uninstall protection, enabled by the parent with the PIN + disclosure.
              No device policies (see res/xml/zadx_device_admin.xml). Exported because Android
              itself delivers DEVICE_ADMIN_ENABLED; only the system holds BIND_DEVICE_ADMIN. -->

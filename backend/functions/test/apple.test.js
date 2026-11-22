@@ -135,3 +135,35 @@ test("first paid renewal + ownership key + JWS shape", () => {
   assert.deepEqual(a.parseAppleEnvironment("Production"), "Production");
   assert.equal(a.parseAppleEnvironment("production"), null);
 });
+
+// ---- Zad X Kids (com.zadx.kids): each app verifies its own bundle and its own products ----------
+const { tierForApp } = require("../lib/security.js");
+
+test("bundle ids per app; Play is the default", () => {
+  assert.deepEqual(a.APPLE_BUNDLE_IDS, { play: "com.zadx.app", kids: "com.zadx.kids" });
+  assert.equal(a.APPLE_BUNDLE_ID, "com.zadx.app");
+});
+
+test("Kids verifier: only com.zadx.kids transactions of Kids products grant a plan", async () => {
+  const kidsTx = (over = {}) => tx({ bundleId: "com.zadx.kids", productId: "zadx_kids_plus_yearly", ...over });
+  const kidsTier = tierForApp("kids");
+  assert.equal(a.appleEntitlement(kidsTx(), NOW, kidsTier, "com.zadx.kids").ok, true);
+  assert.equal(a.appleEntitlement(kidsTx(), NOW, kidsTier, "com.zadx.kids").productId, "zadx_kids_plus_yearly");
+  // A Zad X Play transaction never verifies for Kids, and a Kids one never for Play.
+  assert.deepEqual(a.appleEntitlement(tx(), NOW, kidsTier, "com.zadx.kids"), { ok: false, reason: "wrong_bundle" });
+  assert.deepEqual(a.appleEntitlement(kidsTx(), NOW, tierForApp("play")), { ok: false, reason: "wrong_bundle" });
+  // A Play product id inside a Kids-bundle transaction is not a Kids product.
+  assert.deepEqual(a.appleEntitlement(kidsTx({ productId: "zadx_plus_monthly" }), NOW, kidsTier, "com.zadx.kids"),
+    { ok: false, reason: "unknown_product" });
+
+  // End to end with Kids deps: the latest state decides, and a Play JWS is refused before any lookup.
+  const current = jws("kids-current");
+  const d = { ...deps({ signed: { [current]: kidsTx() }, latest: [current] }), bundleId: "com.zadx.kids" };
+  const r = await a.verifyAppleSubscription(d, current, NOW, kidsTier);
+  assert.equal(r.ok, true);
+  assert.equal(r.tier, "plus");
+  const playJws = jws("play-client");
+  const d2 = { ...deps({ signed: { [playJws]: tx() }, latest: [] }), bundleId: "com.zadx.kids" };
+  assert.deepEqual(await a.verifyAppleSubscription(d2, playJws, NOW, kidsTier), { ok: false, reason: "wrong_bundle" });
+  assert.equal(d2.calls.some((c) => c[0] === "latest"), false);
+});

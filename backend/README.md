@@ -71,9 +71,15 @@ It moves each token to `purchases/{sha256}` + `families/{id}/private/billing` an
   Give the Functions service account access in Play Console → API access.
 - **App Store** (`verifyPurchase` on iOS + `appStoreNotifications`, `src/apple.ts` / `src/apple-logic.ts`):
   every signed transaction / notification is verified with `SignedDataVerifier`
-  (`@apple/app-store-server-library`: JWS signature, x5c chain up to Apple's root CA, bundle id
-  `com.zadx.app`, environment, OCSP), the tier comes from the verified productId, and the current
-  state is read from the App Store Server API. **Fails closed** (no entitlement, clear log line
+  (`@apple/app-store-server-library`: JWS signature, x5c chain up to Apple's root CA, bundle id,
+  environment, OCSP), the tier comes from the verified productId, and the current
+  state is read from the App Store Server API. **Per app:** a purchase is verified against the
+  bundle of the app whose product id was sent (Zad X Play `com.zadx.app`, Zad X Kids
+  `com.zadx.kids`), and only that app's product ids grant a tier (`tierForApp`). Plans are stored
+  under `plans.<app>`; the legacy top-level `plan / planExpiresAt / inTrial` (+ `planApp`) are
+  written for Zad X Play only. The billing doc stores the ownership key (`apple:<originalTransactionId>`,
+  never the raw receipt), `storeApp` and the verified product id. `appStoreNotifications` (one URL
+  for both apps) finds the app by which bundle's verifier accepts the signed payload. **Fails closed** (no entitlement, clear log line
   naming the missing settings) until all of this is configured:
   ```bash
   # App Store Connect → Users and Access → Integrations → In-App Purchase → generate a key (.p8)
@@ -82,12 +88,13 @@ It moves each token to `purchases/{sha256}` + `families/{id}/private/billing` an
   APPLE_ENVIRONMENT=Sandbox            # Production for the live app
   APPLE_ISSUER_ID=<issuer id shown above the keys list>
   APPLE_KEY_ID=<the key id>
-  APPLE_APP_APPLE_ID=<numeric Apple ID, App Store Connect → App Information>  # required in Production
+  APPLE_APP_APPLE_ID=<numeric Apple ID of Zad X Play, App Store Connect → App Information>  # required in Production
+  APPLE_KIDS_APP_APPLE_ID=<numeric Apple ID of Zad X Kids>   # required in Production once Kids is on the App Store
   # Apple's public root certificates into functions/certs/ (checked against Apple's page; commit them)
   bash scripts/fetch-apple-root-certs.sh
   ```
   App Store Connect → App Information → App Store Server Notifications → Version 2, Production and
-  Sandbox URL = the deployed `appStoreNotifications` URL (europe-west1).
+  Sandbox URL = the deployed `appStoreNotifications` URL (europe-west1), for **both** apps.
   `verifyPurchase` lists `APPLE_PRIVATE_KEY` as a secret, so the secret must exist before deploying
   (set it to `unset` to deploy before the key exists: iOS then fails closed).
 

@@ -8,7 +8,7 @@ service cloud.firestore {
     }
     // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
     function serverOnlyFamilyKeys() {
-      return ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
+      return ['plan', 'plans', 'planApp', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
               'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).

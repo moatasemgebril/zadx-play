@@ -32,3 +32,16 @@ class AppColors {
     'parent': Color(0xFFEEF4FF),
   };
 }
+
+/// Zad X Kids brand accents (US / Europe market): bright, neutral, no religious symbolism.
+/// Contrast: white on [teal] 5.5:1, white on [tealDeep] 9.5:1, [sun] on [tealDeep] 6.6:1,
+/// ink on [coral] 7.1:1, ink on [sun] 11.4:1.
+class KidsColors {
+  const KidsColors._();
+
+  static const teal = Color(0xFF0F766E);
+  static const tealDeep = Color(0xFF134E4A);
+  static const mint = Color(0xFFB8F2E6);
+  static const coral = Color(0xFFFF8A65);
+  static const sun = Color(0xFFFFD23F);
+}

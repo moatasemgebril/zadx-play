@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
@@ -18,6 +19,7 @@ import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
+import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../settings/sound_settings_card.dart';
 import '../subscription/paid_feature_gate.dart';
@@ -45,8 +47,9 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
-          const _PrayerPauseCard(),
-          const _HijriAdjustmentCard(),
+          // Zad X Play only: Zad X Kids has no prayer tasks, prayer lock or prayer times.
+          if (!kIsKids) const _PrayerPauseCard(),
+          if (!kIsKids) const _HijriAdjustmentCard(),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),
           const SizedBox(height: 12),
           const DevicesCard(),
@@ -55,6 +58,11 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const DeviceLockCard(),
           const SizedBox(height: 12),
+          // Zad X Kids: study / bedtime / reading schedules replace the prayer lock.
+          if (kIsKids) ...[
+            const ScheduleSettingsCard(),
+            const SizedBox(height: 12),
+          ],
           // Settings for the parent only + prevent deleting Zad X (docs/decisions/DEVICE-PROTECTION.md).
           const ProtectionCard(),
           const SizedBox(height: 12),
@@ -249,9 +257,10 @@ class _ConsolesCard extends ConsumerWidget {
     final l10n = context.l10n;
     final lang = context.lang;
     final wallet = ref.watch(walletProvider);
-    final times = ref.watch(prayerTimesProvider);
     final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
-    final windows = playWindows(times);
+    // Adhan alerts and play windows between prayers: Zad X Play only.
+    final prayerAlert = !kIsKids && wallet.prayerLock;
+    final windows = kIsKids ? const <({Prayer after, double start, double end})>[] : playWindows(ref.watch(prayerTimesProvider));
 
     String label(Prayer p) => switch (p) {
           Prayer.dhuhr => l10n.afterDhuhr,
@@ -274,7 +283,7 @@ class _ConsolesCard extends ConsumerWidget {
             color: AppColors.psBlue,
             title: l10n.playstation,
             subtitle: l10n.psSub,
-            alert: wallet.prayerLock ? l10n.psAlertAdhan : null,
+            alert: prayerAlert ? l10n.psAlertAdhan : null,
             buttonText: l10n.psOpen,
             note: l10n.psScheduleNote,
             onOpen: () => ref.read(appLockServiceProvider).openCompanionApp(CompanionApp.playStation),
@@ -285,11 +294,12 @@ class _ConsolesCard extends ConsumerWidget {
             color: const Color(0xFF107C10),
             title: l10n.xboxWindows,
             subtitle: l10n.msSub,
-            alert: wallet.prayerLock ? l10n.msAlertAdhan : null,
+            alert: prayerAlert ? l10n.msAlertAdhan : null,
             buttonText: l10n.msOpen,
             note: l10n.msScheduleNote,
             onOpen: () => ref.read(appLockServiceProvider).openCompanionApp(CompanionApp.microsoftFamily),
           ),
+          if (windows.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(l10n.psSchedule, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
@@ -304,6 +314,7 @@ class _ConsolesCard extends ConsumerWidget {
                     textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               ]),
             ),
+          ],
         ],
       ]),
     );
@@ -419,9 +430,9 @@ class _SettingsCard extends ConsumerWidget {
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.settings, style: Theme.of(context).textTheme.titleMedium),
-        _switchRow(l10n.lockAtAdhan, s.lockAtAdhan, ctrl.setLockAtAdhan),
+        if (!kIsKids) _switchRow(l10n.lockAtAdhan, s.lockAtAdhan, ctrl.setLockAtAdhan),
         _switchRow(l10n.psNotifyTasks, s.notifyParentOnTasks, ctrl.setNotifyOnTasks),
-        _switchRow(l10n.psNotifyAdhan, s.notifyParentOnAdhan, ctrl.setNotifyOnAdhan),
+        if (!kIsKids) _switchRow(l10n.psNotifyAdhan, s.notifyParentOnAdhan, ctrl.setNotifyOnAdhan),
       ]),
     );
   }

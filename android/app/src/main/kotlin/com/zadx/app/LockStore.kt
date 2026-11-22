@@ -25,10 +25,31 @@ object LockStore {
         allowedPackages: List<String> = emptyList(),
         allowMessaging: Boolean = true,
         prayerAutoEndMinutes: Int = 0,
+        baseLocked: Boolean = locked,
+        baseReason: String = reason,
+        schedules: List<LockRules.ScheduleWindow> = emptyList(),
+        scheduleTimeZone: String? = null,
     ) {
+        val p = prefs(ctx)
+        val tz = p.edit()
+        // The time zone the parent saved the schedules in (IANA id). Without one (older Zad X), the
+        // phone's zone when schedules first arrive is kept, so changing the zone later cannot move them.
+        val parentZone = LockRules.zoneOrNull(scheduleTimeZone)
+        if (parentZone != null) {
+            if (parentZone.id != p.getString("scheduleTz", null)) tz.putBoolean("tzTamper", false)
+            tz.putString("scheduleTz", parentZone.id)
+        } else if (schedules.isNotEmpty() && LockRules.zoneOrNull(p.getString("scheduleTz", null)) == null) {
+            tz.putString("scheduleTz", java.util.TimeZone.getDefault().id)
+        }
+        tz.apply()
         prefs(ctx).edit()
             .putBoolean("locked", locked)
             .putString("reason", reason)
+            // Zad X Kids: the lock state without the schedules + the schedules themselves, so a
+            // bedtime / study / reading window starts and ends on time even when Flutter is closed.
+            .putBoolean("baseLocked", baseLocked)
+            .putString("baseReason", baseReason)
+            .putString("schedules", LockRules.encodeSchedules(schedules))
             .putStringSet("packages", packages.toSet())
             .putInt("remaining", remainingMinutes)
             .putString("mode", mode)
@@ -66,12 +87,99 @@ object LockStore {
     fun controlledPackages(ctx: Context): Set<String> =
         prefs(ctx).getStringSet("packages", emptySet())!!
 
+    /**
+     * Zad X Kids: the schedule locking the device right now, or null. Read at the trusted time (see
+     * [trustedClock]) in the parent's saved time zone, never simply the phone's clock / zone.
+     */
+    fun activeSchedule(ctx: Context): String? {
+        val p = prefs(ctx)
+        val windows = LockRules.decodeSchedules(p.getString("schedules", null))
+        if (windows.isEmpty()) return null
+        val device = java.util.TimeZone.getDefault()
+        return LockRules.activeScheduleChecked(
+            windows = windows,
+            trusted = trustedClock(ctx),
+            parentZone = LockRules.zoneOrNull(p.getString("scheduleTz", null)) ?: device,
+            deviceWallMs = System.currentTimeMillis(),
+            deviceZone = device,
+        )
+    }
+
+    private fun autoTime(ctx: Context): Boolean =
+        runCatching { Settings.Global.getInt(ctx.contentResolver, Settings.Global.AUTO_TIME) == 1 }.getOrDefault(false)
+
+    private fun autoTimeZone(ctx: Context): Boolean =
+        runCatching { Settings.Global.getInt(ctx.contentResolver, Settings.Global.AUTO_TIME_ZONE) == 1 }.getOrDefault(false)
+
+    /**
+     * Real time as far as we can tell, cross-checked against elapsed time since the last check
+     * ([LockRules.trustedClock]). Re-anchors on every call and remembers whether the clock was moved.
+     */
+    @Synchronized
+    fun trustedClock(ctx: Context): LockRules.ClockState {
+        val p = prefs(ctx)
+        val nowWall = System.currentTimeMillis()
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val boot = bootCount(ctx)
+        val state = LockRules.trustedClock(
+            nowWallMs = nowWall,
+            nowElapsed = nowElapsed,
+            boot = boot,
+            anchorTrustedMs = if (p.contains("clkTrusted")) p.getLong("clkTrusted", nowWall) else null,
+            anchorElapsed = p.getLong("clkElapsed", 0L),
+            anchorBoot = p.getInt("clkBoot", Int.MIN_VALUE),
+            lastOffsetMs = p.getLong("clkOffset", 0L),
+            autoTime = autoTime(ctx),
+        )
+        p.edit()
+            .putLong("clkTrusted", state.trustedWallMs)
+            .putLong("clkElapsed", nowElapsed)
+            .putInt("clkBoot", boot)
+            .putLong("clkOffset", state.offsetFrom(nowWall))
+            .putBoolean("clockTamper", state.tampered)
+            .apply()
+        return state
+    }
+
+    /**
+     * [ClockChangeReceiver]: the time or time zone was changed. Re-checks the clock at once (so the
+     * jump is measured against the anchor taken just before) and flags a time zone changed by hand
+     * while schedules are on. Returns true when the parent should be told.
+     */
+    fun onClockChanged(ctx: Context, timeZoneChanged: Boolean): Boolean {
+        val p = prefs(ctx)
+        val clock = trustedClock(ctx)
+        if (LockRules.decodeSchedules(p.getString("schedules", null)).isEmpty()) return false
+        if (timeZoneChanged) {
+            val manual = !autoTimeZone(ctx) && java.util.TimeZone.getDefault().id != p.getString("scheduleTz", null)
+            p.edit().putBoolean("tzTamper", manual).apply()
+        }
+        return clockChanged(ctx, clock)
+    }
+
+    /** Tamper reason "clock_changed": schedules are on and the clock or time zone was moved by hand. */
+    fun clockChanged(ctx: Context, clock: LockRules.ClockState? = null): Boolean {
+        val p = prefs(ctx)
+        if (LockRules.decodeSchedules(p.getString("schedules", null)).isEmpty()) return false
+        return (clock ?: trustedClock(ctx)).tampered || p.getBoolean("tzTamper", false)
+    }
+
+    /** IANA id of the phone's current time zone (Flutter stores it when the parent saves schedules). */
+    fun deviceTimeZone(): String = java.util.TimeZone.getDefault().id
+
+    /** Lock state without the schedules (older policies only have locked / reason). */
+    private fun baseLocked(p: SharedPreferences): Boolean = p.getBoolean("baseLocked", p.getBoolean("locked", true))
+
+    private fun baseReason(p: SharedPreferences): String =
+        p.getString("baseReason", null) ?: p.getString("reason", "requiredTasks")!!
+
     /** True when a controlled app must be blocked right now. */
     fun shouldBlock(ctx: Context): Boolean {
+        if (activeSchedule(ctx) != null) return true
         val p = prefs(ctx)
         return LockRules.shouldBlock(
-            locked = p.getBoolean("locked", true),
-            reason = p.getString("reason", "requiredTasks")!!,
+            locked = baseLocked(p),
+            reason = baseReason(p),
             prayerLock = p.getBoolean("prayerLock", false),
             remainingMinutes = p.getInt("remaining", 0),
             prayerOver = prayerOver(ctx),
@@ -79,8 +187,9 @@ object LockStore {
     }
 
     fun reason(ctx: Context): String {
+        activeSchedule(ctx)?.let { return it }
         val p = prefs(ctx)
-        val stored = p.getString("reason", "requiredTasks")!!
+        val stored = baseReason(p)
         val prayerActive = (p.getBoolean("prayerLock", false) || stored == "prayer") && !prayerOver(ctx)
         return when {
             prayerActive -> "prayer"

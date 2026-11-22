@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 
 import 'app.dart';
+import 'core/app_variant.dart';
 import 'core/platform.dart';
 import 'features/settings/settings_controller.dart';
 import 'services/billing/subscription_service.dart';
@@ -46,7 +47,8 @@ Future<void> main() async {
     familyIdProvider.overrideWith((_) => familyId),
   ]);
 
-  if (AppPlatform.canScheduleNotifications) {
+  // Adhan notifications: Zad X Play only (Zad X Kids has no prayer times).
+  if (!kIsKids && AppPlatform.canScheduleNotifications) {
     await container.read(prayerNotificationServiceProvider).init();
   }
   if (firebaseReady && AppPlatform.canPurchase) {
