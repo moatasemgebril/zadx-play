@@ -8,7 +8,9 @@ class CalcMethod {
     required this.fajrAngle,
     this.ishaAngle,
     this.ishaMinutesAfterMaghrib,
-  }) : assert(ishaAngle != null || ishaMinutesAfterMaghrib != null);
+    this.ishaMinutesAfterMaghribInRamadan,
+  }) : assert(ishaAngle != null || ishaMinutesAfterMaghrib != null),
+       assert(ishaMinutesAfterMaghribInRamadan == null || ishaMinutesAfterMaghrib != null);
 
   final String id;
   final Localized name;
@@ -17,6 +19,11 @@ class CalcMethod {
 
   /// Used by Umm al-Qura / Qatar: Isha is a fixed interval after Maghrib.
   final int? ishaMinutesAfterMaghrib;
+
+  /// Umm al-Qura only: Isha interval during Ramadan of the Umm al-Qura Hijri calendar
+  /// (120 min, Saudi Press Agency https://www.spa.gov.sa/907467). See
+  /// `lib/features/prayer/hijri_ramadan.dart`.
+  final int? ishaMinutesAfterMaghribInRamadan;
 }
 
 class Country {

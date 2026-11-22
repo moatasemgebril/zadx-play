@@ -42,6 +42,7 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
             prev.methodId != next.methodId ||
             prev.asrFactor != next.asrFactor ||
             prev.highLatitude != next.highLatitude ||
+            prev.hijriAdjustmentDays != next.hijriAdjustmentDays ||
             prev.language != next.language) {
           _reschedule(ref, next);
         }

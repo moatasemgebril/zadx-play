@@ -1,6 +1,7 @@
 import 'package:zadx/core/localized.dart';
 import 'package:zadx/data/catalog/locations.dart';
 import 'package:zadx/data/models/location.dart';
+import 'package:zadx/features/prayer/hijri_ramadan.dart';
 import 'package:zadx/features/prayer/prayer_calculator.dart';
 
 import 'solar_reference.dart';
@@ -152,6 +153,7 @@ RefDay referenceFor(WorldCase c, DateTime date, {int? asrFactor}) => SolarRefere
       lng: c.city.lng,
       fajrAngle: c.method.fajrAngle,
       ishaAngle: c.method.ishaAngle,
-      ishaMinutesAfterMaghrib: c.method.ishaMinutesAfterMaghrib,
+      // Umm al-Qura: 120 min in Ramadan of the Umm al-Qura calendar (a calendar rule, not astronomy).
+      ishaMinutesAfterMaghrib: ishaIntervalOn(c.method, date.year, date.month, date.day),
       asrFactor: asrFactor ?? c.asrFactor,
     );

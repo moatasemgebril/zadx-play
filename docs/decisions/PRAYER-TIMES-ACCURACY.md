@@ -63,19 +63,33 @@ UTC for Africa/Casablanca and Africa/El_Aaiun while the bundled data is stale, a
 itself off when a newer database has +00. Remove it after the planned
 flutter_local_notifications / timezone upgrade.
 
-## 3. Umm al-Qura Ramadan Isha (rule confirmed; not implemented)
+## 3. Umm al-Qura Ramadan Isha (implemented 2026-11-22)
 
-Rule confirmed: in Ramadan the Umm al-Qura timetable uses Isha = Maghrib + 120 min (instead of
-90). Source: Saudi Press Agency, https://www.spa.gov.sa/907467 . The calendar authority for the
+Rule: in Ramadan the Umm al-Qura timetable uses Isha = Maghrib + 120 min (instead of 90).
+Source: Saudi Press Agency, https://www.spa.gov.sa/907467 . The calendar authority for the
 Umm al-Qura calendar is KACST (King Abdulaziz City for Science and Technology).
 
-Not implemented (2026-11-22): no official downloadable Umm al-Qura Hijri table was found, no
-Hijri package is in `pubspec.yaml`, and no pub.dev package's data source could be verified
-against KACST from this environment. Adding an unverified table could put Isha 30 minutes off
-for a whole day or the whole month, so the test "Umm al-Qura: Isha is Maghrib + 120 min during
-Ramadan" stays skipped. To finish: add a vetted offline Umm al-Qura package (data traced to
-KACST), a parent ±1 day adjustment (moon sighting can differ from the calendar), and enable
-the test.
+Implementation (`lib/features/prayer/hijri_ramadan.dart`, PR #35):
+
+* "Is it Ramadan" comes from the pub.dev package `hijri` (^3.0.1, BSD-2-Clause, offline),
+  whose published documentation describes its conversion as the Umm al-Qura calendar
+  ("From Gregorian to Ummalqura"; example: "in the Hijri (Umm al-Qura) calendar").
+  Caveat: the package documentation does not name its data source, so its table is **not
+  traced to KACST**. Tests check that Ramadan 1448 starts 7-9 Feb 2027, lasts 29-30 days
+  and that the rule moves with the parent adjustment.
+* Only `CalcMethod.ishaMinutesAfterMaghribInRamadan` (Umm al-Qura = 120) changes. Qatar
+  (also 90 min) and every angle-based method are unchanged.
+* The rule follows the calendar day: every Gregorian day whose Umm al-Qura date is in
+  month 9 gets Isha = Maghrib + 120 (same for the home screen, adhan notifications and the
+  prayer lock).
+* Parent adjustment (parent area, behind the PIN; Islamic variant only): "started 1 day
+  earlier" (+1), "as the calendar" (0), "started 1 day later" (-1). Ramadan in Saudi Arabia
+  is announced by moon sighting, which can differ from the printed calendar by a day.
+
+Follow-up (not done): Windows Guard (`windows_guard/PrayerTimes.cs`) and the backend policy
+still receive the fixed `ishaMinutes` (90), so on Windows the Isha lock starts 30 minutes
+early in Ramadan for Umm al-Qura families. .NET has `System.Globalization.UmAlQuraCalendar`;
+sync `ishaMinutesRamadan` + `hijriAdjust` and apply the same rule there.
 
 ## 4. Per-authority minute adjustments (decided: none)
 
