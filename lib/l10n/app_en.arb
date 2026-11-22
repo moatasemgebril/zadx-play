@@ -423,5 +423,6 @@
   "protectAdminExplanation": "Stops Zad X being deleted without the parent. No other device controls are used.",
   "protectTamperNote": "If protection is turned off on the child's device, or the device stops checking in for a day, you'll get an alert on your phone.",
   "protectDisclosureExtra": "Zad X also keeps the phone's Settings app for you only (you open it with your PIN) and can stop apps being deleted without you.",
-  "deviceLockAlwaysOpenProtected": "Always open: phone and emergency calls, Zad X, home screen and keyboard. Settings open for the parent with the PIN."
+  "deviceLockAlwaysOpenProtected": "Always open: phone and emergency calls, Zad X, home screen and keyboard. Settings open for the parent with the PIN.",
+  "approveOnParentPhone": "Approve tasks from the parent phone. This is the child's device."
 }
