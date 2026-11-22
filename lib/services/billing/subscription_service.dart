@@ -9,6 +9,8 @@ import '../../core/app_config.dart';
 import '../../core/backend.dart';
 import '../../data/models/plan.dart';
 import '../../features/prayer/prayer_providers.dart';
+import '../../features/settings/settings_controller.dart';
+import '../family/family_repository.dart';
 import 'entitlement_cache.dart';
 import 'trial_clock.dart';
 
@@ -18,12 +20,17 @@ import 'trial_clock.dart';
 /// validates the receipt, stores the entitlement in Firestore and credits the
 /// referrer if [referralCode] was used → [entitlementProvider] updates.
 class SubscriptionService {
-  SubscriptionService({InAppPurchase? iap, FirebaseFunctions? functions})
+  SubscriptionService({InAppPurchase? iap, FirebaseFunctions? functions, this.onFamilyRestored})
       : _iap = iap ?? InAppPurchase.instance,
         _functions = functions;
 
   final InAppPurchase _iap;
   final FirebaseFunctions? _functions;
+
+  /// Called when `verifyPurchase` moved this phone into the family that owns the restored
+  /// purchase (restore on a new phone). The app then switches to that family, the same way
+  /// `PairingService.redeem` does.
+  final Future<void> Function(String familyId)? onFamilyRestored;
   final _entitlement = StreamController<Entitlement>.broadcast();
   StreamSubscription<List<PurchaseDetails>>? _sub;
   Map<String, ProductDetails> _products = {};
@@ -81,6 +88,8 @@ class SubscriptionService {
             'referralCode': _pendingReferralCode,
           });
           final data = Map<String, dynamic>.from(result.data as Map);
+          final familyId = restoredFamilyId(data);
+          if (familyId != null) await onFamilyRestored?.call(familyId);
           final ent = Entitlement(
             // Unknown or missing tier = Free, never silently Basic.
             tier: parsePlanTier(data['tier']),
@@ -103,34 +112,70 @@ class SubscriptionService {
   }
 }
 
+/// The family `verifyPurchase` moved this phone into (restore on a new phone), or `null`.
+/// Only a well-formed Firestore id is accepted.
+String? restoredFamilyId(Map<String, dynamic> data) {
+  final id = data['familyId'];
+  if (data['restored'] != true || id is! String) return null;
+  return RegExp(r'^[A-Za-z0-9_-]{1,128}$').hasMatch(id) ? id : null;
+}
+
 final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
-  final s = SubscriptionService();
+  final s = SubscriptionService(
+    onFamilyRestored: (familyId) async {
+      if (ref.read(familyIdProvider) == familyId) return;
+      await ref.read(sharedPrefsProvider).setString('family.id', familyId);
+      ref.read(familyIdProvider.notifier).state = familyId; // repository + plan stream switch
+    },
+  );
   ref.onDispose(s.dispose);
   return s;
 });
 
 /// The latest plan the store + `verifyPurchase` confirmed in this session (`null` until then).
-/// Every confirmation is written to the [EntitlementCache] (offline grace).
 final storeEntitlementProvider = StreamProvider<Entitlement?>((ref) async* {
-  final cache = ref.watch(entitlementCacheProvider);
   final service = ref.watch(subscriptionServiceProvider);
-  final latest = service.latest;
-  if (latest != null) await cache.recordVerified(latest.effectiveTier);
-  yield latest;
-  await for (final e in service.entitlementStream) {
-    await cache.recordVerified(e.effectiveTier);
-    yield e;
-  }
+  yield service.latest;
+  yield* service.entitlementStream;
+});
+
+/// The plan stored on this device's family doc by `verifyPurchase` (bought on any family phone),
+/// server-confirmed snapshots only. Never emits without Firebase or a family (local mode).
+final familyEntitlementProvider = StreamProvider<Entitlement?>(
+  (ref) => ref.watch(familyRepositoryProvider).watchEntitlement(),
+);
+
+/// Best server-confirmed answer of this session: highest active tier among this device's
+/// purchase and the family doc (`null` until one of them answers).
+final verifiedEntitlementProvider = Provider<Entitlement?>(
+  (ref) => bestVerifiedEntitlement(
+    ref.watch(storeEntitlementProvider).valueOrNull,
+    ref.watch(familyEntitlementProvider).valueOrNull,
+  ),
+);
+
+/// Writes every new server confirmation to the [EntitlementCache] (7-day offline grace,
+/// clock-rollback safe). Only fires when the confirmation changes, never on the minute tick,
+/// so keeping the app open offline cannot stretch the grace.
+final entitlementRecorderProvider = Provider<void>((ref) {
+  final cache = ref.watch(entitlementCacheProvider);
+  ref.listen<Entitlement?>(verifiedEntitlementProvider, (previous, next) {
+    if (next != null && !identical(previous, next)) unawaited(cache.recordVerified(next.effectiveTier));
+  }, fireImmediately: true);
 });
 
 /// Current plan, available synchronously (no loading state, so the lock never flashes open
 /// while the plan loads). Re-evaluated every minute so the 7-day trial and the offline grace
-/// end on time. Order: verified paid plan > cached paid plan (grace) > trial > Free.
+/// end on time. Order: verified paid plan (this device or family doc, highest) > cached paid
+/// plan (grace) > trial > Free.
 /// Free features (lock, prayer times, adhan, Quran, adhkar) never depend on this value.
 final planEntitlementProvider = Provider<Entitlement>((ref) {
   ref.watch(clockProvider);
+  ref.watch(entitlementRecorderProvider);
+  ref.watch(verifiedEntitlementProvider); // runs the recorder before the cache is read
   return resolveEntitlement(
     store: ref.watch(storeEntitlementProvider).valueOrNull,
+    family: ref.watch(familyEntitlementProvider).valueOrNull,
     cachedTier: ref.watch(entitlementCacheProvider).effectiveTier(),
     trial: ref.watch(trialClockProvider).status(),
   );

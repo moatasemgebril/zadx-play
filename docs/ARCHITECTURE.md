@@ -58,6 +58,29 @@ Pairing (`lib/services/family/pairing_service.dart`, Cloud Functions `createPair
 All devices share `families/{id}/children/{childId}/days/{yyyy-MM-dd}`; the phone also writes the
 derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
 
+### Family plan & restore on a new phone (fix/family-entitlement-restore)
+- **Plan on every family device.** `verifyPurchase` writes `plan`, `planExpiresAt` (ISO string),
+  `inTrial`, `store` on `families/{id}` (server-only fields, readable by every member, child
+  devices included). `FamilyRepository.watchEntitlement()` streams them (server-confirmed
+  snapshots only, never the offline cache; local mode emits nothing). `planEntitlementProvider`
+  takes the highest active tier of this device's own verified purchase and the family doc, then
+  the `EntitlementCache` grace (7 days offline, clock-rollback safe), then the device trial, then
+  Free. Every new server answer (including "expired") is recorded in the cache once, by
+  `entitlementRecorderProvider`.
+- **The raw store token is server-only.** Ownership lives in `purchases/{sha256(token)}` →
+  `familyId`; the raw token (for referral deferrals) in `families/{id}/private/billing`. Both
+  are closed to clients in firestore.rules. Old docs with a `purchaseToken` field are still read
+  and the field is removed on the next verification.
+- **Restore on a new phone.** A new install signs in anonymously and gets a new family. When
+  the store-verified token belongs to exactly one other family, `verifyPurchase` moves the
+  caller into it as a **parent** member (never `childDevices`) in one transaction, deletes the
+  caller's old family only if it is an empty install (else just leaves it), and returns
+  `{familyId, restored: true}`; the app saves `family.id` and switches `familyIdProvider` like
+  pairing does. Refused: a device bound to a child (`restore_child_device`), a token on several
+  families (`purchase_in_use`), and a phone whose own family already has another device linked
+  (`restore_family_in_use`). Rate limits: 3 joins/hour per user, 5/day per family; existing
+  parent devices get a push ("a new parent phone joined").
+
 ## Platforms
 | Platform | Game locking | Everything else |
 |---|---|---|

@@ -21,8 +21,8 @@ import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
   HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, heartbeatAction, hexDigestEquals,
-  isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
-  rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
+  isPairingCode, isSafeId, normaliseReferralCode, oldFamilyAction, parseProtectionReport, planAllows, protectionAlertText,
+  purchaseOwnerDecision, rateLimitDecision, rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
 
 initializeApp();
@@ -260,23 +260,109 @@ export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => 
 
   const family = await familyOf(uid);
   // One store subscription unlocks one family only (stops sharing a receipt between accounts).
-  const holders = await db.collection("families").where("purchaseToken", "==", verificationData).limit(2).get();
-  if (holders.docs.some((d) => d.id !== family.id)) throw new HttpsError("permission-denied", "purchase_in_use");
-  await family.ref.set(
-    { plan: tier, planExpiresAt: expiresAt, inTrial, store: platform, purchaseToken: verificationData },
-    { merge: true },
-  );
+  // The raw token is never stored on the family doc (every member, child devices included, can
+  // read that doc): ownership lives in purchases/{sha256(token)}, the raw token (needed for the
+  // referral deferral) in families/{id}/private/billing. Both are server-only (firestore.rules).
+  const purchaseRef = db.doc(`purchases/${sha256Hex(verificationData)}`);
+  const owner = await purchaseRef.get();
+  const legacy = await db.collection("families").where("purchaseToken", "==", verificationData).limit(2).get();
+  const holderFamilyIds = [...legacy.docs.map((d) => d.id), ...(isSafeId(owner.get("familyId")) ? [owner.get("familyId") as string] : [])];
+  const decision = purchaseOwnerDecision({
+    callerFamilyId: family.id,
+    callerIsChildDevice: boundChildOf(family, uid) !== null,
+    holderFamilyIds,
+  });
+  if (decision.action === "reject") {
+    throw new HttpsError("permission-denied", decision.reason === "child_device" ? "restore_child_device" : "purchase_in_use");
+  }
+
+  const entitlement = { plan: tier, planExpiresAt: expiresAt, inTrial, store: platform, purchaseToken: FieldValue.delete() };
+  let target = family.ref;
+  let restored = false;
+  if (decision.action === "join") {
+    // Restore on a new phone: the store just proved this caller holds the paying store account,
+    // so this device joins the purchasing family as a PARENT device (never via childDevices).
+    await enforceRateLimit("restoreJoin", uid, 3, 60 * 60_000);
+    await enforceRateLimit("restoreJoinFamily", decision.familyId, 5, 24 * 60 * 60_000);
+    target = db.doc(`families/${decision.familyId}`);
+    await joinPurchasingFamily(uid, family.ref, target, verificationData);
+    restored = true;
+  }
+  await target.set(entitlement, { merge: true });
+  await purchaseRef.set({ familyId: target.id, store: platform, updatedAt: FieldValue.serverTimestamp() });
+  await target.collection("private").doc("billing").set({ purchaseToken: verificationData }, { merge: true });
 
   // Record the referral now; the referrer is credited only after the friend's first PAID period.
   const code = normaliseReferralCode(referralCode);
-  if (code && !(await family.ref.get()).get("referredBy")) {
-    const owner = await db.collection("referralCodes").doc(code).get();
-    if (owner.exists && owner.get("familyId") !== family.id) {
-      await family.ref.set({ referredBy: owner.get("familyId"), referralPaid: false }, { merge: true });
+  if (code && !(await target.get()).get("referredBy")) {
+    const referrer = await db.collection("referralCodes").doc(code).get();
+    if (referrer.exists && referrer.get("familyId") !== target.id) {
+      await target.set({ referredBy: referrer.get("familyId"), referralPaid: false }, { merge: true });
     }
   }
-  return { tier, inTrial, expiresAt };
+  if (restored) await notifyNewParentDevice(target.id);
+  return { tier, inTrial, expiresAt, familyId: target.id, restored };
 });
+
+/**
+ * Moves [uid] from its own (new-install) family into the family that holds the purchase, as a
+ * parent member. One transaction: re-checks everything it relies on, so two racing calls or a
+ * pairing that lands in between cannot leave the caller in two families or as a child device.
+ */
+async function joinPurchasingFamily(
+  uid: string,
+  oldRef: FirebaseFirestore.DocumentReference,
+  targetRef: FirebaseFirestore.DocumentReference,
+  token: string,
+): Promise<void> {
+  await db.runTransaction(async (tx) => {
+    const target = await tx.get(targetRef);
+    const old = await tx.get(oldRef);
+    const owner = await tx.get(db.doc(`purchases/${sha256Hex(token)}`));
+    const holdsToken = owner.get("familyId") === targetRef.id || target.get("purchaseToken") === token;
+    if (!target.exists || !holdsToken) throw new HttpsError("aborted", "Try again.");
+    if (boundChildOf(target, uid) !== null || boundChildOf(old, uid) !== null) {
+      throw new HttpsError("permission-denied", "restore_child_device");
+    }
+    const hasChildren = !(await tx.get(oldRef.collection("children").limit(1))).empty;
+    const hasDevices = !(await tx.get(oldRef.collection("devices").limit(1))).empty;
+    const action = oldFamilyAction({
+      uid,
+      members: old.get("members"),
+      childDevices: old.get("childDevices"),
+      keys: Object.keys(old.data() ?? {}),
+      hasChildren,
+      hasDevices,
+    });
+    // Another device is linked to this phone's family: moving would orphan it.
+    if (action === "reject") throw new HttpsError("failed-precondition", "restore_family_in_use");
+    tx.update(targetRef, { members: FieldValue.arrayUnion(uid) });
+    if (action === "delete") tx.delete(oldRef);
+    else tx.update(oldRef, { members: FieldValue.arrayRemove(uid) });
+  });
+}
+
+/** Best effort: tells the existing parent devices that a restored phone joined as a parent. */
+async function notifyNewParentDevice(familyId: string): Promise<void> {
+  try {
+    const family = await db.doc(`families/${familyId}`).get();
+    const tokens: string[] = family.get("parentTokens") ?? [];
+    if (tokens.length === 0) return;
+    const ar = (family.get("language") ?? "ar") === "ar";
+    await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: "Zad X",
+        body: ar
+          ? "تم ربط جهاز ولي أمر جديد بالعائلة بعد استعادة الاشتراك. لو مش إنت، غيّر كلمة سر حساب المتجر."
+          : "A new parent phone joined your family by restoring the subscription. If this wasn't you, change your store account password.",
+      },
+      data: { type: "parent_joined" },
+    });
+  } catch (e) {
+    console.error("notifyNewParentDevice failed", e instanceof Error ? e.name : typeof e);
+  }
+}
 
 export const referralStatus = onCall({ region: "europe-west1" }, async (req) => {
   const uid = requireUid(req.auth);
@@ -332,6 +418,14 @@ async function isGenuinePubSubPush(authorization: string | undefined): Promise<b
   }
 }
 
+/** The family a store purchase token belongs to (purchases/{sha256}, or the legacy family field). */
+async function familyIdForToken(token: string): Promise<string | null> {
+  const owner = await db.doc(`purchases/${sha256Hex(token)}`).get();
+  if (isSafeId(owner.get("familyId"))) return owner.get("familyId");
+  const legacy = await db.collection("families").where("purchaseToken", "==", token).limit(1).get();
+  return legacy.empty ? null : legacy.docs[0].id;
+}
+
 export const playNotifications = onRequest({ region: "europe-west1" }, async (req, res) => {
   try {
     if (req.method !== "POST" || !(await isGenuinePubSubPush(req.get("authorization")))) {
@@ -345,8 +439,9 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
       res.status(204).send();
       return;
     }
-    const friend = await db.collection("families").where("purchaseToken", "==", n.purchaseToken).limit(1).get();
-    if (friend.empty || friend.docs[0].get("referralPaid") !== false) {
+    const friendId = await familyIdForToken(n.purchaseToken);
+    const friendSnap = friendId ? await db.doc(`families/${friendId}`).get() : null;
+    if (!friendSnap?.exists || friendSnap.get("referralPaid") !== false) {
       res.status(204).send();
       return;
     }
@@ -356,8 +451,8 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
       res.status(204).send();
       return;
     }
-    const friendRef = friend.docs[0].ref;
-    const referrerId: string = friend.docs[0].get("referredBy");
+    const friendRef = friendSnap.ref;
+    const referrerId: string = friendSnap.get("referredBy");
     if (!isSafeId(referrerId)) {
       res.status(204).send();
       return;
@@ -385,7 +480,7 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
       await publisher.purchases.subscriptions.defer({
         packageName: ANDROID_PACKAGE,
         subscriptionId: productId!,
-        token: referrer.get("purchaseToken"),
+        token: (await referrerRef.collection("private").doc("billing").get()).get("purchaseToken") ?? referrer.get("purchaseToken"),
         requestBody: {
           deferralInfo: {
             expectedExpiryTimeMillis: String(current.getTime()),

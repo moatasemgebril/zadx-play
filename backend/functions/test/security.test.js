@@ -189,3 +189,39 @@ test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
   // Junk in the stored map is dropped.
   assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
 });
+
+test("purchaseOwnerDecision: new token or own token attaches to the caller's family", () => {
+  const base = { callerFamilyId: "famNew", callerIsChildDevice: false };
+  assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: [] }), { action: "attach" });
+  assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: ["famNew"] }), { action: "attach" });
+  assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: ["famNew", "famNew"] }), { action: "attach" });
+});
+
+test("purchaseOwnerDecision: restore on a new phone joins the one family that holds the token", () => {
+  const d = s.purchaseOwnerDecision({ callerFamilyId: "famNew", callerIsChildDevice: false, holderFamilyIds: ["famOld"] });
+  assert.deepEqual(d, { action: "join", familyId: "famOld" });
+});
+
+test("purchaseOwnerDecision: a child-bound device can never take the parent role", () => {
+  const d = s.purchaseOwnerDecision({ callerFamilyId: "famNew", callerIsChildDevice: true, holderFamilyIds: ["famOld"] });
+  assert.deepEqual(d, { action: "reject", reason: "child_device" });
+});
+
+test("purchaseOwnerDecision: ambiguous or unsafe ownership is rejected", () => {
+  const base = { callerFamilyId: "famNew", callerIsChildDevice: false };
+  assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: ["famA", "famB"] }), { action: "reject", reason: "purchase_in_use" });
+  assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: ["famNew", "famA"] }), { action: "reject", reason: "purchase_in_use" });
+  assert.deepEqual(s.purchaseOwnerDecision({ ...base, holderFamilyIds: ["../x"] }), { action: "reject", reason: "purchase_in_use" });
+});
+
+test("oldFamilyAction: delete an empty install, keep data, never orphan another device", () => {
+  const fresh = { uid: "u1", members: ["u1"], childDevices: undefined, keys: ["members", "createdAt", "settings"], hasChildren: false, hasDevices: false };
+  assert.equal(s.oldFamilyAction(fresh), "delete");
+  assert.equal(s.oldFamilyAction({ ...fresh, hasChildren: true }), "leave");
+  assert.equal(s.oldFamilyAction({ ...fresh, hasDevices: true }), "leave");
+  assert.equal(s.oldFamilyAction({ ...fresh, keys: [...fresh.keys, "referralCode"] }), "leave");
+  assert.equal(s.oldFamilyAction({ ...fresh, keys: [...fresh.keys, "plan"] }), "leave");
+  assert.equal(s.oldFamilyAction({ ...fresh, members: ["u1", "childPhone"] }), "reject");
+  assert.equal(s.oldFamilyAction({ ...fresh, childDevices: { u1: "child-1" } }), "reject");
+  assert.equal(s.oldFamilyAction({ ...fresh, members: "junk" }), "reject");
+});

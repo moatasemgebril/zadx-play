@@ -264,3 +264,65 @@ export function tamperReasonsToAlert(
   for (const r of reasons) map[r] = nowMs;
   return { reasons, alertedAt: map };
 }
+
+// ---------------------------------------------------------------------------
+// Purchase ownership + restore on a new phone (verifyPurchase)
+// ---------------------------------------------------------------------------
+
+export type PurchaseOwnerDecision =
+  /** Token unused, or already this caller's family: store the entitlement on the caller's family. */
+  | { action: "attach" }
+  /** Token belongs to exactly one other family: move the caller into it as a PARENT device. */
+  | { action: "join"; familyId: string }
+  | { action: "reject"; reason: "purchase_in_use" | "child_device" };
+
+/**
+ * Who may use a store-verified purchase token. Call it only AFTER the store confirmed the token
+ * is an active subscription: Google Play hands the token only to devices signed in to the store
+ * account that bought it, so holding a valid token proves the caller holds that account.
+ * A device bound to a child (`childDevices`) can never take the parent role this way.
+ */
+export function purchaseOwnerDecision(input: {
+  callerFamilyId: string;
+  callerIsChildDevice: boolean;
+  holderFamilyIds: readonly string[];
+}): PurchaseOwnerDecision {
+  const holders = [...new Set(input.holderFamilyIds)];
+  const others = holders.filter((id) => id !== input.callerFamilyId);
+  if (others.length === 0) return { action: "attach" };
+  // Ambiguous ownership (token on several families, e.g. legacy data): never guess.
+  if (holders.length > 1) return { action: "reject", reason: "purchase_in_use" };
+  if (input.callerIsChildDevice) return { action: "reject", reason: "child_device" };
+  if (!isSafeId(others[0])) return { action: "reject", reason: "purchase_in_use" };
+  return { action: "join", familyId: others[0] };
+}
+
+/** Fields a brand-new, unused family may hold (firestore.rules `create` + saveSettings). */
+const FRESH_FAMILY_KEYS: readonly string[] = ["members", "createdAt", "settings"];
+
+export type OldFamilyAction = "delete" | "leave" | "reject";
+
+/**
+ * What happens to the caller's own (new-install) family when it joins the purchasing family:
+ * * "reject": another device is linked to it (leaving would orphan that device), or the caller
+ *   is a child device there.
+ * * "delete": only the caller, and no child profiles, devices, plan or referral data (an empty
+ *   fresh install).
+ * * "leave": only the caller, but it holds data: the caller is removed from `members` and the
+ *   data is left untouched (no client can read it any more).
+ */
+export function oldFamilyAction(input: {
+  uid: string;
+  members: unknown;
+  childDevices: unknown;
+  keys: readonly string[];
+  hasChildren: boolean;
+  hasDevices: boolean;
+}): OldFamilyAction {
+  if (!Array.isArray(input.members) || input.members.some((m) => m !== input.uid)) return "reject";
+  const map = input.childDevices && typeof input.childDevices === "object" ? (input.childDevices as Record<string, unknown>) : {};
+  if (Object.prototype.hasOwnProperty.call(map, input.uid)) return "reject";
+  if (input.hasChildren || input.hasDevices) return "leave";
+  if (input.keys.some((k) => !FRESH_FAMILY_KEYS.includes(k))) return "leave";
+  return "delete";
+}

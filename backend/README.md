@@ -18,11 +18,13 @@ families/{familyId}
   members: [uid]            parents + paired child devices
   parentTokens: [fcmToken]
   language, settings{notifyOnTasks, notifyOnAdhan}
-  plan, planExpiresAt, inTrial, store, purchaseToken      (functions only)
+  plan, planExpiresAt, inTrial, store                    (functions only; every member reads them)
+  private/billing { purchaseToken }                      (functions only, no client access)
   referralCode, referredBy, referralPaid, referrals{year}  (functions only)
   children/{childId}/days/{yyyy-MM-dd}   tasks progress, usedMinutes, prayerLock
   assistantUsage/{yyyy-MM-dd}            Basic plan daily AI quota
 referralCodes/{CODE} → familyId
+purchases/{sha256(store token)} → familyId, store   (functions only: one purchase = one family)
 ```
 
 ## Store webhooks

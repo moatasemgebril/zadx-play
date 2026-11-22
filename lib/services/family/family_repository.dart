@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/child_profile.dart';
+import '../../data/models/plan.dart';
 import 'firestore_family_repository.dart';
 
 /// Snapshot of a child's day that both the child and parent devices share.
@@ -52,6 +53,24 @@ class FamilyDay {
       );
 }
 
+/// The plan `verifyPurchase` (backend/functions/src/index.ts) stores on families/{id}:
+/// `plan` ('basic' | 'plus'), `planExpiresAt` (ISO-8601 string), `inTrial` (bool).
+/// These fields are server-only (firestore.rules) and readable by every family member,
+/// so a child device gets the plan the parent paid for on another phone.
+///
+/// Fails closed: an unknown plan, or a plan without a readable expiry, is Free.
+Entitlement parseFamilyEntitlement(Map<String, dynamic> data, {DateTime Function()? now}) {
+  final tier = parsePlanTier(data['plan']);
+  final raw = data['planExpiresAt'];
+  final expiresAt = switch (raw) {
+    String s => DateTime.tryParse(s)?.toUtc(),
+    DateTime d => d.toUtc(),
+    _ => null,
+  };
+  if (tier == null || expiresAt == null) return Entitlement(now: now);
+  return Entitlement(tier: tier, expiresAt: expiresAt, inTrial: data['inTrial'] == true, now: now);
+}
+
 /// Syncs a child's day between the child device and the parent device(s).
 ///
 /// [LocalFamilyRepository] keeps everything on one device (good for demos and
@@ -78,6 +97,11 @@ abstract class FamilyRepository {
   /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
   /// `accessibility_off`. The backend alerts the parent devices once per new reason.
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
+
+  /// The family's server-written plan ([parseFamilyEntitlement]), emitted only for snapshots
+  /// confirmed by the server (never from the offline cache: offline, the app relies on the
+  /// EntitlementCache grace instead). Emits nothing for local-only.
+  Stream<Entitlement> watchEntitlement();
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -85,6 +109,9 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Stream<FamilyDay> watchDay(String childId, String day) => _controller.stream;
+
+  @override
+  Stream<Entitlement> watchEntitlement() => const Stream<Entitlement>.empty();
 
   @override
   Future<void> saveDay(String childId, FamilyDay day) async {}
