@@ -330,6 +330,8 @@
   "lockedTitle": "This part is still locked",
   "lockedKidBody": "Ask your mum or dad to open it for you",
   "askParent": "Call a parent",
+  "assistantParentOnlyTitle": "The assistant is for grown-ups",
+  "assistantParentOnlyBody": "Ask your mum or dad to open it with the parent PIN",
   "upgradeBasicTitle": "Available in Basic and Plus",
   "upgradePlusTitle": "Available in Plus",
   "upgradeBody": "Quran, adhkar, adhan, prayer times and the device lock are free, with no subscription. Paid plans add games, tasks & rewards, exercises and more.",
