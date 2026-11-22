@@ -29,9 +29,7 @@ public sealed record DevicePolicy(
     [property: JsonPropertyName("prayer")] PrayerSettings Prayer,
     // Device-wide lock (absent from older backends → legacy "selectedGames" behaviour).
     [property: JsonPropertyName("mode")] string? Mode = null,
-    [property: JsonPropertyName("allowBrowsers")] bool AllowBrowsers = false,
-    // Excused today (set by a parent): no lock at the adhan (absent from older backends → false).
-    [property: JsonPropertyName("prayerPaused")] bool PrayerPaused = false);
+    [property: JsonPropertyName("allowBrowsers")] bool AllowBrowsers = false);
 
 public sealed class PolicyClient
 {

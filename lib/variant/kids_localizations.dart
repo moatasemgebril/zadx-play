@@ -190,15 +190,6 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get prayerIkhlas => _text('prayerIkhlas');
 
   @override
-  String get prayerPauseTitle => _text('prayerPauseTitle');
-
-  @override
-  String get prayerPauseHelp => _text('prayerPauseHelp');
-
-  @override
-  String get otherTasksOpenToday => _text('otherTasksOpenToday');
-
-  @override
   String get iPrayed => _text('iPrayed');
 
   @override

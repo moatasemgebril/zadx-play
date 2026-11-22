@@ -100,7 +100,7 @@ public sealed class GuardWorker : BackgroundService
     {
         if (policy is null) return (true, "offline"); // never synced → safe default
         if (!policy.PlanActive) return (false, "none"); // Windows Guard is a Plus feature
-        if (!policy.PrayerPaused && PrayerTimes.InPrayerWindow(policy.Prayer, _options.PrayerLockMinutes)) return (true, "prayer");
+        if (PrayerTimes.InPrayerWindow(policy.Prayer, _options.PrayerLockMinutes)) return (true, "prayer");
         if (policy.Locked) return (true, policy.Reason);
         if (policy.RemainingMinutes <= 0) return (true, "noTime");
         return (false, "none");

@@ -102,9 +102,8 @@ const Set<String> islamicOnlyL10nKeys = {
   'adhanTitle', 'chooseMuezzin', 'hearAdhan',
   // Prayer lock ("I prayed").
   'lockPrayer', 'prayerNow', 'prayerSub', 'iPrayed', 'childPrayerLocked', 'deviceLockFreePrayerNote',
-  // Ikhlas reminder after a prayer task, and the parent-only "excused" pause (#38, #35): the pause
-  // does not exist in Kids (no prayer tasks), so its title, help and child line are empty too.
-  'prayerIkhlas', 'prayerPauseTitle', 'prayerPauseHelp', 'otherTasksOpenToday',
+  // Ikhlas reminder after a prayer task (#38).
+  'prayerIkhlas',
   // Quran + adhkar screens.
   'quran', 'chooseReciter', 'quranRiwaya', 'ayatCount', 'playSurah', 'readSurah', 'hideSurahText', 'juz30', 'juz29',
   'adhkar', 'morningAdhkar', 'eveningAdhkar', 'salawat', 'sectionDone', 'loadingText', 'textError',
