@@ -22,7 +22,6 @@ service cloud.firestore {
         && (!('prayerLock' in d) || d.prayerLock is bool)
         && (!('prayerLockSinceMs' in d) || (d.prayerLockSinceMs is int && d.prayerLockSinceMs >= 0))
         && (!('prayerLockAt' in d) || d.prayerLockAt is timestamp)
-        && (!('prayerPaused' in d) || d.prayerPaused is bool)
         && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
     }
 
@@ -60,8 +59,11 @@ service cloud.firestore {
     function serverOnlyDayKeys() {
       return ['approved', 'earnedMinutes', 'requiredDone', 'prayerLockSinceMs'];
     }
-    // `prayerPaused` (excused today: prayer tasks + prayer lock paused) is written only by a parent
-    // device: it is not in childDayKeys(), so a child device can neither set nor clear it.
+    // Fields of removed features: no client (parent or child) may set, change or add them.
+    // `prayerPaused` (the "excused" prayer pause) was removed by owner decision 2026-11-22.
+    function removedDayKeys() {
+      return ['prayerPaused'];
+    }
     // What a paired child device may write on its own day doc: its submissions (`progress`,
     // status "pending"; "done" counts for nothing without a server `approved` entry), more used
     // minutes, and a prayer lock that it may START but end only after the Free prayer window.
@@ -128,10 +130,11 @@ service cloud.firestore {
           // A child device deleting its day would reset its used minutes and prayer lock.
           allow delete: if isParent(familyId);
           allow create: if validDay(day) && (
-            (isParent(familyId) && !request.resource.data.keys().hasAny(serverOnlyDayKeys()))
+            (isParent(familyId) && !request.resource.data.keys().hasAny(serverOnlyDayKeys().concat(removedDayKeys())))
             || (isChildDevice(familyId, childId) && childDayCreateOk()));
           allow update: if validDay(day) && (
-            (isParent(familyId) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyDayKeys()))
+            (isParent(familyId)
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyDayKeys().concat(removedDayKeys())))
             || (isChildDevice(familyId, childId) && childDayUpdateOk()));
         }
       }

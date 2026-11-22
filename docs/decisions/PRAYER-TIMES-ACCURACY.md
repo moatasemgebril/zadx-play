@@ -106,19 +106,11 @@ angles only and may differ by a few minutes from these printed timetables:
 Revisit only if an authority publishes its adjustment table officially (with document link
 and date); never add numbers from unofficial sites.
 
-## 5. Excused (menstruation) option (decided 2026-11-22)
+## 5. Excused prayer-pause option: removed (owner decision 2026-11-22)
 
-Sources: Dar al-Ifta al-Misriyya fatwa 7711 (https://dar-alifta.org/ar/fatwa/details/19049/) and
-Ibn Baz fatwa 13476: a menstruating girl does not pray and does not make the prayers up.
-
-Built as a parent-only (parent area, behind the PIN; parent devices only in
-`backend/firestore.rules`) per-day, per-child toggle «إيقاف مهام الصلاة مؤقتًا (عذر)» / "Pause prayer
-tasks (excused)". It pauses that child's prayer tasks and prayer lock (phone alarms, app lock,
-Windows Guard via `devicePolicy.prayerPaused`) for that day; minutes and stars already earned are
-not touched and prayer tasks do not count as missed. Nothing is sent to the family log or other
-children's devices; the child only sees «مهامّك الأخرى متاحة اليوم» / "Your other tasks are open
-today", with no reason. Adhkar stay available. Stored as `prayerPaused` on the child's day doc.
-Shown for children addressed as a girl or not set. Not in the Kids variant.
-
-Known limit: Windows Guard reads the server `requiredDone`, recomputed by `approveTask`; after a
-pause it reflects the pause from the next approval of that day.
+The parent-only "Pause prayer tasks (excused)" toggle that was briefly added on the prayer-times
+branch (PR #35) has been removed completely by owner decision 2026-11-22: no toggle in the parent
+area, no `prayerPaused` field on the day doc (the Firestore rules now refuse it for every client),
+no pause of prayer tasks, the prayer lock, the native adhan alarms or Windows Guard, and no related
+strings. Prayer times, the adhan, the prayer lock and the high-latitude / Umm al-Qura Ramadan /
+Isha-after-Fajr handling above are unchanged.

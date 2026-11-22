@@ -218,25 +218,31 @@ test("prayerLockSinceMs is not writable by any client (lock window counts from s
   await assertFails(setDoc(day(as(PARENT)), { prayerLockSinceMs: 0 }, { merge: true }));
 });
 
-// ---- Excused today (prayerPaused): parent devices only ---------------------------------------
+// ---- Removed feature: the "excused" prayer pause (owner decision 2026-11-22) -----------------
 
-test("only a parent device pauses or resumes prayer (excused); a child device cannot", async () => {
+test("prayerPaused (removed excused pause) is not writable by any client", async () => {
   await seed({ lockMinutesAgo: 1 });
-  // A child device can neither set nor clear it, alone or together with ending its own lock.
+  // Child devices cannot set it, alone or with other fields, on an existing or a new day.
   await assertFails(setDoc(day(as(KID1)), { prayerPaused: true }, { merge: true }));
   await assertFails(setDoc(day(as(KID1)), { prayerPaused: true, prayerLock: false }, { merge: true }));
   await assertFails(setDoc(day(as(KID1), "c1", "2026-11-23"), { day: "2026-11-23", prayerPaused: true }));
-  // A sibling's device cannot touch (or read) another child's pause.
-  await assertFails(setDoc(day(as(KID2), "c1"), { prayerPaused: true }, { merge: true }));
-  await assertFails(getDoc(day(as(KID2), "c1")));
-  // A parent device pauses (ending a running lock in the same write) and resumes.
-  await assertSucceeds(setDoc(day(as(PARENT)), { day: DAY, prayerPaused: true, prayerLock: false }, { merge: true }));
-  await assertSucceeds(setDoc(day(as(PARENT2)), { prayerPaused: false }, { merge: true }));
-  // Once set by the parent, the child device still cannot clear it.
-  await assertSucceeds(setDoc(day(as(PARENT)), { prayerPaused: true }, { merge: true }));
-  await assertFails(setDoc(day(as(KID1)), { prayerPaused: false }, { merge: true }));
-  // The child keeps writing its normal fields while paused.
+  // Parent devices cannot set, change or create it either.
+  await assertFails(setDoc(day(as(PARENT)), { prayerPaused: true }, { merge: true }));
+  await assertFails(setDoc(day(as(PARENT2)), { prayerPaused: false }, { merge: true }));
+  await assertFails(setDoc(day(as(PARENT)), { day: DAY, prayerPaused: true, prayerLock: false }, { merge: true }));
+  await assertFails(setDoc(day(as(PARENT), "c1", "2026-11-23"), { day: "2026-11-23", prayerPaused: false }));
+  // Normal day writes keep working for parents and the child device.
+  await assertSucceeds(setDoc(day(as(PARENT)), { prayerLock: false }, { merge: true }));
   await assertSucceeds(setDoc(day(as(KID1)), { progress: { homework: { status: "pending", count: 0 } } }, { merge: true }));
-  // Wrong type is refused for everyone.
-  await assertFails(setDoc(day(as(PARENT)), { prayerPaused: "yes" }, { merge: true }));
+});
+
+test("a legacy prayerPaused value does not block normal writes, and cannot be changed", async () => {
+  await seed({ lockMinutesAgo: 1 });
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), `families/f1/children/c1/days/${DAY}`), { prayerPaused: true }, { merge: true });
+  });
+  await assertSucceeds(setDoc(day(as(PARENT)), { prayerLock: false }, { merge: true }));
+  await assertSucceeds(setDoc(day(as(KID1)), { usedMinutes: increment(1) }, { merge: true }));
+  await assertFails(setDoc(day(as(PARENT)), { prayerPaused: false }, { merge: true }));
+  await assertFails(setDoc(day(as(KID1)), { prayerPaused: false }, { merge: true }));
 });
