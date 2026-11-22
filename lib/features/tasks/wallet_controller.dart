@@ -28,6 +28,7 @@ class WalletState {
     this.lockedPrayer,
     this.prayerLockSince,
     this.approved,
+    this.prayerPaused = false,
   });
 
   final String day;
@@ -47,6 +48,15 @@ class WalletState {
   /// approval on this device (behind the parent PIN) sets the task to done.
   final Map<String, int>? approved;
 
+  /// Excused today (set by a parent behind the PIN): prayer tasks and the prayer lock are paused
+  /// for this child. Prayer tasks then count for nothing either way (no stars or minutes lost),
+  /// and the child sees only "your other tasks are open today", never a reason.
+  final bool prayerPaused;
+
+  /// Today's tasks for this child: prayer tasks are left out while [prayerPaused].
+  List<TaskDefinition> get activeTasks =>
+      prayerPaused ? tasks.where((t) => t.kind != TaskKind.prayer).toList() : tasks;
+
   /// True when the parent approved [id] today.
   bool isApproved(String id) =>
       approved != null ? approved!.containsKey(id) : progressOf(id).status == TaskStatus.done;
@@ -57,7 +67,7 @@ class WalletState {
 
   TaskProgress progressOf(String id) => progress[id] ?? const TaskProgress();
 
-  bool get requiredDone => tasks.where((t) => t.required).every((t) => isApproved(t.id));
+  bool get requiredDone => activeTasks.where((t) => t.required).every((t) => isApproved(t.id));
 
   int get earnedMinutes => approved != null
       ? approved!.values.fold(0, (sum, m) => sum + m)
@@ -68,11 +78,11 @@ class WalletState {
   /// Device games are playable only when all three conditions hold.
   bool get gamesUnlocked => requiredDone && !prayerLock && remainingMinutes > 0;
 
-  int get doneCount => tasks.where((t) => isApproved(t.id)).length;
+  int get doneCount => activeTasks.where((t) => isApproved(t.id)).length;
 
   /// Submissions waiting for a parent. "I prayed" can wait again at the next adhan even though
   /// the prayer task was already credited today (a second approval ends the lock, no new minutes).
-  List<TaskDefinition> get pending => tasks
+  List<TaskDefinition> get pending => activeTasks
       .where((t) =>
           progressOf(t.id).status == TaskStatus.pending &&
           (approved == null || !approved!.containsKey(t.id) || t.kind == TaskKind.prayer))
@@ -95,6 +105,7 @@ class WalletState {
     bool clearLockedPrayer = false,
     DateTime? prayerLockSince,
     Map<String, int>? approved,
+    bool? prayerPaused,
   }) =>
       WalletState(
         day: day ?? this.day,
@@ -105,6 +116,7 @@ class WalletState {
         lockedPrayer: clearLockedPrayer ? null : (lockedPrayer ?? this.lockedPrayer),
         prayerLockSince: clearLockedPrayer ? null : (prayerLockSince ?? this.prayerLockSince),
         approved: approved ?? this.approved,
+        prayerPaused: prayerPaused ?? this.prayerPaused,
       );
 
   FamilyDay toFamilyDay() => FamilyDay(
@@ -116,6 +128,7 @@ class WalletState {
         requiredDone: requiredDone,
         prayerLockSinceMs: prayerLock ? prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
         approved: approved,
+        prayerPaused: prayerPaused,
       );
 }
 
@@ -235,12 +248,31 @@ class WalletController extends Notifier<WalletState> {
         day: state.day,
         taskId: taskId,
         minutes: minutes,
-        requiredTaskIds: state.tasks.where((t) => t.required).map((t) => t.id).toList(),
+        requiredTaskIds: state.activeTasks.where((t) => t.required).map((t) => t.id).toList(),
         isPrayer: def.kind == TaskKind.prayer,
       ));
     }
     if (lockEnds) next = next.copyWith(prayerLock: false, clearLockedPrayer: true);
     _update(next, lockChanged: lockEnds);
+    return true;
+  }
+
+  /// Parent only (behind the PIN; a paired child device cannot, and the server rules refuse it):
+  /// pauses or resumes prayer tasks and the prayer lock for the active child, for today only.
+  /// Pausing ends a running prayer lock. Nothing is sent to the family log or other children.
+  bool setPrayerPaused(bool paused) {
+    if (!canApprove) return false;
+    if (state.prayerPaused == paused) return true;
+    final endsLock = paused && state.prayerLock;
+    var next = state.copyWith(prayerPaused: paused);
+    if (endsLock) next = next.copyWith(prayerLock: false, clearLockedPrayer: true);
+    state = next;
+    _persist(next);
+    if (_repo.serverApprovals) {
+      _repo.setPrayerPaused(childId: _childId, day: next.day, paused: paused).catchError((Object e) {
+        debugPrint('prayer pause sync failed: $e');
+      });
+    }
     return true;
   }
 
@@ -282,6 +314,7 @@ class WalletController extends Notifier<WalletState> {
   // ---- prayer lock ----------------------------------------------------------
 
   void startPrayerLock(Prayer prayer) {
+    if (state.prayerPaused) return; // excused today: no prayer lock, no task reset, no notification
     if (state.prayerLock && state.lockedPrayer == prayer) return; // already locked (app + native alarm)
     final prayerTask = state.tasks.where((t) => t.kind == TaskKind.prayer).firstOrNull;
     final progress = {...state.progress};
@@ -338,6 +371,7 @@ class WalletController extends Notifier<WalletState> {
       clearLockedPrayer: !remote.prayerLock,
       prayerLockSince: remote.prayerLock ? _sinceOrNow(sinceMs, state.prayerLockSince) : null,
       approved: remote.approved,
+      prayerPaused: remote.prayerPaused,
     );
     _persist(state);
   }
@@ -363,6 +397,7 @@ class WalletController extends Notifier<WalletState> {
           prayerLock: day.prayerLock,
           prayerLockSince: day.prayerLock ? _sinceOrNow(day.prayerLockSinceMs, null) : null,
           approved: day.approved ?? (serverApprovals ? const {} : null),
+          prayerPaused: day.prayerPaused,
         );
       }
     }

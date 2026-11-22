@@ -718,7 +718,9 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
     const earned = dayDoc.get("earnedMinutes") ?? 0;
     const used = dayDoc.get("usedMinutes") ?? 0;
     const requiredDone = dayDoc.get("requiredDone") ?? false;
-    const prayerLock = dayDoc.get("prayerLock") ?? false;
+    // Excused today (parent-only `prayerPaused`): no prayer lock and no adhan lock on the guard.
+    const prayerPaused = dayDoc.get("prayerPaused") === true;
+    const prayerLock = !prayerPaused && (dayDoc.get("prayerLock") ?? false);
     const remaining = Math.max(0, earned - used);
     const plan = family.get("plan");
     res.json({
@@ -726,6 +728,7 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
       locked: !(requiredDone && !prayerLock && remaining > 0),
       reason: prayerLock ? "prayer" : !requiredDone ? "requiredTasks" : remaining <= 0 ? "noTime" : "none",
       remainingMinutes: remaining,
+      prayerPaused,
       games: settings.games ?? [],
       // Device-wide lock (docs/decisions/DEVICE-WIDE-LOCK.md). Windows locks games + launchers +
       // social apps (+ browsers unless allowed); it never blocks every process.

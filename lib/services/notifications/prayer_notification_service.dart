@@ -19,6 +19,30 @@ class PrayerNotificationService {
   final FlutterLocalNotificationsPlugin _plugin;
 
   static const _channelId = 'adhan_channel_v1';
+  static const _silentChannelId = 'prayer_silent_v1';
+
+  static const _adhanDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _channelId,
+      'Adhan',
+      importance: Importance.max,
+      priority: Priority.high,
+      sound: RawResourceAndroidNotificationSound('adhan_short'),
+      playSound: true,
+    ),
+    iOS: DarwinNotificationDetails(sound: 'adhan_short.caf', presentSound: true),
+  );
+
+  static const _silentDetails = NotificationDetails(
+    android: AndroidNotificationDetails(
+      _silentChannelId,
+      'Prayer reminder (silent)',
+      importance: Importance.defaultImportance,
+      priority: Priority.defaultPriority,
+      playSound: false,
+    ),
+    iOS: DarwinNotificationDetails(presentSound: false),
+  );
 
   Future<void> init() async {
     const android = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -52,17 +76,8 @@ class PrayerNotificationService {
         title,
         prayerName(slot.prayer),
         slot.when,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            'Adhan',
-            importance: Importance.max,
-            priority: Priority.high,
-            sound: RawResourceAndroidNotificationSound('adhan_short'),
-            playSound: true,
-          ),
-          iOS: DarwinNotificationDetails(sound: 'adhan_short.caf', presentSound: true),
-        ),
+        // A silent Isha reminder (Isha at/after the next Fajr): no adhan sound.
+        slot.sound ? _adhanDetails : _silentDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
       );
