@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/app_config.dart';
 import 'data/catalog/locations.dart';
+import 'services/family/children_controller.dart';
 import 'services/family/family_repository.dart';
 import 'core/platform.dart';
 import 'core/theme/app_theme.dart';
@@ -84,7 +85,10 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
   }
 
   /// Shares what other devices need (Windows Guard computes prayer locks from this).
+  /// Parent devices only (R-33): family settings are parent-only in firestore.rules, and a paired
+  /// child device must never overwrite the parent's adhan lock, games or lock mode.
   void _syncSettings(WidgetRef ref, AppSettings s) {
+    if (ref.read(childrenProvider).isBound) return;
     final city = cityById(s.cityId);
     final method = methodById(s.methodId);
     ref.read(familyRepositoryProvider).saveSettings({

@@ -7,6 +7,7 @@ import '../../core/utils/formatters.dart';
 import '../../data/models/plan.dart';
 import '../../services/assistant/assistant_service.dart';
 import '../subscription/paid_feature_gate.dart';
+import 'assistant_parent_lock.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 
@@ -44,7 +45,10 @@ class HelpScreen extends StatelessWidget {
       body: ZadSceneBackground(
         scene: ZadScene.parent,
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          const PaidFeatureGate(feature: AppFeature.assistant, child: _AssistantCard()),
+          // Parent PIN first (child safety), then the plan check.
+          const AssistantParentLock(
+            child: PaidFeatureGate(feature: AppFeature.assistant, child: _AssistantCard()),
+          ),
           const SizedBox(height: 14),
           ZadCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [

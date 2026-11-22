@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/catalog/default_tasks.dart';
 import '../../data/models/child_profile.dart';
 import '../../data/models/family_task.dart';
+import '../../services/family/approval_queue.dart';
 import '../../services/family/child_storage.dart';
 import '../../services/family/children_controller.dart';
 import '../../services/family/family_repository.dart';
@@ -26,6 +27,7 @@ class WalletState {
     this.prayerLock = false,
     this.lockedPrayer,
     this.prayerLockSince,
+    this.approved,
   });
 
   final String day;
@@ -39,28 +41,42 @@ class WalletState {
   /// automatically after the prayer window (see `lockStateFor`).
   final DateTime? prayerLockSince;
 
+  /// Synced family: the server's credits {taskId: minutes} (written only by the `approveTask`
+  /// Cloud Function for a parent device, R-32). A task counts as approved, and earns minutes,
+  /// only with an entry here, whatever `progress` says. Null for a local-only family, where an
+  /// approval on this device (behind the parent PIN) sets the task to done.
+  final Map<String, int>? approved;
+
+  /// True when the parent approved [id] today.
+  bool isApproved(String id) =>
+      approved != null ? approved!.containsKey(id) : progressOf(id).status == TaskStatus.done;
+
   /// True when a Free-plan prayer lock that started at [prayerLockSince] is over at [now].
   bool prayerWindowOver(DateTime now, Duration window) =>
       prayerLock && prayerLockSince != null && !now.toUtc().isBefore(prayerLockSince!.toUtc().add(window));
 
   TaskProgress progressOf(String id) => progress[id] ?? const TaskProgress();
 
-  bool get requiredDone =>
-      tasks.where((t) => t.required).every((t) => progressOf(t.id).status == TaskStatus.done);
+  bool get requiredDone => tasks.where((t) => t.required).every((t) => isApproved(t.id));
 
-  int get earnedMinutes => tasks
-      .where((t) => progressOf(t.id).status == TaskStatus.done)
-      .fold(0, (sum, t) => sum + t.rewardMinutes);
+  int get earnedMinutes => approved != null
+      ? approved!.values.fold(0, (sum, m) => sum + m)
+      : tasks.where((t) => progressOf(t.id).status == TaskStatus.done).fold(0, (sum, t) => sum + t.rewardMinutes);
 
   int get remainingMinutes => (earnedMinutes - usedMinutes).clamp(0, 1 << 30);
 
   /// Device games are playable only when all three conditions hold.
   bool get gamesUnlocked => requiredDone && !prayerLock && remainingMinutes > 0;
 
-  int get doneCount => tasks.where((t) => progressOf(t.id).status == TaskStatus.done).length;
+  int get doneCount => tasks.where((t) => isApproved(t.id)).length;
 
-  List<TaskDefinition> get pending =>
-      tasks.where((t) => progressOf(t.id).status == TaskStatus.pending).toList();
+  /// Submissions waiting for a parent. "I prayed" can wait again at the next adhan even though
+  /// the prayer task was already credited today (a second approval ends the lock, no new minutes).
+  List<TaskDefinition> get pending => tasks
+      .where((t) =>
+          progressOf(t.id).status == TaskStatus.pending &&
+          (approved == null || !approved!.containsKey(t.id) || t.kind == TaskKind.prayer))
+      .toList();
 
   LockReason? get lockReason {
     if (prayerLock) return LockReason.prayer;
@@ -78,6 +94,7 @@ class WalletState {
     Prayer? lockedPrayer,
     bool clearLockedPrayer = false,
     DateTime? prayerLockSince,
+    Map<String, int>? approved,
   }) =>
       WalletState(
         day: day ?? this.day,
@@ -87,6 +104,7 @@ class WalletState {
         prayerLock: prayerLock ?? this.prayerLock,
         lockedPrayer: clearLockedPrayer ? null : (lockedPrayer ?? this.lockedPrayer),
         prayerLockSince: clearLockedPrayer ? null : (prayerLockSince ?? this.prayerLockSince),
+        approved: approved ?? this.approved,
       );
 
   FamilyDay toFamilyDay() => FamilyDay(
@@ -97,8 +115,12 @@ class WalletState {
         earnedMinutes: earnedMinutes,
         requiredDone: requiredDone,
         prayerLockSinceMs: prayerLock ? prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
+        approved: approved,
       );
 }
+
+/// Most minutes one task can earn (backend MAX_TASK_MINUTES); the server enforces it too.
+const maxTaskMinutes = 120;
 
 enum LockReason { prayer, requiredTasks, noTime }
 
@@ -119,13 +141,16 @@ class WalletController extends Notifier<WalletState> {
     _childId = ref.watch(activeChildIdProvider);
     // Rebuild only when the date changes (not every minute).
     final today = ref.watch(cityNowProvider.select((n) => dayKey(n.local)));
-    final restored = restoreFrom(ref.read(sharedPrefsProvider), _childId, today);
-
     // Re-subscribes automatically when the device is paired to another family.
     final repo = ref.watch(familyRepositoryProvider);
+    final restored = restoreFrom(ref.read(sharedPrefsProvider), _childId, today, serverApprovals: repo.serverApprovals);
     _remoteSub?.cancel();
     _remoteSub = repo.watchDay(_childId, today).listen(_applyRemote);
     ref.onDispose(() => _remoteSub?.cancel());
+    // Parent device: approvals taken offline reach the server now (no-op when nothing is queued).
+    if (repo.serverApprovals) {
+      Future.microtask(() => _queue.flush(repo, ref.read(familyIdProvider)));
+    }
 
     // Lock games automatically when a new prayer time starts.
     ref.listen<Prayer>(nextPrayerProvider, (previous, next) {
@@ -180,21 +205,69 @@ class WalletController extends Notifier<WalletState> {
   }
 
   // ---- parent actions (guarded by the parent PIN in the UI) -----------------
+  //
+  // Local-only family: the decision is applied on this device, as before.
+  // Synced family (R-32): the SERVER decides. `approveTask` / `rejectTask` check server-side that
+  // this is a parent device and credit the minutes; the result comes back through [watchDay].
+  // Offline, the decision is queued here and sent when online. A paired child device cannot
+  // approve, even with the PIN (the server would refuse): these return false and the UI asks
+  // the parent to approve from the parent phone.
 
-  void approve(String taskId) {
-    _setStatus(taskId, TaskStatus.done);
-    final def = state.tasks.firstWhere((t) => t.id == taskId);
-    if (def.kind == TaskKind.prayer && state.prayerLock) {
-      _update(state.copyWith(prayerLock: false, clearLockedPrayer: true));
+  ApprovalQueue get _queue => ApprovalQueue(ref.read(sharedPrefsProvider));
+
+  /// False when this device may not approve (a paired child device in a synced family).
+  bool get canApprove => !_repo.serverApprovals || !ref.read(childrenProvider).isBound;
+
+  bool approve(String taskId) {
+    final def = state.tasks.where((t) => t.id == taskId).firstOrNull;
+    if (def == null || !canApprove) return false;
+    final lockEnds = def.kind == TaskKind.prayer && state.prayerLock;
+    final p = state.progressOf(taskId);
+    var next = state.copyWith(progress: {...state.progress, taskId: p.copyWith(status: TaskStatus.done)});
+    if (_repo.serverApprovals) {
+      // Shown right away on this parent device; the server's credits replace it on the next snapshot.
+      final minutes = def.rewardMinutes.clamp(0, maxTaskMinutes);
+      next = next.copyWith(approved: {...?state.approved}..putIfAbsent(taskId, () => minutes));
+      _sendDecision(PendingApproval(
+        approve: true,
+        familyId: ref.read(familyIdProvider) ?? '',
+        childId: _childId,
+        day: state.day,
+        taskId: taskId,
+        minutes: minutes,
+        requiredTaskIds: state.tasks.where((t) => t.required).map((t) => t.id).toList(),
+        isPrayer: def.kind == TaskKind.prayer,
+      ));
     }
+    if (lockEnds) next = next.copyWith(prayerLock: false, clearLockedPrayer: true);
+    _update(next, lockChanged: lockEnds);
+    return true;
   }
 
-  void reject(String taskId) {
+  bool reject(String taskId) {
+    if (!canApprove) return false;
     final p = state.progressOf(taskId);
     _update(state.copyWith(progress: {
       ...state.progress,
       taskId: p.copyWith(status: TaskStatus.todo, count: 0),
     }));
+    if (_repo.serverApprovals) {
+      _sendDecision(PendingApproval(
+        approve: false,
+        familyId: ref.read(familyIdProvider) ?? '',
+        childId: _childId,
+        day: state.day,
+        taskId: taskId,
+      ));
+    }
+    return true;
+  }
+
+  void _sendDecision(PendingApproval item) {
+    final repo = _repo;
+    final queue = _queue;
+    // Older queued decisions go first, so the server sees them in order.
+    unawaited(queue.flush(repo, item.familyId).then((_) => queue.send(repo, item)));
   }
 
   void upsertTask(TaskDefinition def) {
@@ -213,12 +286,15 @@ class WalletController extends Notifier<WalletState> {
     final prayerTask = state.tasks.where((t) => t.kind == TaskKind.prayer).firstOrNull;
     final progress = {...state.progress};
     if (prayerTask != null) progress[prayerTask.id] = const TaskProgress();
-    _update(state.copyWith(
-      prayerLock: true,
-      lockedPrayer: prayer,
-      progress: progress,
-      prayerLockSince: DateTime.now().toUtc(),
-    ));
+    _update(
+      state.copyWith(
+        prayerLock: true,
+        lockedPrayer: prayer,
+        progress: progress,
+        prayerLockSince: DateTime.now().toUtc(),
+      ),
+      lockChanged: true,
+    );
     _repo.notifyParent(_childId, 'adhan', data: {'prayer': prayer.name});
   }
 
@@ -227,7 +303,7 @@ class WalletController extends Notifier<WalletState> {
   /// Returns true when the lock was ended.
   bool endPrayerLockIfOver(DateTime now, Duration window) {
     if (!state.prayerWindowOver(now, window)) return false;
-    _update(state.copyWith(prayerLock: false, clearLockedPrayer: true));
+    _update(state.copyWith(prayerLock: false, clearLockedPrayer: true), lockChanged: true);
     return true;
   }
 
@@ -239,27 +315,37 @@ class WalletController extends Notifier<WalletState> {
     if (notifyType != null) _repo.notifyParent(_childId, notifyType, data: {'taskId': taskId});
   }
 
-  void _update(WalletState next) {
+  /// [lockChanged]: this change starts or ends the prayer lock (only then is the lock synced).
+  void _update(WalletState next, {bool lockChanged = false}) {
     state = next;
     _persist(next);
-    _repo.saveDay(_childId, next.toFamilyDay());
+    _repo.saveDay(_childId, next.toFamilyDay(), lockChanged: lockChanged).catchError((Object e) {
+      debugPrint('day sync failed: $e');
+    });
   }
 
   void _applyRemote(FamilyDay remote) {
     if (remote.day != state.day) return;
+    // The window of a Free prayer lock counts from the later of the device time and the server
+    // time the lock reached Firestore. `prayerLockSinceMs` is not synced (the repository drops it),
+    // so a back-dated device time cannot shorten the lock.
+    final sinceMs = [remote.prayerLockSinceMs, remote.prayerLockAtMs].whereType<int>().fold<int?>(
+        null, (a, b) => a == null || b > a ? b : a);
     state = state.copyWith(
       progress: remote.progress.map((k, v) => MapEntry(k, TaskProgress.fromJson(v))),
       usedMinutes: remote.usedMinutes,
       prayerLock: remote.prayerLock,
       clearLockedPrayer: !remote.prayerLock,
-      prayerLockSince: remote.prayerLock ? _sinceOrNow(remote.prayerLockSinceMs, state.prayerLockSince) : null,
+      prayerLockSince: remote.prayerLock ? _sinceOrNow(sinceMs, state.prayerLockSince) : null,
+      approved: remote.approved,
     );
     _persist(state);
   }
 
   /// Loads [childId]'s saved wallet for [today] (new day → progress resets,
   /// task definitions stay). Also used for the per-child summaries.
-  static WalletState restoreFrom(SharedPreferences prefs, String childId, String today) {
+  /// [serverApprovals]: synced family, where only the server's credits count (R-32).
+  static WalletState restoreFrom(SharedPreferences prefs, String childId, String today, {bool serverApprovals = false}) {
     final raw = prefs.getString(ChildStorage.walletKey(childId));
     final tasksRaw = prefs.getString(ChildStorage.tasksKey(childId));
     final tasks = tasksRaw == null
@@ -276,11 +362,12 @@ class WalletController extends Notifier<WalletState> {
           usedMinutes: day.usedMinutes,
           prayerLock: day.prayerLock,
           prayerLockSince: day.prayerLock ? _sinceOrNow(day.prayerLockSinceMs, null) : null,
+          approved: day.approved ?? (serverApprovals ? const {} : null),
         );
       }
     }
     // New day: everything resets, task definitions stay.
-    return WalletState(day: today, tasks: tasks, progress: const {});
+    return WalletState(day: today, tasks: tasks, progress: const {}, approved: serverApprovals ? const {} : null);
   }
 
   /// A prayer lock saved without a start time (older version or another device) counts from

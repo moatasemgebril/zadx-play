@@ -315,7 +315,7 @@ class _ReferralCard extends ConsumerWidget {
         Row(children: [
           Expanded(child: Text(l10n.invitedOf(Fmt.digits(friends, lang)), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
           Text(
-            status.rewardMonths > 0 ? l10n.rewardMonths(Fmt.digits(status.rewardMonths, lang)) : l10n.noRewardYet,
+            status.rewardMonths > 0 ? l10n.rewardMonths(status.rewardMonths, Fmt.digits(status.rewardMonths, lang)) : l10n.noRewardYet,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.mintText),
           ),
         ]),
