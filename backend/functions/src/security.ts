@@ -145,6 +145,18 @@ export function productInfo(id: unknown): { tier: "basic" | "plus"; app: StoreAp
   return PRODUCTS[id];
 }
 
+/**
+ * Tier lookup for ONE app: our product ids of [app] map to their tier, everything else (including the
+ * other app's products) is null. Used to read verified store data (App Store transactions), so a Zad X
+ * Play product can never verify a Kids purchase or the other way round.
+ */
+export function tierForApp(app: StoreApp): (productId: string) => "basic" | "plus" | null {
+  return (productId: string) => {
+    const info = productInfo(productId);
+    return info && info.app === app ? info.tier : null;
+  };
+}
+
 /** The app whose Play package is [pkg], or null for any other package. */
 export function appForAndroidPackage(pkg: unknown): StoreApp | null {
   if (pkg === ANDROID_PACKAGES.play) return "play";
@@ -506,4 +518,80 @@ export function tokenMigrationAction(familyId: string, token: unknown, ownerFami
   if (typeof token !== "string" || token.length === 0) return "skip";
   if (ownerFamilyId !== undefined && ownerFamilyId !== null && ownerFamilyId !== familyId) return "conflict";
   return "move";
+}
+
+// ---------------------------------------------------------------------------
+// Task approval (approveTask / rejectTask). R-32: minutes are credited only here, by a parent
+// device, never by a child device writing its own day doc.
+// ---------------------------------------------------------------------------
+
+/** Most minutes one approved task can earn (the app's task editor stays well below this). */
+export const MAX_TASK_MINUTES = 120;
+/** Most minutes a child can earn in one day, whatever the parent approves. */
+export const DAILY_EARN_CAP_MINUTES = 600;
+/** Most tasks one child can have (bounds the request and the day doc). */
+export const MAX_TASKS = 50;
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** yyyy-MM-dd that is a real date within [maxDays] of [nowMs] (time zones and queued approvals). */
+export function isApprovalDay(value: unknown, nowMs: number, maxDays = 2): value is string {
+  if (typeof value !== "string" || !DAY_RE.test(value)) return false;
+  const t = Date.parse(`${value}T12:00:00Z`);
+  if (!Number.isFinite(t) || new Date(t).toISOString().slice(0, 10) !== value) return false;
+  return Math.abs(t - nowMs) <= (maxDays * 24 + 12) * 60 * 60_000;
+}
+
+export interface ApprovalRequest {
+  taskId: string;
+  minutes: number;
+  requiredTaskIds: string[];
+  isPrayer: boolean;
+}
+
+/** Validates the approveTask payload (ids, minutes, required list). Null when anything is off. */
+export function parseApprovalRequest(raw: unknown): ApprovalRequest | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (!isSafeId(r.taskId) || r.taskId.length > 64) return null;
+  if (typeof r.minutes !== "number" || !Number.isInteger(r.minutes) || r.minutes < 0 || r.minutes > MAX_TASK_MINUTES) return null;
+  const req = r.requiredTaskIds ?? [];
+  if (!Array.isArray(req) || req.length > MAX_TASKS || !req.every((id) => isSafeId(id) && id.length <= 64)) return null;
+  if (r.isPrayer !== undefined && typeof r.isPrayer !== "boolean") return null;
+  return { taskId: r.taskId, minutes: r.minutes, requiredTaskIds: [...new Set(req as string[])], isPrayer: r.isPrayer === true };
+}
+
+/** Server-only credits on a day doc: { taskId: minutes } (anything malformed is dropped). */
+export function readCredits(raw: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (isSafeId(k) && typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= MAX_TASK_MINUTES) out[k] = v;
+  }
+  return out;
+}
+
+export interface ApprovalOutcome {
+  /** Minutes credited by THIS approval (0 when the task was already approved today or the cap is reached). */
+  credited: number;
+  approved: Record<string, number>;
+  earnedMinutes: number;
+  requiredDone: boolean;
+}
+
+/**
+ * Idempotent: a task is credited at most once per day; the day total never exceeds
+ * [DAILY_EARN_CAP_MINUTES]. requiredDone = every required task has a credit entry.
+ */
+export function applyApproval(previous: unknown, req: ApprovalRequest, cap = DAILY_EARN_CAP_MINUTES): ApprovalOutcome {
+  const approved = readCredits(previous);
+  let credited = 0;
+  if (!Object.prototype.hasOwnProperty.call(approved, req.taskId)) {
+    const total = Object.values(approved).reduce((n, v) => n + v, 0);
+    credited = Math.max(0, Math.min(req.minutes, cap - total));
+    approved[req.taskId] = credited;
+  }
+  const earnedMinutes = Math.min(cap, Object.values(approved).reduce((n, v) => n + v, 0));
+  const requiredDone = req.requiredTaskIds.every((id) => Object.prototype.hasOwnProperty.call(approved, id));
+  return { credited, approved, earnedMinutes, requiredDone };
 }

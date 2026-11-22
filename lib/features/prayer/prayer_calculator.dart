@@ -4,6 +4,47 @@ import '../../data/models/location.dart';
 
 enum Prayer { fajr, dhuhr, asr, maghrib, isha }
 
+/// How Fajr and Isha are found when the twilight angle is reached late or never
+/// (high latitudes in summer). Same definitions as the adhan library (batoulapps
+/// `HighLatitudeRule`) and PrayTimes.org: the night (sunset to next sunrise) is cut into
+/// portions; Fajr is never earlier than `sunrise - portion * night` and Isha never later
+/// than `sunset + portion * night`.
+///
+/// PENDING SCHOLAR REVIEW: which rule a family should use is a fiqh decision.
+enum HighLatitudeRule {
+  /// Fajr and Isha portions are 1/2 of the night.
+  middleOfTheNight,
+
+  /// Fajr and Isha portions are 1/7 of the night.
+  seventhOfTheNight,
+
+  /// Portions are angle / 60 (e.g. 18° gives 18/60 of the night).
+  twilightAngle,
+}
+
+/// The parent's choice in Settings. [auto] = [HighLatitudeRule.twilightAngle] at
+/// latitudes of 48° and above (where Fajr/Isha can disappear in summer), no rule below.
+enum HighLatitudeSetting {
+  auto,
+  middleOfTheNight,
+  seventhOfTheNight,
+  twilightAngle;
+
+  static HighLatitudeSetting parse(String? name) =>
+      values.firstWhere((v) => v.name == name, orElse: () => auto);
+}
+
+/// Latitude from which [HighLatitudeSetting.auto] applies a rule.
+const highLatitudeAutoFromDegrees = 48.0;
+
+/// The rule to compute with for [setting] at [lat] (`null` = no rule).
+HighLatitudeRule? resolveHighLatitudeRule(HighLatitudeSetting setting, double lat) => switch (setting) {
+      HighLatitudeSetting.auto => lat.abs() >= highLatitudeAutoFromDegrees ? HighLatitudeRule.twilightAngle : null,
+      HighLatitudeSetting.middleOfTheNight => HighLatitudeRule.middleOfTheNight,
+      HighLatitudeSetting.seventhOfTheNight => HighLatitudeRule.seventhOfTheNight,
+      HighLatitudeSetting.twilightAngle => HighLatitudeRule.twilightAngle,
+    };
+
 /// Prayer times for one day, as local clock hours (e.g. 15.42 = 15:25).
 class PrayerTimes {
   const PrayerTimes(this.hours);
@@ -42,6 +83,11 @@ class PrayerCalculator {
   static double _fixAngle(double a) => (a % 360 + 360) % 360;
 
   /// [utcOffsetHours] is the city's offset on [date] (DST aware), e.g. 2 for Cairo.
+  ///
+  /// [highLatitudeRule] (see [HighLatitudeRule]) bounds Fajr and Isha by a portion of the
+  /// night, and fills them in when the sun never reaches the twilight angle. `null` = no
+  /// rule (Fajr/Isha are NaN when the angle is not reached). A fixed-interval Isha
+  /// (Umm al-Qura, Qatar) is never changed by the rule, as in the adhan library.
   PrayerTimes compute({
     required DateTime date,
     required double lat,
@@ -49,28 +95,51 @@ class PrayerCalculator {
     required double utcOffsetHours,
     required CalcMethod method,
     int asrFactor = 1,
+    HighLatitudeRule? highLatitudeRule,
   }) {
     final utcMidnight = DateTime.utc(date.year, date.month, date.day);
     final jd = utcMidnight.millisecondsSinceEpoch / 86400000 + 2440587.5 + 0.5 - lng / 360;
     final sun = _sunPosition(jd);
     final noon = 12 - sun.eqt;
 
-    double angleTime(double angle, {required bool beforeNoon}) {
-      final x = (-math.sin(_rad(angle)) - math.sin(_rad(sun.decl)) * math.sin(_rad(lat))) /
-          (math.cos(_rad(sun.decl)) * math.cos(_rad(lat)));
+    double angleTimeFor(({double decl, double eqt}) s, double angle, {required bool beforeNoon}) {
+      final x = (-math.sin(_rad(angle)) - math.sin(_rad(s.decl)) * math.sin(_rad(lat))) /
+          (math.cos(_rad(s.decl)) * math.cos(_rad(lat)));
       if (x < -1 || x > 1) return double.nan; // sun never reaches that angle
       final t = _deg(math.acos(x)) / 15;
-      return noon + (beforeNoon ? -t : t);
+      return 12 - s.eqt + (beforeNoon ? -t : t);
     }
 
-    final fajr = angleTime(method.fajrAngle, beforeNoon: true);
+    double angleTime(double angle, {required bool beforeNoon}) => angleTimeFor(sun, angle, beforeNoon: beforeNoon);
+
+    var fajr = angleTime(method.fajrAngle, beforeNoon: true);
     final dhuhr = noon + 1 / 60; // 1 minute after zenith
     final asrAngle = -_deg(math.atan(1 / (asrFactor + math.tan(_rad((lat - sun.decl).abs())))));
     final asr = angleTime(asrAngle, beforeNoon: false);
     final maghrib = angleTime(0.833, beforeNoon: false);
-    final isha = method.ishaMinutesAfterMaghrib != null
+    var isha = method.ishaMinutesAfterMaghrib != null
         ? maghrib + method.ishaMinutesAfterMaghrib! / 60
         : angleTime(method.ishaAngle!, beforeNoon: false);
+
+    if (highLatitudeRule != null) {
+      final sunrise = angleTime(0.833, beforeNoon: true);
+      // Next morning's sunrise, from the sun's position one day later (adhan: tomorrow's sunrise).
+      final nextSunrise = 24 + angleTimeFor(_sunPosition(jd + 1), 0.833, beforeNoon: true);
+      final night = nextSunrise - maghrib;
+      if (sunrise.isFinite && night.isFinite && night > 0) {
+        final (fajrPortion, ishaPortion) = switch (highLatitudeRule) {
+          HighLatitudeRule.middleOfTheNight => (1 / 2, 1 / 2),
+          HighLatitudeRule.seventhOfTheNight => (1 / 7, 1 / 7),
+          HighLatitudeRule.twilightAngle => (method.fajrAngle / 60, (method.ishaAngle ?? 0) / 60),
+        };
+        final safeFajr = sunrise - fajrPortion * night;
+        if (fajr.isNaN || safeFajr > fajr) fajr = safeFajr;
+        if (method.ishaMinutesAfterMaghrib == null) {
+          final safeIsha = maghrib + ishaPortion * night;
+          if (isha.isNaN || safeIsha < isha) isha = safeIsha;
+        }
+      }
+    }
 
     final adjust = utcOffsetHours - lng / 15;
     return PrayerTimes([fajr, dhuhr, asr, maghrib, isha].map((t) => t + adjust).toList());

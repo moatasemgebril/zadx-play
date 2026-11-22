@@ -11,6 +11,7 @@ import 'core/platform.dart';
 import 'features/settings/settings_controller.dart';
 import 'features/splash/launch_splash.dart';
 import 'services/billing/subscription_service.dart';
+import 'services/family/family_bootstrap.dart';
 import 'services/family/family_repository.dart';
 import 'services/family/firestore_family_repository.dart';
 import 'services/notifications/prayer_notification_service.dart';
@@ -49,15 +50,16 @@ Future<Widget> startUpApp() async {
     debugPrint('Firebase not configured, running locally: $e');
   }
 
-  String? familyId = prefs.getString('family.id');
+  String? familyId = prefs.getString(FamilyBootstrap.idKey);
   if (firebaseReady) {
-    try {
-      familyId = await FirestoreFamilyRepository.ensureFamily(familyId).timeout(_networkStepTimeout);
-      await prefs.setString('family.id', familyId);
-    } catch (e) {
-      debugPrint('Family setup failed, staying local: $e');
-      familyId = null;
-    }
+    // The id is saved locally before the family doc is written (no orphan family on a timeout).
+    familyId = await FamilyBootstrap.run(
+      prefs,
+      newId: FirestoreFamilyRepository.newFamilyId,
+      signIn: FirestoreFamilyRepository.signIn,
+      create: FirestoreFamilyRepository.createFamily,
+      timeout: _networkStepTimeout,
+    );
   }
 
   final container = ProviderContainer(overrides: [

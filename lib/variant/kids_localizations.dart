@@ -202,7 +202,7 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get chooseReciter => _text('chooseReciter');
 
   @override
-  String ayatCount(String n) => _fill('ayatCount', {'n': n});
+  String ayatCount(int count, String n) => _fill('ayatCount', {'n': n});
 
   @override
   String playSurah(String name) => _fill('playSurah', {'name': name});
@@ -287,6 +287,27 @@ mixin KidsL10nOverrides on AppLocalizations {
 
   @override
   String get soundSacredNote => _text('soundSacredNote');
+
+  @override
+  String get highLatitudeRule => _text('highLatitudeRule');
+
+  @override
+  String get highLatitudeAuto => _text('highLatitudeAuto');
+
+  @override
+  String get highLatitudeMiddleOfNight => _text('highLatitudeMiddleOfNight');
+
+  @override
+  String get highLatitudeSeventhOfNight => _text('highLatitudeSeventhOfNight');
+
+  @override
+  String get highLatitudeTwilightAngle => _text('highLatitudeTwilightAngle');
+
+  @override
+  String get highLatitudeHelp => _text('highLatitudeHelp');
+
+  @override
+  String get pendingScholarReview => _text('pendingScholarReview');
 
   @override
   String get featPrayer => _text('featPrayer');

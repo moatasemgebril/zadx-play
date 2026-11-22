@@ -5,11 +5,16 @@
   "engines": { "node": "20" },
   "scripts": {
     "build": "tsc",
-    "test": "tsc && node --test test/security.test.js",
+    "test": "tsc && node --test test/security.test.js test/approvals.test.js test/apple.test.js",
+    "test:rules:deps": "npm install --no-save --no-audit --no-fund @firebase/rules-unit-testing@4 firebase@11",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-zadx \"node --test test/rules.test.js\"",
     "serve": "npm run build && firebase emulators:start --only functions,firestore",
-    "deploy": "firebase deploy --only functions,firestore:rules,firestore:indexes"
+    "deploy": "echo \"Deploy in two steps (backend/README.md, Deploy runbook): npm run deploy:functions, then after the new app is out: npm run deploy:rules\" && exit 1",
+    "deploy:functions": "firebase functions:secrets:get APPLE_PRIVATE_KEY && firebase deploy --only functions,firestore:indexes",
+    "deploy:rules": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
+    "@apple/app-store-server-library": "^1.4.0",
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^6.1.1",
     "googleapis": "^144.0.0"

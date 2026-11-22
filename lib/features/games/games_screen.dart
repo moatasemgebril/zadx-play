@@ -155,7 +155,7 @@ class _LockBanner extends StatelessWidget {
     }
     if (wallet.gamesUnlocked) {
       return Banner2(
-        text: l10n.gamesOpen(Fmt.digits(wallet.remainingMinutes, context.lang)),
+        text: l10n.gamesOpen(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, context.lang)),
         bg: AppColors.mintSoft,
         fg: AppColors.mintText,
         icon: Icons.lock_open_rounded,

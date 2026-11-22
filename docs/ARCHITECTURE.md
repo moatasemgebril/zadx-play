@@ -22,8 +22,8 @@ Parent sets tasks ─┐
                    ▼
 Child taps "Done" / counts reps / finishes adhkar ──► status = pending ──► parent notified
                                                                         │
-Parent approves (PIN) ◄─────────────────────────────────────────────────┘
-        │
+Parent approves (PIN, parent phone) ◄───────────────────────────────────┘
+        │  synced family: approveTask callable (server checks the PARENT role, credits once, daily cap)
         ▼
 earnedMinutes ↑ ─► gamesUnlocked = requiredDone && !prayerLock && remaining > 0
         │
@@ -59,8 +59,34 @@ Pairing (`lib/services/family/pairing_service.dart`, Cloud Functions `createPair
    (its uid is added to `members`; the wallet re-subscribes to the shared day document).
 3. Windows PC → `install.ps1 -PairingCode …` → the guard receives a device id + secret.
 
-All devices share `families/{id}/children/{childId}/days/{yyyy-MM-dd}`; the phone also writes the
-derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
+All devices share `families/{id}/children/{childId}/days/{yyyy-MM-dd}`.
+
+### Task approval (server-side, R-32)
+Approval is decided by the server, not by the PIN on a phone:
+
+| Who | May write on `days/{day}` | Never |
+|---|---|---|
+| Child device (bound in `childDevices`, server-written) | `progress` (submissions: status `pending`, rep counts), `usedMinutes` **up only** (sent as `FieldValue.increment`), start a prayer lock (`prayerLock: true` + `prayerLockAt` = server time), end it only after the Free window (19 min after `prayerLockAt`) | `approved`, `earnedMinutes`, `requiredDone`; delete the day; another child's docs |
+| Parent device (member, not bound) | `progress`, `usedMinutes`, `prayerLock` | `approved`, `earnedMinutes`, `requiredDone` (only via `approveTask`) |
+| `approveTask` Cloud Function | `approved.{taskId}` (minutes, once per task per day, ≤ 120 per task, ≤ 600 per day), `earnedMinutes`, `requiredDone`, `progress.{taskId} = done`, ends the prayer lock for "I prayed" | — |
+
+1. Child taps *Done* / counts reps / *I prayed* → `progress.{taskId}.status = pending` (works offline:
+   Firestore queues the write) → `notifyParent`.
+2. Parent opens the parent dashboard (PIN) on a **parent phone** → *Approve* → `approveTask`
+   (`rejectTask` for *Reject*). The server reads the family doc and refuses any device listed in
+   `childDevices` (role from server data, never from client claims) and runs the credit in a transaction.
+3. Offline parent: the decision shows at once on that phone and waits in `ApprovalQueue`
+   (`lib/services/family/approval_queue.dart`, shared_preferences); it is sent when the wallet
+   rebuilds / the next decision is made online. Permanent refusals are dropped, never retried forever.
+4. Every device applies the result from the day doc: in a synced family a task counts only with an
+   `approved` entry (`WalletState.isApproved`), so a "done" status written by a tampered child client
+   earns nothing. Local-only families (no Firebase) keep approving on the device behind the PIN.
+5. A paired child device cannot approve even with the PIN: the dashboard shows
+   "Approve tasks from the parent phone".
+
+Family `settings` (adhan lock, controlled games, lock mode, time zone, parent pushes) are
+**parent-only** (R-33): only parent devices write the family doc; `_syncSettings` in `lib/app.dart`
+is skipped on a bound child device, and the parent phone writes the defaults on its first start.
 
 ### Family plan & restore on a new phone (fix/family-entitlement-restore)
 - **Plan on every family device.** `verifyPurchase` writes `plan`, `planExpiresAt` (ISO string),
@@ -241,7 +267,8 @@ settings. Lock state stays mirrored to the native stores so it is enforced when 
 - **Firestore offline persistence** on (default on Android/iOS; must be enabled explicitly on web
   — to verify for the current `cloud_firestore` version). Child writes are queued while offline.
 - **Queued parent commands** (`families/{id}/children/{childId}/commands/{id}`: lock, unlock, add
-  minutes, change limits, approve task) carry `issuedAt` (server timestamp) and a parent device id.
+  minutes, change limits) carry `issuedAt` (server timestamp) and a parent device id. Task approval
+  already goes through the `approveTask` callable (see "Task approval" above).
   The child device applies them in order when it sees them and records `appliedAt` locally.
 - **Child progress** (task status, used minutes) is written locally first, then synced.
 - **Conflict rule:** for locks and limits, **the parent's latest command wins** (ordered by server

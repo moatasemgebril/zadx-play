@@ -4,6 +4,7 @@
 #   Push to main   -> light checks + heavy jobs ONLY for the platforms whose files changed.
 #   Nightly (Mon-Sat)  -> light checks + Android emulator, ONLY if main changed in the last ~25 h.
 #   Weekly (Sunday) / manual ("Run workflow") -> everything (emulator, iOS, Windows, real phones);
+#                         manual with only=windows-guard -> just the Windows build (saves macOS minutes);
 #                         the weekly run is skipped if main did not change in the last 8 days.
 #   (iOS = macOS minutes x10: the owner keeps the free plan with a $0 spending limit, so iOS is weekly.)
 # Docs-only changes (*.md, docs/, reports/) do not run CI at all.
@@ -19,6 +20,12 @@ on:
     - cron: "17 10 * * 1-6"   # nightly light + emulator (~2-3 AM Pacific), Mon-Sat
     - cron: "37 10 * * 0"     # weekly full run incl. iOS + Windows, Sunday
   workflow_dispatch:
+    inputs:
+      only:
+        description: "Which heavy jobs to run by hand (all = everything, as before)"
+        type: choice
+        default: all
+        options: [all, windows-guard]
 
 permissions:
   contents: read
@@ -76,7 +83,8 @@ jobs:
     needs: changes
     if: >-
       always() && needs.changes.result != 'failure' &&
-      (github.event_name != 'schedule' || needs.changes.outputs.recent == 'true')
+      (github.event_name != 'schedule' || needs.changes.outputs.recent == 'true') &&
+      (github.event_name != 'workflow_dispatch' || inputs.only != 'windows-guard')
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -162,7 +170,7 @@ jobs:
     if: >-
       always() && needs.flutter.result == 'success' &&
       ((github.event_name == 'schedule' && needs.changes.outputs.recent == 'true') ||
-       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'workflow_dispatch' && inputs.only == 'all') ||
        (github.event_name == 'push' && needs.changes.outputs.app == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -191,7 +199,7 @@ jobs:
     if: >-
       always() && needs.flutter.result == 'success' &&
       ((github.event_name == 'schedule' && needs.changes.outputs.weekly == 'true') ||
-       github.event_name == 'workflow_dispatch')
+       (github.event_name == 'workflow_dispatch' && inputs.only == 'all'))
     runs-on: ubuntu-latest
     env:
       HAS_KEY: ${{ secrets.GCP_SA_KEY != '' }}
@@ -221,7 +229,7 @@ jobs:
       always() &&
       ((github.event_name == 'schedule' && needs.changes.outputs.weekly == 'true' &&
         needs.changes.outputs.recent == 'true') ||
-       github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'workflow_dispatch' && inputs.only == 'all') ||
        (github.event_name == 'push' && needs.changes.outputs.ios == 'true'))
     runs-on: macos-latest
     timeout-minutes: 45
@@ -245,7 +253,8 @@ jobs:
     needs: changes
     if: >-
       always() && needs.changes.result != 'failure' &&
-      (github.event_name != 'schedule' || needs.changes.outputs.recent == 'true')
+      (github.event_name != 'schedule' || needs.changes.outputs.recent == 'true') &&
+      (github.event_name != 'workflow_dispatch' || inputs.only != 'windows-guard')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults: { run: { working-directory: backend/functions } }
@@ -262,6 +271,19 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm audit --audit-level=high
+      # Firestore rules tests (R-32 / R-33) on the emulator. firebase-tools and the rules-testing SDK
+      # are installed after the audit and never saved to package.json: `npm audit` above stays about
+      # what we deploy (the client SDK's grpc-js advisories do not ship to production).
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-v14
+      - run: npm install -g firebase-tools@14 --no-audit --no-fund
+      - run: npm run test:rules:deps
+      - name: Firestore rules tests (emulator)
+        run: npm run test:rules
 
   # 6) Windows "Zad X Guard" builds
   #    Windows minutes cost x2: weekly (Sunday) / manual, or on main when windows_guard/** changed.

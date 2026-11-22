@@ -265,6 +265,20 @@ test("verifiedLine: only a product of the SAME app counts", () => {
   assert.equal(s.verifiedLine("play", undefined), null);
 });
 
+test("tierForApp: only the SAME app's products have a tier (App Store verification)", () => {
+  const play = s.tierForApp("play");
+  const kids = s.tierForApp("kids");
+  assert.equal(play("zadx_plus_yearly"), "plus");
+  assert.equal(play("zadx_basic_monthly"), "basic");
+  assert.equal(play("zadx_kids_plus_yearly"), null);
+  assert.equal(kids("zadx_kids_basic_monthly"), "basic");
+  assert.equal(kids("zadx_plus_yearly"), null);
+  for (const bad of ["", "toString", "__proto__", "zadx_gold_monthly"]) {
+    assert.equal(play(bad), null, bad);
+    assert.equal(kids(bad), null, bad);
+  }
+});
+
 test("packages: only our two apps", () => {
   assert.equal(s.ANDROID_PACKAGES.play, "com.zadx.app");
   assert.equal(s.ANDROID_PACKAGES.kids, "com.zadx.kids");

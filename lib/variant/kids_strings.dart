@@ -112,6 +112,9 @@ const Set<String> islamicOnlyL10nKeys = {
   'computerNote',
   // Settings: adhan lock, prayer calculation, sacred-audio note.
   'lockAtAdhan', 'method', 'asrCalc', 'asrStandard', 'asrHanafi', 'soundSacredNote',
+  // Settings: high-latitude rule for Fajr / Isha and its "pending scholar review" label (#35).
+  'highLatitudeRule', 'highLatitudeAuto', 'highLatitudeMiddleOfNight', 'highLatitudeSeventhOfNight',
+  'highLatitudeTwilightAngle', 'highLatitudeHelp', 'pendingScholarReview',
   // Plans: Islamic features and the Ramadan offer.
   'featPrayer', 'featQuran', 'featAdhkar', 'offer3',
   // Learning games: mosque builder, prophets quiz, scholar-review note. The Arabic Letters game is

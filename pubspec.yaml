@@ -63,3 +63,5 @@ flutter:
     - assets/images/
     - assets/audio/
     - assets/sfx/
+    # Bundled fonts (never downloaded at runtime) + their OFL licence. docs/FONTS.md
+    - assets/fonts/

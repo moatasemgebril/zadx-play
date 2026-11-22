@@ -145,7 +145,7 @@ class ChildrenCard extends ConsumerWidget {
       builder: (ctx) => AlertDialog(
         icon: const Icon(Icons.workspace_premium_rounded, color: AppColors.purple, size: 40),
         title: Text(l10n.childLimitTitle),
-        content: Text(l10n.childLimitBody(Fmt.digits(maxChildren, lang), Fmt.digits(planPlus.maxChildren, lang)),
+        content: Text(l10n.childLimitBody(maxChildren, Fmt.digits(maxChildren, lang), Fmt.digits(planPlus.maxChildren, lang)),
             style: const TextStyle(fontSize: 16, height: 1.5)),
         actions: [
           TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text(l10n.cancelButton)),
@@ -213,6 +213,7 @@ class _ChildRow extends ConsumerWidget {
                       ]),
                       Text(
                         l10n.childSummary(
+                          wallet.remainingMinutes,
                           Fmt.digits(wallet.doneCount, lang),
                           Fmt.digits(wallet.tasks.length, lang),
                           Fmt.digits(wallet.remainingMinutes, lang),

@@ -100,6 +100,33 @@ class SettingsScreen extends ConsumerWidget {
               onSelected: ctrl.setAsrFactor,
             ),
           ),
+          _Section(
+            title: l10n.highLatitudeRule,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ChoiceGrid<HighLatitudeSetting>(
+                  items: HighLatitudeSetting.values,
+                  selected: s.highLatitude,
+                  columns: 2,
+                  label: (v) => switch (v) {
+                    HighLatitudeSetting.auto => l10n.highLatitudeAuto,
+                    HighLatitudeSetting.middleOfTheNight => l10n.highLatitudeMiddleOfNight,
+                    HighLatitudeSetting.seventhOfTheNight => l10n.highLatitudeSeventhOfNight,
+                    HighLatitudeSetting.twilightAngle => l10n.highLatitudeTwilightAngle,
+                  },
+                  onSelected: ctrl.setHighLatitude,
+                ),
+                const SizedBox(height: 8),
+                Text(l10n.highLatitudeHelp, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.pendingScholarReview,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
           ZadCard(
             color: AppColors.cream,
             child: Text(
