@@ -97,7 +97,7 @@ class _ProphetsGameScreenState extends ConsumerState<ProphetsGameScreen> {
             firstTry: _firstTry,
             total: _questions.length,
             onPlayAgain: _start,
-            onBack: () => context.pop(),
+            onBack: () => exitEduGame(context),
             onBuild: () => context.pushReplacement(Routes.eduMasjid),
           ),
       },

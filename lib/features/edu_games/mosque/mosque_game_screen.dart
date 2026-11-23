@@ -75,7 +75,8 @@ class _MosqueGameScreenState extends ConsumerState<MosqueGameScreen> {
                     child: TweenAnimationBuilder<double>(
                       key: ValueKey(built),
                       tween: Tween(begin: 0.96, end: 1),
-                      duration: const Duration(milliseconds: 500),
+                      // Reduce-motion: the new part simply appears.
+                      duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 500),
                       curve: Curves.elasticOut,
                       builder: (context, v, child) => Transform.scale(scale: v, child: child),
                       child: CustomPaint(painter: MosquePainter(built: built)),

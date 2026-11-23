@@ -249,6 +249,7 @@ class _LevelList extends ConsumerWidget {
           title: l10n.eduLevelN(Fmt.digits(level.number, lang)),
           description: descriptions[(level.number - 1) % descriptions.length],
           stars: best[level.number] ?? 0,
+          starsLabel: l10n.eduBestStars(Fmt.digits(best[level.number] ?? 0, lang), Fmt.digits(3, lang)),
           unlocked: progress.isUnlocked(level.number),
           lockedText: l10n.eduLevelLocked,
           onTap: () => onPick(level),
@@ -264,6 +265,7 @@ class _LevelCard extends StatelessWidget {
     required this.title,
     required this.description,
     required this.stars,
+    required this.starsLabel,
     required this.unlocked,
     required this.lockedText,
     required this.onTap,
@@ -272,14 +274,19 @@ class _LevelCard extends StatelessWidget {
   final String title;
   final String description;
   final int stars;
+  final String starsLabel;
   final bool unlocked;
   final String lockedText;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Semantics(
+        container: true,
         button: true,
         enabled: unlocked,
+        label: '$title. ${unlocked ? description : lockedText}. $starsLabel',
+        onTap: unlocked ? onTap : null,
+        excludeSemantics: true,
         child: Material(
           color: unlocked ? Colors.white : const Color(0xFFF1EFF6),
           borderRadius: BorderRadius.circular(22),

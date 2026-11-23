@@ -18,6 +18,8 @@ import '../../services/app_lock/app_lock_service.dart';
 import '../../services/family/children_controller.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../edu_games/letters/letters_progress.dart';
+import '../edu_games/letters/letters_quiz.dart';
 import '../schedule/schedule_controller.dart';
 import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
@@ -137,9 +139,37 @@ class _ZadGameTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(height: 40, child: Center(child: Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)))),
+          // Same height on every tile so the row stays aligned.
+          SizedBox(height: 26, child: game.id == 'letters' ? const _LettersBestStars() : null),
           FilledButton(onPressed: () => context.push(Routes.eduGame(game.id)), child: Text(context.l10n.play)),
         ]),
       );
+}
+
+/// The active child's best stars in Quran Letters (sum of the best per level),
+/// read from the local per-child progress store.
+class _LettersBestStars extends ConsumerWidget {
+  const _LettersBestStars();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lang = context.lang;
+    final best = ref.watch(lettersProgressProvider).values.fold<int>(0, (sum, s) => sum + s);
+    final total = letterLevels.length * 3;
+    return Semantics(
+      key: const Key('lettersBestStars'),
+      label: context.l10n.eduBestStars(Fmt.digits(best, lang), Fmt.digits(total, lang)),
+      excludeSemantics: true,
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.star_rounded, color: AppColors.yellow, size: 20),
+        const SizedBox(width: 2),
+        Text(
+          '${Fmt.digits(best, lang)}/${Fmt.digits(total, lang)}',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.purpleDark),
+        ),
+      ]),
+    );
+  }
 }
 
 class _LockBanner extends StatelessWidget {

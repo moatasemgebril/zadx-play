@@ -621,6 +621,34 @@
     }
   },
   "eduGoBuild": "ابنِ مسجدك بنجومك",
+  "eduExitGame": "اخرج من اللعبة",
+  "eduChoiceCorrect": "{choice}: إجابة صح",
+  "@eduChoiceCorrect": {
+    "placeholders": {
+      "choice": {
+        "type": "String"
+      }
+    }
+  },
+  "eduChoiceTried": "{choice}: جرّب إجابة تانية",
+  "@eduChoiceTried": {
+    "placeholders": {
+      "choice": {
+        "type": "String"
+      }
+    }
+  },
+  "eduBestStars": "أحسن نتيجة: {n} من {total} نجوم",
+  "@eduBestStars": {
+    "placeholders": {
+      "n": {
+        "type": "String"
+      },
+      "total": {
+        "type": "String"
+      }
+    }
+  },
   "lettersLevel1": "أول ١٠ حروف: إيه اسم الحرف؟",
   "lettersLevel2": "١٨ حرف: دوّر على الحرف",
   "lettersLevel3": "حروف الهجاء الثمانية والعشرون كلها",
