@@ -21,9 +21,6 @@ dependencies:
   # Storage
   shared_preferences: ^2.3.3
 
-  # UI
-  google_fonts: ^6.2.1
-
   # Audio (adhan + Quran)
   just_audio: ^0.9.42
   just_audio_windows: ^0.2.2
@@ -67,5 +64,30 @@ flutter:
     - assets/images/
     - assets/audio/
     - assets/sfx/
-    # Bundled fonts (never downloaded at runtime) + their OFL licence. docs/FONTS.md
-    - assets/fonts/
+    # Licences of the bundled fonts (shown on the Licences page). docs/FONTS.md
+    - assets/fonts/tajawal/OFL.txt
+    - assets/fonts/baloobhaijaan2/OFL.txt
+    - assets/fonts/amiriquran/OFL.txt
+
+  # Fonts ship inside the app and are never downloaded at runtime (child privacy, offline).
+  # Source, licence and SHA-256 of every file: docs/FONTS.md. Keep in sync with AppFonts.files.
+  fonts:
+    - family: Tajawal
+      fonts:
+        - asset: assets/fonts/tajawal/Tajawal-Regular.ttf
+        - asset: assets/fonts/tajawal/Tajawal-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/tajawal/Tajawal-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/tajawal/Tajawal-ExtraBold.ttf
+          weight: 800
+        - asset: assets/fonts/tajawal/Tajawal-Black.ttf
+          weight: 900
+    - family: Baloo Bhaijaan 2
+      fonts:
+        # Upstream variable font (wght 400-800). Only used at 800 (AppTheme.display sets the axis).
+        - asset: assets/fonts/baloobhaijaan2/BalooBhaijaan2-VariableFont_wght.ttf
+          weight: 800
+    - family: Amiri Quran
+      fonts:
+        - asset: assets/fonts/amiriquran/AmiriQuran-Regular.ttf
