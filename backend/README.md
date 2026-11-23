@@ -103,3 +103,9 @@ It moves each token to `purchases/{sha256}` + `families/{id}/private/billing` an
 - Max 3 friends per year → 2 / 4 / 6 free months.
 - Android: the referrer's subscription is extended with `subscriptions.defer`.
 - iOS: send a one-time **offer code** (TODO).
+
+## Firestore rules tests (R-32 / R-33)
+`functions/test/rules.test.js` runs against the Firestore emulator in the CI `backend` job (every PR).
+Locally (Java 11+ and `npm i -g firebase-tools@14`), from `backend/functions`:
+`npm run test:rules:deps && npm run test:rules`. The test SDKs are installed with `--no-save`, so
+`npm audit` in CI covers only the deployed dependencies. Run them after any change to `firestore.rules`.
