@@ -35,8 +35,49 @@ void main() {
         'members': ['parent', 'child-phone'],
       };
 
+  group('separate entitlements per app (Zad X Play / Zad X Kids)', () {
+    final until = t0.add(const Duration(days: 20)).toIso8601String();
+    Entitlement parse(Map<String, dynamic> d, String app) => parseFamilyEntitlement(d, now: () => t0, app: app);
+
+    test('a Kids plan never unlocks Zad X Play', () {
+      final d = {
+        'plans': {
+          'kids': {'plan': 'plus', 'planExpiresAt': until, 'inTrial': false},
+        },
+      };
+      expect(parse(d, 'kids').effectiveTier, PlanTier.plus);
+      expect(parse(d, 'play').isFree, isTrue);
+    });
+
+    test('a Play plan (also one bought before Zad X Kids) never unlocks Kids', () {
+      final legacy = {'plan': 'basic', 'planExpiresAt': until, 'inTrial': false};
+      expect(parse(legacy, 'play').effectiveTier, PlanTier.basic);
+      expect(parse(legacy, 'kids').isFree, isTrue);
+      expect(parse({...legacy, 'planApp': 'kids'}, 'play').isFree, isTrue);
+    });
+
+    test('a family with both apps gets each app its own tier', () {
+      final d = {
+        'plan': 'basic',
+        'planExpiresAt': until,
+        'planApp': 'play',
+        'plans': {
+          'play': {'plan': 'basic', 'planExpiresAt': until},
+          'kids': {'plan': 'plus', 'planExpiresAt': until, 'inTrial': true},
+        },
+      };
+      expect(parse(d, 'play').effectiveTier, PlanTier.basic);
+      expect(parse(d, 'kids').effectiveTier, PlanTier.plus);
+      expect(parse(d, 'kids').inTrial, isTrue);
+    });
+
+    test('this build reads its own app', () {
+      expect(currentStoreApp, anyOf('play', 'kids'));
+    });
+  });
+
   group('parseFamilyEntitlement (fields written by verifyPurchase)', () {
-    Entitlement parse(Map<String, dynamic> d) => parseFamilyEntitlement(d, now: () => t0);
+    Entitlement parse(Map<String, dynamic> d) => parseFamilyEntitlement(d, now: () => t0, app: 'play');
 
     test('active plus / basic', () {
       expect(parse(doc('plus', const Duration(days: 20))).effectiveTier, PlanTier.plus);

@@ -9,7 +9,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- No location permission: removed 2026-11-22 (unused; Families policy) until the
+         location review in docs/LOCATION_PRIVACY.md is signed off. -->
 
     <!-- Android 11+: declare the games we launch/check instead of QUERY_ALL_PACKAGES -->
     <queries>
@@ -78,6 +79,15 @@
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
         <receiver android:name=".PrayerLockReceiver" android:exported="false" />
+
+        <!-- Zad X Kids schedules: a time / time zone changed by hand cannot end bedtime; the parent
+             is alerted (ClockChangeReceiver). Both are protected system broadcasts. -->
+        <receiver android:name=".ClockChangeReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Optional uninstall protection, enabled by the parent with the PIN + disclosure.
              No device policies (see res/xml/zadx_device_admin.xml). Exported because Android

@@ -80,6 +80,10 @@ object AppLockChannel {
                         allowedPackages = call.argument<List<String>>("allowedPackages") ?: emptyList(),
                         allowMessaging = call.argument<Boolean>("allowMessaging") ?: true,
                         prayerAutoEndMinutes = call.argument<Int>("prayerAutoEndMinutes") ?: 0,
+                        baseLocked = call.argument<Boolean>("baseLocked") ?: (call.argument<Boolean>("locked") ?: true),
+                        baseReason = call.argument<String>("baseReason") ?: reason,
+                        schedules = scheduleWindows(call.argument<List<Any?>>("schedules")),
+                        scheduleTimeZone = call.argument<String>("scheduleTimeZone"),
                     )
                     // Flutter is the source of truth for the prayer lock once it is running; the native
                     // auto-end timer (Free) stays anchored to when this lock started (elapsed time).
@@ -148,11 +152,15 @@ object AppLockChannel {
                     result.success(null)
                 }
 
+                // IANA id of the phone's time zone, stored with the schedules when the parent saves them.
+                "deviceTimeZone" -> result.success(LockStore.deviceTimeZone())
+
                 "protectionStatus" -> {
                     val service = isAccessibilityEnabled(context)
                     if (service) LockStore.markServiceEnabled(context)
                     val admin = ZadXDeviceAdminReceiver.isActive(context)
                     if (admin) LockStore.markAdminEnabled(context, true)
+                    val clockChanged = LockStore.clockChanged(context)
                     result.success(
                         mapOf(
                             "platform" to "android",
@@ -163,12 +171,14 @@ object AppLockChannel {
                             "settingsLock" to LockStore.settingsLock(context),
                             "uninstallGuard" to LockStore.uninstallGuard(context),
                             "windowSeconds" to LockStore.parentWindowSecondsLeft(context),
+                            "clockChanged" to clockChanged,
                             "tamper" to LockRules.tamperReasons(
                                 serviceEverEnabled = LockStore.serviceEverEnabled(context),
                                 serviceEnabled = service,
                                 uninstallGuard = LockStore.uninstallGuard(context),
                                 adminEverEnabled = LockStore.adminEverEnabled(context),
                                 adminActive = admin,
+                                clockChanged = clockChanged,
                             ),
                         ),
                     )
@@ -208,6 +218,18 @@ object AppLockChannel {
             }
         }
     }
+
+    /** Zad X Kids schedules from Flutter: [{kind, start, end, days}] (see ScheduledLock.toNative). */
+    private fun scheduleWindows(raw: List<Any?>?): List<LockRules.ScheduleWindow> =
+        (raw ?: emptyList()).mapNotNull { item ->
+            val m = item as? Map<*, *> ?: return@mapNotNull null
+            val kind = m["kind"] as? String ?: return@mapNotNull null
+            val start = (m["start"] as? Number)?.toInt() ?: return@mapNotNull null
+            val end = (m["end"] as? Number)?.toInt() ?: return@mapNotNull null
+            val days = (m["days"] as? List<*>)?.mapNotNull { (it as? Number)?.toInt() }?.filter { it in 1..7 }?.toSet() ?: emptySet()
+            if (kind !in LockRules.SCHEDULE_KINDS || start !in 0 until 24 * 60 || end !in 0 until 24 * 60) return@mapNotNull null
+            LockRules.ScheduleWindow(kind, start, end, days)
+        }
 
     private fun openStore(context: Context, pkg: String?) {
         if (pkg == null) return

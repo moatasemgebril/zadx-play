@@ -122,9 +122,12 @@ object LockRules {
         uninstallGuard: Boolean,
         adminEverEnabled: Boolean,
         adminActive: Boolean,
+        clockChanged: Boolean = false,
     ): List<String> = buildList {
         if (serviceEverEnabled && !serviceEnabled) add("accessibility_off")
         if (uninstallGuard && adminEverEnabled && !adminActive) add("device_admin_off")
+        // Zad X Kids: the time / time zone was moved by hand while schedules are on (see [trustedClock]).
+        if (clockChanged) add("clock_changed")
     }
 
     /**
@@ -242,4 +245,131 @@ object LockRules {
         val age = nowElapsed - ownForegroundAtElapsed
         return fromZadX && age in 0..PLAY_SHEET_WINDOW_MS
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Zad X Kids schedules (docs/decisions/ZADX-KIDS-VARIANT.md). Mirrors `ScheduledLock.activeAt` /
+    // `activeScheduledLock` in lib/features/schedule/scheduled_lock.dart: keep both in sync.
+    // ---------------------------------------------------------------------------------------------
+
+    /** Schedule kinds by priority (the first active one is the lock reason). */
+    val SCHEDULE_KINDS: List<String> = listOf("bedtime", "study", "reading")
+
+    /**
+     * One lock window in local time. [start]/[end] = minutes after midnight; `end < start` crosses
+     * midnight. [days] = ISO weekdays (1 = Monday … 7 = Sunday) on which the window STARTS.
+     */
+    data class ScheduleWindow(val kind: String, val start: Int, val end: Int, val days: Set<Int>)
+
+    /** ISO weekday (1 = Monday … 7 = Sunday) from `Calendar.DAY_OF_WEEK` (1 = Sunday … 7 = Saturday). */
+    fun isoWeekday(calendarDayOfWeek: Int): Int = ((calendarDayOfWeek + 5) % 7) + 1
+
+    fun scheduleActive(w: ScheduleWindow, minuteOfDay: Int, isoWeekday: Int): Boolean {
+        if (w.kind !in SCHEDULE_KINDS || w.start == w.end || w.days.isEmpty()) return false
+        val yesterday = if (isoWeekday == 1) 7 else isoWeekday - 1
+        return if (w.end > w.start) {
+            isoWeekday in w.days && minuteOfDay >= w.start && minuteOfDay < w.end
+        } else {
+            (isoWeekday in w.days && minuteOfDay >= w.start) || (yesterday in w.days && minuteOfDay < w.end)
+        }
+    }
+
+    /** The kind of the schedule locking the device now (bedtime > study > reading), or null. */
+    fun activeSchedule(windows: List<ScheduleWindow>, minuteOfDay: Int, isoWeekday: Int): String? =
+        windows.filter { scheduleActive(it, minuteOfDay, isoWeekday) }
+            .minByOrNull { SCHEDULE_KINDS.indexOf(it.kind) }
+            ?.kind
+
+    /**
+     * The schedule locking the device at the instant [epochMs], read in [zone] (the time zone the
+     * parent saved the schedules in, not the phone's current one: changing the phone's time zone
+     * cannot move bedtime).
+     */
+    fun activeScheduleAt(windows: List<ScheduleWindow>, epochMs: Long, zone: java.util.TimeZone): String? {
+        if (windows.isEmpty()) return null
+        val cal = java.util.Calendar.getInstance(zone).apply { timeInMillis = epochMs }
+        val minute = cal.get(java.util.Calendar.HOUR_OF_DAY) * 60 + cal.get(java.util.Calendar.MINUTE)
+        return activeSchedule(windows, minute, isoWeekday(cal.get(java.util.Calendar.DAY_OF_WEEK)))
+    }
+
+    /**
+     * Schedule lock decision with the clock checks: the schedule active at the [trusted] instant in the
+     * parent's [parentZone]. While the clock looks tampered, a schedule active by the phone's own wall
+     * clock / zone also keeps the lock on (moving the clock can never open a lock, only keep one).
+     */
+    fun activeScheduleChecked(
+        windows: List<ScheduleWindow>,
+        trusted: ClockState,
+        parentZone: java.util.TimeZone,
+        deviceWallMs: Long,
+        deviceZone: java.util.TimeZone,
+    ): String? {
+        activeScheduleAt(windows, trusted.trustedWallMs, parentZone)?.let { return it }
+        return if (trusted.tampered) activeScheduleAt(windows, deviceWallMs, deviceZone) else null
+    }
+
+    /** A valid IANA id, or null (`TimeZone.getTimeZone` silently returns GMT for unknown ids). */
+    fun zoneOrNull(id: String?): java.util.TimeZone? {
+        if (id.isNullOrBlank()) return null
+        val tz = java.util.TimeZone.getTimeZone(id)
+        return if (tz.id == id) tz else null
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Clock tamper (Zad X Kids schedules): a child must not escape bedtime by moving the phone's clock.
+    // Between two checks on the same boot, real time advances exactly like elapsed time since boot
+    // (SystemClock.elapsedRealtime, which the child cannot change). A wall clock that jumped away from
+    // that, while automatic (network) time is off, was set by hand: we keep using the trusted time and
+    // tell the parent.
+    // ---------------------------------------------------------------------------------------------
+
+    /** Wall-clock difference we still accept as drift / a network correction. */
+    const val CLOCK_TOLERANCE_MS = 2 * 60_000L
+
+    /** [trustedWallMs]: our best estimate of real time. [tampered]: the phone's clock is off by hand. */
+    data class ClockState(val trustedWallMs: Long, val tampered: Boolean) {
+        fun offsetFrom(nowWallMs: Long): Long = trustedWallMs - nowWallMs
+    }
+
+    /**
+     * @param anchorTrustedMs trusted time at the last check (null = never checked)
+     * @param anchorElapsed / [anchorBoot] elapsed time and boot count at that check
+     * @param lastOffsetMs trusted − wall at the last check (used after a reboot, when elapsed restarts)
+     * @param autoTime Settings.Global.AUTO_TIME: the phone takes its time from the network, the child
+     *   cannot set it by hand, so the wall clock is trusted again
+     */
+    fun trustedClock(
+        nowWallMs: Long,
+        nowElapsed: Long,
+        boot: Int,
+        anchorTrustedMs: Long?,
+        anchorElapsed: Long,
+        anchorBoot: Int,
+        lastOffsetMs: Long,
+        autoTime: Boolean,
+    ): ClockState {
+        if (autoTime) return ClockState(nowWallMs, false)
+        if (anchorTrustedMs != null && boot == anchorBoot && nowElapsed >= anchorElapsed) {
+            val expected = anchorTrustedMs + (nowElapsed - anchorElapsed)
+            // Always the elapsed-based time, so several small steps add up instead of each being "drift".
+            return ClockState(expected, kotlin.math.abs(expected - nowWallMs) > CLOCK_TOLERANCE_MS)
+        }
+        // Rebooted (elapsed restarted) or first check: keep the last known offset.
+        return ClockState(nowWallMs + lastOffsetMs, kotlin.math.abs(lastOffsetMs) > CLOCK_TOLERANCE_MS)
+    }
+
+    /** Compact storage form: "kind,start,end,1.2.3;kind,…". */
+    fun encodeSchedules(windows: List<ScheduleWindow>): String =
+        windows.joinToString(";") { "${it.kind},${it.start},${it.end},${it.days.sorted().joinToString(".")}" }
+
+    /** Inverse of [encodeSchedules]; malformed entries are dropped. */
+    fun decodeSchedules(encoded: String?): List<ScheduleWindow> =
+        (encoded ?: "").split(";").mapNotNull { entry ->
+            val parts = entry.split(",")
+            if (parts.size != 4) return@mapNotNull null
+            val start = parts[1].toIntOrNull() ?: return@mapNotNull null
+            val end = parts[2].toIntOrNull() ?: return@mapNotNull null
+            if (parts[0] !in SCHEDULE_KINDS || start !in 0 until 24 * 60 || end !in 0 until 24 * 60) return@mapNotNull null
+            val days = parts[3].split(".").mapNotNull { it.toIntOrNull() }.filter { it in 1..7 }.toSet()
+            ScheduleWindow(parts[0], start, end, days)
+        }
 }

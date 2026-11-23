@@ -10,6 +10,11 @@ import '../../data/models/child_profile.dart';
 /// v1: `wallet.state`, `wallet.state.tasks`, `adhkar.counts`
 /// v2: `children.list`, `children.active`, `children.bound`,
 ///     `wallet.child.<id>.state`, `wallet.child.<id>.tasks`, `adhkar.child.<id>.counts`
+///
+/// Learning games (stars, mosque, letters) were shared by all children until
+/// 2026-11-22 (`edu.stars.balance`, `edu.mosque.built`, `edu.letters.best`);
+/// they now live under `edu.child.<id>.*` and [migrateEdu] moves the old shared
+/// values to the active child once.
 class ChildStorage {
   const ChildStorage._();
 
@@ -26,6 +31,14 @@ class ChildStorage {
   static String walletKey(String childId) => 'wallet.child.$childId.state';
   static String tasksKey(String childId) => 'wallet.child.$childId.tasks';
   static String adhkarKey(String childId) => 'adhkar.child.$childId.counts';
+
+  static const legacyEduStarsKey = 'edu.stars.balance';
+  static const legacyEduMosqueKey = 'edu.mosque.built';
+  static const legacyEduLettersKey = 'edu.letters.best';
+
+  static String eduStarsKey(String childId) => 'edu.child.$childId.stars.balance';
+  static String eduMosqueKey(String childId) => 'edu.child.$childId.mosque.built';
+  static String eduLettersKey(String childId) => 'edu.child.$childId.letters.best';
 
   /// Returns the stored children, migrating v1 data into a default child the
   /// first time. Safe to call repeatedly (idempotent) and never throws on
@@ -68,7 +81,29 @@ class ChildStorage {
     prefs
       ..remove(walletKey(childId))
       ..remove(tasksKey(childId))
-      ..remove(adhkarKey(childId));
+      ..remove(adhkarKey(childId))
+      ..remove(eduStarsKey(childId))
+      ..remove(eduMosqueKey(childId))
+      ..remove(eduLettersKey(childId));
+  }
+
+  /// One-time move of the shared (pre per-child) learning-game progress to
+  /// [childId], normally the active child the first time a game loads (on a
+  /// paired child device that is the child it belongs to). All three values move
+  /// together so they always land on the same child. Idempotent: the shared keys
+  /// are deleted afterwards, and a child that already has its own value keeps it.
+  static void migrateEdu(SharedPreferences prefs, String childId) {
+    final stars = prefs.get(legacyEduStarsKey);
+    if (stars is int && !prefs.containsKey(eduStarsKey(childId))) prefs.setInt(eduStarsKey(childId), stars);
+    final built = prefs.get(legacyEduMosqueKey);
+    if (built is int && !prefs.containsKey(eduMosqueKey(childId))) prefs.setInt(eduMosqueKey(childId), built);
+    final best = prefs.get(legacyEduLettersKey);
+    if (best is List && !prefs.containsKey(eduLettersKey(childId))) {
+      prefs.setStringList(eduLettersKey(childId), [for (final e in best) e.toString()]);
+    }
+    for (final k in const [legacyEduStarsKey, legacyEduMosqueKey, legacyEduLettersKey]) {
+      if (prefs.containsKey(k)) prefs.remove(k);
+    }
   }
 
   /// Copies [from] to [to] (unless [to] already has data), then deletes [from].

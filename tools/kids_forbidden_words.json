@@ -1,0 +1,26 @@
+{
+  "_about": "Religious words that must never appear in Zad X Kids text (owner decision 2026-11-22, docs/decisions/ZADX-KIDS-VARIANT.md). The ONLY copy of the list: used by test/kids_variant_test.dart (ARB strings, brand/store config, praise, tasks, schedules) and backend/functions/test/security.test.js (assistant prompt). English entries match whole words, case-insensitive. Arabic entries match whole words too, optionally after the attached prefixes و / ف, then ب / ل / ك, then ال (or لل); an entry that starts with ال needs that article. So 'بسم' does not match 'بسمة' and 'سورة' does not match 'المكسورة'. Inflected forms are listed explicitly (e.g. 'صلاتك'). The Dart test (religiousWordsIn) is the reference; the backend test is stricter (Arabic anywhere). Words left out on purpose because they are also everyday words: 'جزء' (part), 'عيد' (inside 'سعيد'/'بعيد'), 'نبي' (inside 'تنبيه'), 'ذكر' (inside 'تذكير'; 'male'), 'سنة' (year), 'جامع', 'حديث' (inside 'تحديث'), 'قارئ' (reader).",
+  "en": [
+    "quran", "qur'an", "koran", "surah", "surahs", "ayah", "ayat", "verse", "verses",
+    "prayer", "prayers", "pray", "prays", "prayed", "praying", "salah", "salat", "salawat",
+    "adhan", "azan", "athan", "muezzin", "adhkar", "dhikr", "dua",
+    "mosque", "mosques", "masjid", "kaaba", "minaret",
+    "allah", "islam", "islamic", "muslim", "muslims", "prophet", "prophets",
+    "ramadan", "eid", "hadith", "sunnah", "wudu", "jannah",
+    "fajr", "dhuhr", "asr", "maghrib", "isha", "juz",
+    "mashaallah", "masha'allah", "inshaallah", "insha'allah", "subhanallah", "alhamdulillah", "bismillah",
+    "assalamu", "alaikum", "sheikh", "imam", "halal", "haram", "reciter", "reciters", "recitation", "tajweed"
+  ],
+  "ar": [
+    "قرآن", "القران", "سورة", "آية", "آيات",
+    "صلاة", "صلاتك", "صلاتي", "صلاته", "صلاتها", "صلاتنا", "صلوات", "تصلي", "يصلي", "صليت", "صلّي", "صلي",
+    "اتوضى", "اتوضا", "اتوضّى", "اتوضيت", "توضأ", "وضوء", "سجادة",
+    "أذان", "اذان", "الآذان", "مؤذن", "أذكار", "اذكار", "الذكر", "دعاء",
+    "مسجد", "مساجد", "كعبة", "مئذنة", "هلال",
+    "الله", "لله", "إسلام", "اسلام", "مسلم", "مسلمين", "مسلمة", "النبي", "أنبياء", "الأنبياء", "رسول", "ﷺ",
+    "رمضان", "العيد", "الجنة", "ملائكة",
+    "الفجر", "الظهر", "العصر", "المغرب", "العشاء", "جزء عم",
+    "جزاك", "بارك", "مبارك", "تبارك", "سبحان", "الحمد", "الحمدلله", "بسم", "السلام عليكم", "ماشاء", "ماشاءالله", "ما شاء", "إن شاء", "ان شاء",
+    "شيخ", "إمام", "حلال", "حرام", "تلاوة", "ترتيل", "تجويد", "مقرئ"
+  ]
+}

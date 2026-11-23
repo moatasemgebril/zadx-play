@@ -7,7 +7,7 @@ Pricing rationale lives in `docs/marketing/PRICING-STRATEGY.md` (PR docs/pricing
 reuses the agreed prices. Character counts are hand-counted; **re-check in each console** (Arabic
 tashkeel such as ّ and ً counts as a character, so short fields below use none except where noted).
 
-Tags used below: **[A1]–[A9]** = claim needs approval/verification before use (see section 6).
+Tags used below: **[A1]–[A10]** = claim needs approval/verification before use (see section 6).
 
 ---
 
@@ -16,12 +16,47 @@ Tags used below: **[A1]–[A9]** = claim needs approval/verification before use 
 | Field | Limit | Arabic | Chars | English | Chars |
 |---|---|---|---|---|---|
 | App name (both stores) | 30 | Zad X Play | 10 | Zad X Play | 10 |
-| Apple subtitle | 30 | ألعاب بعد الصلاة والمهام | 24 | Games after prayer & tasks | 26 |
-| Play short description | 80 | ألعاب بعد الصلاة والمهام: مواقيت وأذان وقرآن وقفل للألعاب بيد ولي الأمر | 71 | Games unlock after prayer & tasks. Prayer times, adhan, Quran, parent controls | 78 |
+| Apple subtitle | 30 | صلِّ وتعلَّم | 12 | Muslim kids: pray, learn, play | 30 |
+| Play short description | 80 | ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل | 50 | For Muslim kids: games unlock after prayer & tasks. Prayer times, adhan, Quran | 78 |
+| In-app identity line (splash, Help) | — | للأطفال المسلمين | 16 | For Muslim Kids | 15 |
+
+Owner request 2026-11-22: Zad X Play must say clearly that it is **for Muslim kids** (the sister app
+Zad X Kids is the non-religious one for the Western market). The same values are in
+`lib/core/app_config.dart` (`IslamicBrand.storeSubtitle*`, `storeShortDescription*`, `identity*`); the
+character limits are checked by `test/launch_splash_test.dart`. The English full description should open
+with "For Muslim kids"; the Arabic store text does not use «المسلمين» (owner decision 2026-11-22, below).
+
+**Owner decision 2026-11-22 (supersedes the Arabic store values below):** Arabic store text must NOT
+contain «المسلمين». Arabic App Store subtitle = «صلِّ وتعلَّم» (`IslamicBrand.storeSubtitleAr`); the
+Arabic Google Play short description drops «للأطفال المسلمين:» and starts directly with «ألعاب بعد
+الصلاة والمهام…». English stays "Muslim kids: pray, learn, play" / "For Muslim kids: …". The in-app
+identity line «للأطفال المسلمين» (splash, Help → About) is unchanged. Tested in
+`test/launch_splash_test.dart`.
 
 Notes: keep the name clean (Play forbids "free", "no ads", "best", ranking or price words in the title/icon/
-developer name). Do not add "for kids" to any Apple field (guideline 2.3.8 reserves "For Kids"/"For
-Children" for the Kids Category; we plan Lifestyle/Education).
+developer name). **Needs approval [A10]:** Apple guideline 2.3.8 reserves "For Kids"/"For Children" for the
+Kids Category (we plan Lifestyle/Education). The Apple subtitle therefore avoids the exact phrase "For Kids"
+("Muslim kids: pray, learn, play"), but App Review may still read it as child-directed. Fallback if
+rejected: "For Muslim families", keeping "For Muslim kids" in the description and in the app (the Arabic
+subtitle «صلِّ وتعلَّم» has no "kids" wording).
+
+**Apple subtitle (history; English still current) (owner decision 2026-11-22, verified sources):** «للأطفال المسلمين: صلِّ، تعلَّم، والعب» /
+"Muslim kids: pray, learn, play". It replaces "pray, then play" / «صلاة ثم لعب», which put the game as the
+goal of the prayer. Rationale, briefly: parents are told to teach children to pray from age seven (Sunan
+Abi Dawud 495), and rewards to encourage children's worship are permissible as long as the child is taught
+to pray sincerely for Allah and the reward stays secondary (islamqa.info answer 570972,
+https://islamqa.info/ar/answers/570972). The app repeats that after a prayer task: «الصلاة لله، والجائزة
+تشجيعٌ لك». No reviewer sign-off is pending for this line any more.
+
+Length: the English is exactly 30. The Arabic as decided is **37 characters with its tashkeel (33
+without)**, over Apple's 30, so the store value was first «للأطفال المسلمين: صلِّ وتعلَّم» (30; "Play" is already in
+the app name "Zad X Play"). If the owner prefers the full three verbs in Arabic, it fits only in the
+promotional text or the description, not the subtitle.
+~~Owner approved «للأطفال المسلمين: صلِّ وتعلَّم» as the Arabic App Store subtitle on 2026-11-22.~~
+Superseded the same day: the Arabic subtitle is «صلِّ وتعلَّم» (see the owner decision above).
+
+**Identity wording (unified 2026-11-22):** the in-app Arabic identity is «للأطفال المسلمين» (splash,
+Help → About, `IslamicBrand.identityAr`), matching "For Muslim Kids". It is not used in Arabic store fields.
 
 ## 2. Apple promotional text (≤170) and keywords (≤100)
 
@@ -184,7 +219,7 @@ sign-off; no "free"/"No.1"/"best"/"download now" overlay text; same captions in 
 - [ ] Category: Lifestyle or Education (parent is the purchaser/configurer). If we ever pick Kids
       Category: no third-party analytics/ads, and links out, purchases and other distractions behind a
       parental gate (we already gate purchases with the PIN).
-- [ ] 2.3.8: not in Kids Category → no "For Kids"/"For Children" in metadata (none used).
+- [ ] 2.3.8: not in Kids Category → no "For Kids"/"For Children" in metadata. The subtitle says "Muslim kids" (owner request 2026-11-22), see [A10].
 - [ ] 5.1.4: kids' data rules apply regardless of category; App Privacy labels must match the description.
 - [ ] 3.1.2: subscription disclosures + Terms/Privacy links (included).
 - [ ] Family Controls Distribution entitlement approved before any listing shows the lock.
@@ -202,6 +237,7 @@ sign-off; no "free"/"No.1"/"best"/"download now" overlay text; same captions in 
 | A7 | Privacy claims (nickname only, on-device check) | Privacy officer sign-off; privacy policy must say the same. |
 | A8 | Windows Guard, iOS lock | Not yet tested on real devices; drop lines if not shipped at launch. |
 | A9 | Prices | Final per-country tiers pending; trial length conflict (in-app 7-day Plus trial vs 14-day store intro offer in STORE_CHECKLIST) → trial **not mentioned** until decided. |
+| A10 | "For Muslim kids" in the Apple subtitle / description | Owner request 2026-11-22. Apple 2.3.8 risk outside the Kids Category: owner/legal to accept the risk or use the fallback "For Muslim families" / «للأسر المسلمة». Google Play: fine with the Families declaration. Wording "pray, learn, play" decided 2026-11-22 (see section 1); no reviewer sign-off pending. |
 
 Never use: "100% safe", "certified", "COPPA certified/compliant" (PRIVO pending), "scholar approved/
 reviewed", "halal certified", any endorsement by Quran Foundation (attribution line only), location/

@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../router.dart';
 import '../../shared/art/zad_art.dart';
+import '../../shared/widgets/brand_logo.dart';
 import '../tasks/wallet_controller.dart';
 
 /// Header (logo, globe, help, minutes) + bottom navigation shared by the 5 tabs.
@@ -28,15 +29,19 @@ class AppShell extends ConsumerWidget {
       return Badge(isLabelVisible: pending > 0, label: Text(Fmt.digits(pending, context.lang)), child: icon);
     }
 
+    // Same order as the shell branches in router.dart (Zad X Kids has no Quran tab).
     final tabs = <(ZadIconKind, String)>[
-      (ZadIconKind.home, l10n.tabHome),
-      (ZadIconKind.games, l10n.tabGames),
-      (ZadIconKind.quran, l10n.tabQuran),
-      (ZadIconKind.tasks, l10n.tabTasks),
-      (ZadIconKind.parent, l10n.tabParent),
+      for (final tab in shellTabsFor())
+        switch (tab) {
+          ShellTab.home => (ZadIconKind.home, l10n.tabHome),
+          ShellTab.games => (ZadIconKind.games, l10n.tabGames),
+          ShellTab.quran => (ZadIconKind.quran, l10n.tabQuran),
+          ShellTab.tasks => (ZadIconKind.tasks, l10n.tabTasks),
+          ShellTab.parent => (ZadIconKind.parent, l10n.tabParent),
+        },
     ];
     void go(int i) => shell.goBranch(i, initialLocation: i == shell.currentIndex);
-    final header = _Header(remaining: l10n.minutesLeft(Fmt.digits(wallet.remainingMinutes, context.lang)));
+    final header = _Header(remaining: l10n.minutesLeft(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, context.lang)));
 
     return LayoutBuilder(builder: (context, constraints) {
       // Tablets, laptops, desktops and the web: side rail + centered content.
@@ -107,10 +112,7 @@ class _Header extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + 10, 16, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: Image.asset('assets/images/zadx_logo.jpg', width: 150, height: 99, fit: BoxFit.cover, semanticLabel: 'Zad X'),
-          ),
+          const BrandLogo(width: 150, height: 99),
           const Spacer(),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Row(children: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../services/audio/sfx_service.dart';
@@ -39,10 +40,12 @@ class SoundSettingsCard extends ConsumerWidget {
           // Let the parent hear the new level.
           onChangeEnd: (_) => ref.read(sfxProvider).play(Sfx.star),
         ),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Text(l10n.soundSacredNote, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
-        ),
+        // Zad X Kids has no adhan or recitation to keep quiet for.
+        if (!kIsKids)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(l10n.soundSacredNote, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+          ),
       ]),
     );
   }

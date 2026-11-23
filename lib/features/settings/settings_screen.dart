@@ -1,30 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:timezone/timezone.dart' as tz;
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../data/catalog/locations.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../prayer/city_time_zone.dart';
 import '../prayer/prayer_calculator.dart';
+import '../prayer/prayer_schedule.dart';
 import '../prayer/prayer_providers.dart';
 import '../../core/utils/formatters.dart';
 import '../parent/devices_card.dart';
 import 'settings_controller.dart';
 
+/// True when, in the next 7 days, the chosen high-latitude rule puts Isha at or after the next
+/// Fajr in the selected city (see `planAdhanNotifications`).
+bool _ishaMeetsFajrSoon(AppSettings s) {
+  final city = cityById(s.cityId);
+  final rule = resolveHighLatitudeRule(s.highLatitude, city.lat);
+  if (rule == null) return false;
+  final location = cityLocation(city);
+  final today = tz.TZDateTime.now(location);
+  for (var i = 0; i < 7; i++) {
+    final d = DateTime.utc(today.year, today.month, today.day + i);
+    if (ishaReachesNextFajr(
+      location: location,
+      year: d.year,
+      month: d.month,
+      day: d.day,
+      lat: city.lat,
+      lng: city.lng,
+      method: methodById(s.methodId),
+      highLatitudeRule: rule,
+      hijriAdjustmentDays: s.hijriAdjustmentDays,
+    )) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Language, country, city and prayer calculation (globe icon in the header).
+/// Zad X Kids: language and family linking only (no location, no prayer calculation).
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final lang = context.lang;
     final s = ref.watch(settingsProvider);
     final ctrl = ref.read(settingsProvider.notifier);
-    final times = ref.watch(prayerTimesProvider);
 
-    final langItems = [...supportedLanguages, ...upcomingLanguages.keys];
+    final langItems = [...languagePickerOrder, ...upcomingLanguages.keys];
     String langLabel(String code) => switch (code) {
           'ar' => 'العربية',
           'en' => 'English',
@@ -47,6 +77,21 @@ class SettingsScreen extends ConsumerWidget {
               onSelected: ctrl.setLanguage,
             ),
           ),
+          if (!kIsKids) ..._prayerSections(context, ref),
+          const JoinFamilyCard(),
+        ]),
+      ),
+    );
+  }
+
+  /// Country, city and prayer calculation: Zad X Play only.
+  List<Widget> _prayerSections(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final lang = context.lang;
+    final s = ref.watch(settingsProvider);
+    final ctrl = ref.read(settingsProvider.notifier);
+    final times = ref.watch(prayerTimesProvider);
+    return [
           _Section(
             title: l10n.country,
             child: ChoiceGrid<String>(
@@ -85,6 +130,41 @@ class SettingsScreen extends ConsumerWidget {
               onSelected: ctrl.setAsrFactor,
             ),
           ),
+          _Section(
+            title: l10n.highLatitudeRule,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ChoiceGrid<HighLatitudeSetting>(
+                  items: HighLatitudeSetting.values,
+                  selected: s.highLatitude,
+                  columns: 2,
+                  label: (v) => switch (v) {
+                    HighLatitudeSetting.auto => l10n.highLatitudeAuto,
+                    HighLatitudeSetting.relativeEstimation45 => l10n.highLatitudeRelative45,
+                    HighLatitudeSetting.angle12 => l10n.highLatitudeAngle12,
+                    HighLatitudeSetting.middleOfTheNight => l10n.highLatitudeMiddleOfNight,
+                    HighLatitudeSetting.seventhOfTheNight => l10n.highLatitudeSeventhOfNight,
+                    HighLatitudeSetting.twilightAngle => l10n.highLatitudeTwilightAngle,
+                  },
+                  onSelected: ctrl.setHighLatitude,
+                ),
+                const SizedBox(height: 8),
+                Text(l10n.highLatitudeHelp, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+                const SizedBox(height: 4),
+                Text(
+                  l10n.highLatitudeSource,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.muted),
+                ),
+                // With a night-portion rule, Isha can fall at/after the next Fajr in summer: its adhan
+                // is skipped (never Isha itself) and the parent is told combining is permitted.
+                if (_ishaMeetsFajrSoon(s)) ...[
+                  const SizedBox(height: 8),
+                  Banner2(text: l10n.ishaCombineNote, bg: AppColors.pendingBg, fg: AppColors.pendingText, icon: Icons.info_outline_rounded),
+                ],
+              ],
+            ),
+          ),
           ZadCard(
             color: AppColors.cream,
             child: Text(
@@ -93,10 +173,7 @@ class SettingsScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const JoinFamilyCard(),
-        ]),
-      ),
-    );
+    ];
   }
 }
 

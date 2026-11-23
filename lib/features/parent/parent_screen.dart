@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/catalog/games.dart';
+import '../../data/catalog/locations.dart';
 import '../../data/models/plan.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
@@ -16,6 +18,8 @@ import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_calculator.dart';
 import '../prayer/prayer_providers.dart';
+import '../reading/reading_setup_card.dart';
+import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../settings/sound_settings_card.dart';
 import '../subscription/paid_feature_gate.dart';
@@ -43,7 +47,11 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
+          // Zad X Play only: Zad X Kids has no prayer tasks, prayer lock or prayer times.
+          if (!kIsKids) const _HijriAdjustmentCard(),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),
+          const SizedBox(height: 12),
+          const PaidFeatureGate(feature: AppFeature.tasksRewards, child: ReadingSetupCard()),
           const SizedBox(height: 12),
           const DevicesCard(),
           const SizedBox(height: 12),
@@ -51,6 +59,11 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const DeviceLockCard(),
           const SizedBox(height: 12),
+          // Zad X Kids: study / bedtime / reading schedules replace the prayer lock.
+          if (kIsKids) ...[
+            const ScheduleSettingsCard(),
+            const SizedBox(height: 12),
+          ],
           // Settings for the parent only + prevent deleting Zad X (docs/decisions/DEVICE-PROTECTION.md).
           const ProtectionCard(),
           const SizedBox(height: 12),
@@ -141,8 +154,9 @@ class _ApprovalsCard extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: () {
-                  ref.read(walletProvider.notifier).reject(t.id);
-                  showToast(context, l10n.toastRejected(t.title.of(lang)));
+                  // Synced family: a paired child device cannot decide, even with the PIN (R-32).
+                  final ok = ref.read(walletProvider.notifier).reject(t.id);
+                  showToast(context, ok ? l10n.toastRejected(t.title.of(lang)) : l10n.approveOnParentPhone);
                 },
                 child: Text(l10n.reject),
               ),
@@ -150,14 +164,50 @@ class _ApprovalsCard extends ConsumerWidget {
               FilledButton(
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 46)),
                 onPressed: () {
-                  ref.read(walletProvider.notifier).approve(t.id);
-                  showToast(context, l10n.toastApproved(t.title.of(lang)));
+                  final ok = ref.read(walletProvider.notifier).approve(t.id);
+                  showToast(context, ok ? l10n.toastApproved(t.title.of(lang)) : l10n.approveOnParentPhone);
                 },
                 child: Text(l10n.approve),
               ),
             ]),
           ),
       ]),
+    );
+  }
+}
+
+/// Parent only (inside [ParentGate]): moves the Umm al-Qura Hijri date by one day for the
+/// Ramadan Isha rule (Isha = Maghrib + 120 min), for families whose Ramadan started a day
+/// before or after the printed calendar. Shown only for a method with a Ramadan rule.
+/// docs/decisions/PRAYER-TIMES-ACCURACY.md section 3.
+class _HijriAdjustmentCard extends ConsumerWidget {
+  const _HijriAdjustmentCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final s = ref.watch(settingsProvider);
+    if (methodById(s.methodId).ishaMinutesAfterMaghribInRamadan == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ZadCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(l10n.hijriAdjustTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text(l10n.hijriAdjustHelp, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+          const SizedBox(height: 8),
+          ChoiceGrid<int>(
+            items: const [1, 0, -1],
+            selected: s.hijriAdjustmentDays,
+            label: (d) => switch (d) {
+              1 => l10n.hijriAdjustEarlier,
+              -1 => l10n.hijriAdjustLater,
+              _ => l10n.hijriAdjustNone,
+            },
+            onSelected: ref.read(settingsProvider.notifier).setHijriAdjustmentDays,
+          ),
+        ]),
+      ),
     );
   }
 }
@@ -172,9 +222,10 @@ class _ConsolesCard extends ConsumerWidget {
     final l10n = context.l10n;
     final lang = context.lang;
     final wallet = ref.watch(walletProvider);
-    final times = ref.watch(prayerTimesProvider);
     final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
-    final windows = playWindows(times);
+    // Adhan alerts and play windows between prayers: Zad X Play only.
+    final prayerAlert = !kIsKids && wallet.prayerLock;
+    final windows = kIsKids ? const <({Prayer after, double start, double end})>[] : playWindows(ref.watch(prayerTimesProvider));
 
     String label(Prayer p) => switch (p) {
           Prayer.dhuhr => l10n.afterDhuhr,
@@ -190,14 +241,14 @@ class _ConsolesCard extends ConsumerWidget {
         if (!hasFeature(ent, AppFeature.consoleLinks))
           FilledButton(onPressed: () => context.push(Routes.subscription), child: Text(l10n.plusName))
         else ...[
-          Banner2(text: l10n.psEarned(Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
+          Banner2(text: l10n.psEarned(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, lang)), bg: AppColors.cream, fg: AppColors.ink),
           const SizedBox(height: 12),
           _CompanionSection(
             icon: Icons.sports_esports_rounded,
             color: AppColors.psBlue,
             title: l10n.playstation,
             subtitle: l10n.psSub,
-            alert: wallet.prayerLock ? l10n.psAlertAdhan : null,
+            alert: prayerAlert ? l10n.psAlertAdhan : null,
             buttonText: l10n.psOpen,
             note: l10n.psScheduleNote,
             onOpen: () => ref.read(appLockServiceProvider).openCompanionApp(CompanionApp.playStation),
@@ -208,11 +259,12 @@ class _ConsolesCard extends ConsumerWidget {
             color: const Color(0xFF107C10),
             title: l10n.xboxWindows,
             subtitle: l10n.msSub,
-            alert: wallet.prayerLock ? l10n.msAlertAdhan : null,
+            alert: prayerAlert ? l10n.msAlertAdhan : null,
             buttonText: l10n.msOpen,
             note: l10n.msScheduleNote,
             onOpen: () => ref.read(appLockServiceProvider).openCompanionApp(CompanionApp.microsoftFamily),
           ),
+          if (windows.isNotEmpty) ...[
           const SizedBox(height: 12),
           Text(l10n.psSchedule, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 6),
@@ -227,6 +279,7 @@ class _ConsolesCard extends ConsumerWidget {
                     textDirection: TextDirection.ltr, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
               ]),
             ),
+          ],
         ],
       ]),
     );
@@ -342,9 +395,9 @@ class _SettingsCard extends ConsumerWidget {
     return ZadCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.settings, style: Theme.of(context).textTheme.titleMedium),
-        _switchRow(l10n.lockAtAdhan, s.lockAtAdhan, ctrl.setLockAtAdhan),
+        if (!kIsKids) _switchRow(l10n.lockAtAdhan, s.lockAtAdhan, ctrl.setLockAtAdhan),
         _switchRow(l10n.psNotifyTasks, s.notifyParentOnTasks, ctrl.setNotifyOnTasks),
-        _switchRow(l10n.psNotifyAdhan, s.notifyParentOnAdhan, ctrl.setNotifyOnAdhan),
+        if (!kIsKids) _switchRow(l10n.psNotifyAdhan, s.notifyParentOnAdhan, ctrl.setNotifyOnAdhan),
       ]),
     );
   }

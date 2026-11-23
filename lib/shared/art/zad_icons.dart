@@ -6,6 +6,10 @@ import 'art_shapes.dart';
 
 /// The Zad X icon set: original, rounded, two-tone, drawn in code on a 24×24
 /// grid. Shapes are objects and architecture only (no figures).
+///
+/// Zad X Kids ([artReligiousMotifs] false): [ZadIconKind.prayer] is drawn as an alarm clock
+/// (a schedule) and [ZadIconKind.quran] as an open storybook without the stand. No dome, no
+/// crescent, no Arabic script.
 enum ZadIconKind { home, games, tasks, quran, prayer, parent, settings, help, star }
 
 /// Colour treatment of an icon.
@@ -133,9 +137,12 @@ class _ZadIconState extends State<ZadIcon> with SingleTickerProviderStateMixin {
 }
 
 class ZadIconPainter extends CustomPainter {
-  const ZadIconPainter(this.kind, this.colors);
+  const ZadIconPainter(this.kind, this.colors, {this.religiousMotifs = artReligiousMotifs});
   final ZadIconKind kind;
   final ZadIconColors colors;
+
+  /// False in Zad X Kids: neutral shapes for the prayer and Quran icons.
+  final bool religiousMotifs;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -149,9 +156,9 @@ class ZadIconPainter extends CustomPainter {
       case ZadIconKind.tasks:
         _tasks(canvas);
       case ZadIconKind.quran:
-        _quran(canvas);
+        religiousMotifs ? _quran(canvas) : _storybook(canvas);
       case ZadIconKind.prayer:
-        _prayer(canvas);
+        religiousMotifs ? _prayer(canvas) : _clock(canvas);
       case ZadIconKind.parent:
         _parent(canvas);
       case ZadIconKind.settings:
@@ -250,6 +257,52 @@ class ZadIconPainter extends CustomPainter {
     canvas.drawRRect(ArtShapes.arch(const Rect.fromLTWH(10.2, 16, 3.6, 5.5)), _fill(colors.detail));
   }
 
+  /// Zad X Kids: an open storybook (no stand), with a bookmark ribbon.
+  void _storybook(Canvas canvas) {
+    final left = Path()
+      ..moveTo(12, 6.5)
+      ..quadraticBezierTo(7.5, 4.2, 2.6, 5.4)
+      ..lineTo(2.6, 18.2)
+      ..quadraticBezierTo(7.5, 17, 12, 19.4)
+      ..close();
+    final right = Path()
+      ..moveTo(12, 6.5)
+      ..quadraticBezierTo(16.5, 4.2, 21.4, 5.4)
+      ..lineTo(21.4, 18.2)
+      ..quadraticBezierTo(16.5, 17, 12, 19.4)
+      ..close();
+    _shape(canvas, left, colors.primary);
+    _shape(canvas, right, colors.primary);
+    final lines = _stroke(colors.detail, 1);
+    for (final y in [9.0, 11.6, 14.2]) {
+      canvas.drawLine(Offset(4.8, y), Offset(10, y + 0.6), lines);
+      canvas.drawLine(Offset(14, y + 0.6), Offset(19.2, y), lines);
+    }
+    final ribbon = Path()
+      ..moveTo(15.6, 5.6)
+      ..lineTo(17.8, 5.6)
+      ..lineTo(17.8, 10.4)
+      ..lineTo(16.7, 9.4)
+      ..lineTo(15.6, 10.4)
+      ..close();
+    canvas.drawPath(ribbon, _fill(colors.accent));
+  }
+
+  /// Zad X Kids: a friendly alarm clock (schedules).
+  void _clock(Canvas canvas) {
+    final bells = _fill(colors.accent);
+    canvas.drawCircle(const Offset(6.2, 5.4), 2.6, bells);
+    canvas.drawCircle(const Offset(17.8, 5.4), 2.6, bells);
+    final legs = _stroke(colors.outline.a > 0 ? colors.outline : colors.accent, 1.8);
+    canvas.drawLine(const Offset(7.6, 19.2), const Offset(5.8, 21.6), legs);
+    canvas.drawLine(const Offset(16.4, 19.2), const Offset(18.2, 21.6), legs);
+    _shape(canvas, Path()..addOval(Rect.fromCircle(center: const Offset(12, 13), radius: 8)), colors.primary);
+    canvas.drawCircle(const Offset(12, 13), 5.6, _fill(colors.detail));
+    final hands = _stroke(colors.primary, 1.6);
+    canvas.drawLine(const Offset(12, 13), const Offset(12, 9.4), hands);
+    canvas.drawLine(const Offset(12, 13), const Offset(14.6, 14.4), hands);
+  }
+
   void _parent(Canvas canvas) {
     final shield = Path()
       ..moveTo(12, 2.4)
@@ -312,5 +365,6 @@ class ZadIconPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ZadIconPainter oldDelegate) => oldDelegate.kind != kind || oldDelegate.colors != colors;
+  bool shouldRepaint(ZadIconPainter oldDelegate) =>
+      oldDelegate.kind != kind || oldDelegate.colors != colors || oldDelegate.religiousMotifs != religiousMotifs;
 }

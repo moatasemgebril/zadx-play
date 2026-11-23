@@ -40,4 +40,7 @@ final protectionMonitorProvider = Provider<void>((ref) {
   unawaited(report());
   final listener = AppLifecycleListener(onResume: () => unawaited(report()));
   ref.onDispose(listener.dispose);
+  // Zad X Kids: the time / time zone was changed by hand while schedules are on (ClockChangeReceiver
+  // -> lock coordinator). Report right away instead of on the next resume.
+  ref.listen<int>(clockChangedTickProvider, (_, __) => unawaited(report()));
 });

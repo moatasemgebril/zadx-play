@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import '../../core/app_variant.dart';
 import '../../data/catalog/locations.dart';
 import '../settings/settings_controller.dart';
+import 'city_time_zone.dart';
 import 'prayer_calculator.dart';
 
 /// Emits once a minute so "next prayer" and locks stay current.
@@ -19,10 +21,16 @@ class CityNow {
   double get hours => local.hour + local.minute / 60;
 }
 
+/// Zad X Kids has no city setting (no prayer times): "now" is the device's local time, which is
+/// also what its schedules and the native blockers use.
 final cityNowProvider = Provider<CityNow>((ref) {
   ref.watch(clockProvider);
+  if (kIsKids) {
+    final now = DateTime.now();
+    return CityNow(DateTime(now.year, now.month, now.day, now.hour, now.minute), now.timeZoneOffset.inMinutes / 60);
+  }
   final city = cityById(ref.watch(settingsProvider.select((s) => s.cityId)));
-  final now = tz.TZDateTime.now(tz.getLocation(city.timeZone));
+  final now = tz.TZDateTime.now(cityLocation(city));
   return CityNow(
     DateTime(now.year, now.month, now.day, now.hour, now.minute),
     now.timeZoneOffset.inMinutes / 60,
@@ -40,6 +48,8 @@ final prayerTimesProvider = Provider<PrayerTimes>((ref) {
     utcOffsetHours: now.utcOffsetHours,
     method: methodById(s.methodId),
     asrFactor: s.asrFactor,
+    highLatitudeRule: resolveHighLatitudeRule(s.highLatitude, city.lat),
+    hijriAdjustmentDays: s.hijriAdjustmentDays,
   );
 });
 

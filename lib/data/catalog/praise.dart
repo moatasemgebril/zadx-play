@@ -1,8 +1,10 @@
 import 'dart:math';
 
+import '../../core/app_variant.dart';
 import '../models/child_profile.dart';
 
-/// A short Islamic praise phrase shown after the child completes a task.
+/// A short praise phrase shown after the child completes a task (Islamic in Zad X Play,
+/// neutral in Zad X Kids: see [activePraisePhrases]).
 class PraisePhrase {
   const PraisePhrase({required this.masculine, required this.feminine, required this.en});
 
@@ -44,9 +46,23 @@ const praisePhrases = <PraisePhrase>[
   PraisePhrase(masculine: 'نفع الله بك!', feminine: 'نفع الله بكِ!', en: 'May Allah benefit others through you!'),
 ];
 
+/// Neutral praise of Zad X Kids (owner decision 2026-11-22): no religious wording, gender-aware
+/// in Arabic like the Islamic list. Scanned for religious words by test/kids_variant_test.dart.
+const kidsPraisePhrases = <PraisePhrase>[
+  PraisePhrase(masculine: 'أحسنتَ!', feminine: 'أحسنتِ!', en: 'Great job!'),
+  PraisePhrase(masculine: 'برافو عليك!', feminine: 'برافو عليكِ!', en: 'Bravo!'),
+  PraisePhrase(masculine: 'شاطر! كمِّل كده', feminine: 'شاطرة! كمِّلي كده', en: 'Well done! Keep it up!'),
+  PraisePhrase(masculine: 'إنت بطل!', feminine: 'إنتِ بطلة!', en: "You're a star!"),
+  PraisePhrase(masculine: 'فخورين بيك!', feminine: 'فخورين بيكِ!', en: "We're proud of you!"),
+  PraisePhrase(masculine: 'شغل جميل يا بطل!', feminine: 'شغل جميل يا بطلة!', en: 'Amazing work!'),
+];
+
+/// The praise list of this build.
+const activePraisePhrases = kIsKids ? kidsPraisePhrases : praisePhrases;
+
 /// Picks a random praise phrase, never the same one twice in a row.
 class PraisePicker {
-  PraisePicker([Random? random, this.phrases = praisePhrases]) : _random = random ?? Random();
+  PraisePicker([Random? random, this.phrases = activePraisePhrases]) : _random = random ?? Random();
 
   final Random _random;
   final List<PraisePhrase> phrases;

@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/app_config.dart';
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
+import '../../data/catalog/games.dart';
 import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/billing/subscription_service.dart';
@@ -55,8 +57,11 @@ class SubscriptionScreen extends ConsumerWidget {
                 Banner2(text: l10n.offer1, bg: AppColors.mintSoft, fg: AppColors.mintText),
                 const SizedBox(height: 6),
                 Banner2(text: l10n.offer2, bg: AppColors.purpleSoft, fg: AppColors.purpleDark),
-                const SizedBox(height: 6),
-                Banner2(text: l10n.offer3, bg: const Color(0xFFFFF4D6), fg: AppColors.pendingText),
+                // Ramadan offer: Zad X Play only.
+                if (!kIsKids) ...[
+                  const SizedBox(height: 6),
+                  Banner2(text: l10n.offer3, bg: const Color(0xFFFFF4D6), fg: AppColors.pendingText),
+                ],
               ]),
             ),
             const SizedBox(height: 14),
@@ -135,15 +140,17 @@ class _PlanCard extends ConsumerWidget {
     // One checklist for all three cards, driven by the feature matrix in plan.dart.
     final features = <(String, Object)>[
       (l10n.featLock, has(AppFeature.appLock)),
-      (l10n.featPrayer, has(AppFeature.prayerTimes) && has(AppFeature.adhan)),
-      (l10n.featQuran, has(AppFeature.quran)),
+      // Islamic features: Zad X Play only (not part of any Zad X Kids plan).
+      if (!kIsKids) (l10n.featPrayer, has(AppFeature.prayerTimes) && has(AppFeature.adhan)),
+      if (!kIsKids) (l10n.featQuran, has(AppFeature.quran)),
       (l10n.featTasks, has(AppFeature.tasksRewards)),
       // No "N games" here: with the device-wide lock every non-allowed app is locked
       // (maxGames only limits the Games screen picker).
       (l10n.featGames, has(AppFeature.tasksRewards)),
-      (l10n.featEduGames, has(AppFeature.eduGames)),
+      // Zad X Kids has no built-in learning game yet: do not advertise one.
+      if (activeZadGames.isNotEmpty) (l10n.featEduGames, has(AppFeature.eduGames)),
       (l10n.featExercises, has(AppFeature.exercises)),
-      (l10n.featAdhkar, has(AppFeature.adhkar)),
+      if (!kIsKids) (l10n.featAdhkar, has(AppFeature.adhkar)),
       (l10n.featCustomTasks, has(AppFeature.customUnlockTasks)),
       (l10n.featKids, Fmt.digits(plan.maxChildren, lang)),
       (
@@ -315,7 +322,7 @@ class _ReferralCard extends ConsumerWidget {
         Row(children: [
           Expanded(child: Text(l10n.invitedOf(Fmt.digits(friends, lang)), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800))),
           Text(
-            status.rewardMonths > 0 ? l10n.rewardMonths(Fmt.digits(status.rewardMonths, lang)) : l10n.noRewardYet,
+            status.rewardMonths > 0 ? l10n.rewardMonths(status.rewardMonths, Fmt.digits(status.rewardMonths, lang)) : l10n.noRewardYet,
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.mintText),
           ),
         ]),

@@ -2,6 +2,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/backend.dart';
 
 @immutable
@@ -26,6 +27,8 @@ class AssistantService {
         .call({
       'question': question,
       'language': language,
+      // Zad X Kids gets a system prompt with no religious content (backend/functions/src/index.ts).
+      'variant': appVariant.name,
       'history': history.takeLast(8).map((m) => m.toJson()).toList(),
     });
     return (res.data as Map)['answer'] as String;

@@ -2,8 +2,11 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/app_variant.dart';
 import '../../data/catalog/locations.dart';
 import '../../services/app_lock/lock_rules.dart';
+import '../prayer/hijri_ramadan.dart';
+import '../prayer/prayer_calculator.dart';
 
 /// Overridden in main() with the real instance.
 final sharedPrefsProvider = Provider<SharedPreferences>(
@@ -12,17 +15,34 @@ final sharedPrefsProvider = Provider<SharedPreferences>(
 
 const supportedLanguages = ['ar', 'en'];
 
-/// Languages shown as "coming soon" in the picker.
-const upcomingLanguages = {'fr': 'Français', 'tr': 'Türkçe', 'ur': 'اردو', 'id': 'Indonesia'};
+/// Languages shown as "coming soon" in the picker. Zad X Kids (US / Europe) lists Western
+/// languages; Zad X Play lists the languages of its Muslim audience.
+const upcomingLanguages = kIsKids
+    ? {'es': 'Español', 'fr': 'Français', 'de': 'Deutsch'}
+    : {'fr': 'Français', 'tr': 'Türkçe', 'ur': 'اردو', 'id': 'Indonesia'};
+
+/// Order of the language picker: English first in Zad X Kids (Arabic stays optional).
+const languagePickerOrder = kIsKids ? ['en', 'ar'] : supportedLanguages;
+
+/// The UI language on first run (nothing saved yet).
+/// * Zad X Kids: always English (US / Europe market, owner decision 2026-11-22); the parent can
+///   still pick Arabic in Settings.
+/// * Zad X Play: the device language when supported, else Arabic.
+String defaultLanguageFor(AppVariant variant, String deviceLanguage) {
+  if (variant == AppVariant.kids) return 'en';
+  return supportedLanguages.contains(deviceLanguage) ? deviceLanguage : 'ar';
+}
 
 @immutable
 class AppSettings {
   const AppSettings({
-    this.language = 'ar',
+    this.language = kIsKids ? 'en' : 'ar',
     this.countryId = 'eg',
     this.cityId = 'cairo',
     this.methodId = 'egypt',
     this.asrFactor = 1,
+    this.highLatitude = HighLatitudeSetting.auto,
+    this.hijriAdjustmentDays = 0,
     this.muezzinId = 'madinah_rec',
     this.reciterId = 'afasy',
     this.lockAtAdhan = true,
@@ -46,6 +66,13 @@ class AppSettings {
   final String cityId;
   final String methodId;
   final int asrFactor;
+
+  /// High-latitude rule for Fajr/Isha (ECFR, see docs/decisions/PRAYER-TIMES-ACCURACY.md). See [HighLatitudeSetting].
+  final HighLatitudeSetting highLatitude;
+
+  /// Parent's Hijri date adjustment for the Umm al-Qura Ramadan Isha rule: -1, 0 or +1 day
+  /// (lib/features/prayer/hijri_ramadan.dart).
+  final int hijriAdjustmentDays;
   final String muezzinId;
   final String reciterId;
   final bool lockAtAdhan;
@@ -92,6 +119,8 @@ class AppSettings {
     String? cityId,
     String? methodId,
     int? asrFactor,
+    HighLatitudeSetting? highLatitude,
+    int? hijriAdjustmentDays,
     String? muezzinId,
     String? reciterId,
     bool? lockAtAdhan,
@@ -115,6 +144,8 @@ class AppSettings {
         cityId: cityId ?? this.cityId,
         methodId: methodId ?? this.methodId,
         asrFactor: asrFactor ?? this.asrFactor,
+        highLatitude: highLatitude ?? this.highLatitude,
+        hijriAdjustmentDays: hijriAdjustmentDays ?? this.hijriAdjustmentDays,
         muezzinId: muezzinId ?? this.muezzinId,
         reciterId: reciterId ?? this.reciterId,
         lockAtAdhan: lockAtAdhan ?? this.lockAtAdhan,
@@ -149,6 +180,8 @@ class SettingsController extends Notifier<AppSettings> {
       cityId: p.getString('${_k}city') ?? d.cityId,
       methodId: p.getString('${_k}method') ?? d.methodId,
       asrFactor: p.getInt('${_k}asr') ?? d.asrFactor,
+      highLatitude: HighLatitudeSetting.parse(p.getString('${_k}highLatitude')),
+      hijriAdjustmentDays: clampHijriAdjustment(p.getInt('${_k}hijriAdjust') ?? d.hijriAdjustmentDays),
       muezzinId: p.getString('${_k}muezzin') ?? d.muezzinId,
       reciterId: p.getString('${_k}reciter') ?? d.reciterId,
       lockAtAdhan: p.getBool('${_k}lockAtAdhan') ?? d.lockAtAdhan,
@@ -168,10 +201,8 @@ class SettingsController extends Notifier<AppSettings> {
     );
   }
 
-  String _deviceLanguage() {
-    final code = WidgetsBinding.instance.platformDispatcher.locale.languageCode;
-    return supportedLanguages.contains(code) ? code : 'ar';
-  }
+  String _deviceLanguage() =>
+      defaultLanguageFor(appVariant, WidgetsBinding.instance.platformDispatcher.locale.languageCode);
 
   void setLanguage(String code) {
     if (!supportedLanguages.contains(code)) return;
@@ -209,6 +240,18 @@ class SettingsController extends Notifier<AppSettings> {
   void setAsrFactor(int factor) {
     state = state.copyWith(asrFactor: factor);
     _prefs.setInt('${_k}asr', factor);
+  }
+
+  void setHighLatitude(HighLatitudeSetting v) {
+    state = state.copyWith(highLatitude: v);
+    _prefs.setString('${_k}highLatitude', v.name);
+  }
+
+  /// Parent only (inside the parent area): see [AppSettings.hijriAdjustmentDays].
+  void setHijriAdjustmentDays(int days) {
+    final v = clampHijriAdjustment(days);
+    state = state.copyWith(hijriAdjustmentDays: v);
+    _prefs.setInt('${_k}hijriAdjust', v);
   }
 
   void setMuezzin(String id) {

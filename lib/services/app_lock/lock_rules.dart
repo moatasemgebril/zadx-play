@@ -115,6 +115,7 @@ class ProtectionStatus {
     this.authorization = false,
     this.authorizationEverApproved = false,
     this.windowSeconds = 0,
+    this.clockChanged = false,
   });
 
   final String platform; // android | ios | none
@@ -125,6 +126,9 @@ class ProtectionStatus {
   final bool authorization;
   final bool authorizationEverApproved;
   final int windowSeconds;
+
+  /// Zad X Kids (Android): schedules are on and the phone's time / time zone was changed by hand.
+  final bool clockChanged;
 
   static const none = ProtectionStatus(platform: 'none');
 
@@ -140,6 +144,7 @@ class ProtectionStatus {
       authorization: b('authorization'),
       authorizationEverApproved: b('authorizationEverApproved'),
       windowSeconds: raw['windowSeconds'] is int ? raw['windowSeconds'] as int : 0,
+      clockChanged: b('clockChanged'),
     );
   }
 
@@ -153,4 +158,5 @@ List<String> protectionTamperReasons(ProtectionStatus s, {required bool uninstal
       if (s.serviceEverEnabled && !s.accessibility) 'accessibility_off',
       if (uninstallGuard && s.adminEverEnabled && !s.deviceAdmin) 'device_admin_off',
       if (s.authorizationEverApproved && !s.authorization) 'screen_time_off',
+      if (s.clockChanged) 'clock_changed',
     ];

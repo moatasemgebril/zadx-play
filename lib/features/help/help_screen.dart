@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_config.dart';
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/plan.dart';
 import '../../services/assistant/assistant_service.dart';
 import '../subscription/paid_feature_gate.dart';
+import 'assistant_parent_lock.dart';
 import '../../shared/art/zad_art.dart';
+import '../../shared/widgets/brand_logo.dart';
 import '../../shared/widgets/zad_widgets.dart';
 
 class HelpScreen extends StatelessWidget {
@@ -44,7 +48,12 @@ class HelpScreen extends StatelessWidget {
       body: ZadSceneBackground(
         scene: ZadScene.parent,
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          const PaidFeatureGate(feature: AppFeature.assistant, child: _AssistantCard()),
+          // About Zad X Play: who it is for (owner request 2026-11-22). Not in Zad X Kids.
+          if (!kIsKids) ...[const _AboutCard(), const SizedBox(height: 14)],
+          // Parent PIN first (child safety), then the plan check.
+          const AssistantParentLock(
+            child: PaidFeatureGate(feature: AppFeature.assistant, child: _AssistantCard()),
+          ),
           const SizedBox(height: 14),
           ZadCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -199,5 +208,27 @@ class _Bubble extends StatelessWidget {
           ),
           child: Text(text, style: TextStyle(fontSize: 16, height: 1.5, color: fromUser ? Colors.white : AppColors.ink)),
         ),
+      );
+}
+
+/// Zad X Play intro: logo, name and the identity line ("For Muslim Kids") in the app language.
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context) => ZadCard(
+        child: Row(children: [
+          const BrandLogo(width: 84, height: 56),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(IslamicBrand.storeName, style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                IslamicBrand.identityFor(context.lang),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.purpleDark),
+              ),
+            ]),
+          ),
+        ]),
       );
 }
