@@ -1,41 +1,59 @@
 # Fonts — bundled only, never downloaded
 
 Zad X Play is a children's app, so the child's device must not contact Google's font servers
-(COPPA / GDPR-K: the request reveals the device IP and app use). Since 2026-11-22:
+(COPPA / GDPR-K: the request reveals the device IP and app use) and the app must work offline.
 
-- `GoogleFonts.config.allowRuntimeFetching = false` is set by `AppFonts.configure()`
-  (`lib/core/theme/app_theme.dart`), which `AppTheme.light()` calls before any text is drawn.
-  `test/fonts_privacy_test.dart` fails if this is ever turned back on.
-- google_fonts only uses font files found in the app's assets (`assets/fonts/`, declared in `pubspec.yaml`).
+## Current state (2026-11-23, branch `fix/bundled-fonts`)
 
-## Current state (2026-11-22)
+- The font files are **bundled** in `assets/fonts/<family>/` and declared under `flutter: fonts:` in
+  `pubspec.yaml`. The theme uses plain `fontFamily:` text styles (`lib/core/theme/app_theme.dart`,
+  `AppFonts` / `AppTheme`).
+- The **`google_fonts` package was removed** from `pubspec.yaml`, so no code path can fetch a font at runtime.
+- Each family's own `OFL.txt` (with its copyright line) ships next to its files and is listed on the
+  app's Licences page (`AppFonts.configure()` → `LicenseRegistry`).
+- `test/bundled_fonts_test.dart` (no network) fails if google_fonts comes back, if a declared font file
+  is missing or not a TrueType file, if `AppFonts.files` and pubspec disagree, or if a licence file is missing.
 
-The font files could **not** be downloaded in the build environment (the network proxy blocks
-`raw.githubusercontent.com`, `fonts.google.com` and `fonts.gstatic.com`). So `AppFonts.bundled` is
-`false` and the app uses the **platform fonts** (the device's default Latin and Arabic fonts) with the same sizes and
-weights. Nothing is fetched.
+Weights bundled: the app uses `FontWeight.w600`–`w900` plus the Material defaults (400/500), so Tajawal ships
+400, 500, 700, 800, 900 (w600 resolves to 700). Baloo Bhaijaan 2 is only published upstream as a variable
+font; it is bundled unmodified, declared as weight 800, and `AppTheme.display` sets `FontVariation('wght', 800)`.
+Amiri Quran has a single Regular style.
 
-Retried on 2026-11-22 during PR integration (zadx-cto-architect): `raw.githubusercontent.com` and
-`fonts.gstatic.com` are still blocked (proxy 403). **Owner action:** add the six TTFs from a machine
-with normal internet access, following the steps below.
+## Font file registry
 
-Known effect: Quran verses and adhan phrases are shown in the platform Arabic font instead of
-Amiri Quran until the files are added (listed for the Islamic Content Reviewer in
-docs/localization/REVIEW-QUEUE.md).
+All files were downloaded on 2026-11-23 from the official google/fonts repository, branch `main`
+(`https://raw.githubusercontent.com/google/fonts/main/ofl/<family>/<file>`), unmodified.
+Licence for all: **SIL Open Font License 1.1** (OFL-1.1). Attribution duty: ship the OFL text with the
+fonts (done: per-family `OFL.txt`, also shown on the Licences page). Fonts may not be sold by themselves.
 
-## How to add the fonts (one commit)
+| Bundled file | Upstream file (`ofl/…`) | Bytes | SHA-256 |
+|---|---|---|---|
+| `assets/fonts/tajawal/Tajawal-Regular.ttf` | `tajawal/Tajawal-Regular.ttf` | 60364 | `6882892da3e03527d5db2bbab3b48bde6ef2e878a43f522d1a4eebda90010a19` |
+| `assets/fonts/tajawal/Tajawal-Medium.ttf` | `tajawal/Tajawal-Medium.ttf` | 62280 | `1ff8bd943a261c9dd7906bdb1993cab87b6d925a7fb5f848cdb51ed301531090` |
+| `assets/fonts/tajawal/Tajawal-Bold.ttf` | `tajawal/Tajawal-Bold.ttf` | 59988 | `0342ab6b74b6bd1b4b5bf7beda45a9734a2b3147a31e8a3a45b6a3417a52d9d7` |
+| `assets/fonts/tajawal/Tajawal-ExtraBold.ttf` | `tajawal/Tajawal-ExtraBold.ttf` | 59648 | `3d1298b747c22579f9e1bdeb0d4165064cb17f7e66145e2f43f9deb12ad7a2cf` |
+| `assets/fonts/tajawal/Tajawal-Black.ttf` | `tajawal/Tajawal-Black.ttf` | 59028 | `da582a579d3200869535dc994d2349608a8582042f8776b3679b157015db287c` |
+| `assets/fonts/tajawal/OFL.txt` | `tajawal/OFL.txt` | 4464 | `9b584984f9db0ee30347391a76eff9c0a6b03dc450c3c6afe3757a2cb3a4db87` |
+| `assets/fonts/baloobhaijaan2/BalooBhaijaan2-VariableFont_wght.ttf` | `baloobhaijaan2/BalooBhaijaan2[wght].ttf` (renamed only: no brackets in asset paths) | 285508 | `3e9f07fbc796c0ddcb3e6e0aa26f9c86741d9f5b7f5cb72f4ed3c06e55a19336` |
+| `assets/fonts/baloobhaijaan2/OFL.txt` | `baloobhaijaan2/OFL.txt` | 4384 | `ad09b05dc8bc678c9daf7c4c5f7ef1f55e5726127f4330b2e98e40b9dffcb860` |
+| `assets/fonts/amiriquran/AmiriQuran-Regular.ttf` | `amiriquran/AmiriQuran-Regular.ttf` | 136920 | `e2a47644762d16bdfb6d33e0d8db8c6ff30beae84150ef5a705316bbd829455c` |
+| `assets/fonts/amiriquran/OFL.txt` | `amiriquran/OFL.txt` | 4392 | `b32e3b24e2a943b8acbf6ab8d5499bfed737d5176091b7341a8c1e7fbcdeb0fa` |
 
-1. Download each family from Google Fonts (fonts.google.com → family → "Get font" → "Download all"),
-   or from the google/fonts GitHub repository (`ofl/tajawal`, `ofl/baloobhaijaan2`, `ofl/amiriquran`).
-2. Copy these **static** files into `assets/fonts/` (google_fonts matches by exact file name;
-   for Baloo Bhaijaan 2 use the file from the zip's `static/` folder, not the variable `[wght]` file):
-   - `Tajawal-Regular.ttf`, `Tajawal-Medium.ttf`, `Tajawal-Bold.ttf`, `Tajawal-ExtraBold.ttf`
-   - `BalooBhaijaan2-ExtraBold.ttf`
-   - `AmiriQuran-Regular.ttf`
-   (The list is `AppFonts.files`; the test checks every file exists once `bundled` is true.)
-3. Open each family's `OFL.txt` and paste its copyright line(s) at the top of `assets/fonts/OFL.txt`
-   (the licence text itself is already there).
-4. In `lib/core/theme/app_theme.dart` set `static final bool bundled = true;`. This also registers
-   `assets/fonts/OFL.txt` on the app's Licences page (`LicenseRegistry`).
-5. Run `flutter test test/fonts_privacy_test.dart`; it checks that the flag and the files agree.
-6. Update the google_fonts rows in docs/ADDONS-REGISTRY.md.
+Copyright lines (copied from each upstream `OFL.txt`, not typed from memory):
+
+- Tajawal: "Copyright 2018 Boutros International. (http://www.boutrosfonts.com)"
+- Baloo Bhaijaan 2: "Copyright 2019 The Baloo 2 Project Authors (https://github.com/EkType/Baloo2)"
+- Amiri Quran: "Copyright 2010-2022 The Amiri Quran Project Authors (https://github.com/aliftype/amiri)."
+
+Total font payload (TTF files): 723,736 bytes (about 0.72 MB).
+
+To verify: `sha256sum assets/fonts/*/*`.
+
+## Adding or changing a font
+
+1. Download from the google/fonts repository (`ofl/<family>/`), unmodified, plus that family's `OFL.txt`.
+2. Put the files in `assets/fonts/<family>/`, declare them under `flutter: fonts:` in `pubspec.yaml`,
+   add the paths to `AppFonts.files` and the licence to `AppFonts.licences` + `flutter: assets:`.
+3. Add a row (source, bytes, SHA-256) to the registry above.
+4. Run `flutter test test/bundled_fonts_test.dart`.
+5. Never re-add `google_fonts` or any runtime font download.
