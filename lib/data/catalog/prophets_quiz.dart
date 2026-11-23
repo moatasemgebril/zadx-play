@@ -217,8 +217,10 @@ const prophetQuestions = <ProphetQuestion>[
     ),
     answer: Localized('نملة', 'An ant'),
     wrong: [Localized('أسد', 'A lion'), Localized('سمكة', 'A fish')],
+    // Indirect narration on purpose (review 2026-11-22): the earlier direct quote changed the
+    // ayah's wording (مساكنكم → بيوتكم). Quran 27:18–19: https://quran.com/27/18-19
     fact: Localized(
-      'قالت نملة للنمل: ادخلوا بيوتكم حتى لا يحطمكم سليمان عليه السلام وجنوده وهم لا يشعرون، فتبسّم سليمان عليه السلام ضاحكًا من قولها.',
+      'حذّرت نملةٌ النملَ وطلبت منهم أن يدخلوا مساكنهم حتى لا يحطمهم سليمان عليه السلام وجنوده وهم لا يشعرون، فتبسّم سليمان عليه السلام ضاحكًا من قولها.',
       'An ant told the other ants to go into their homes so that Sulaiman (peace be upon him) and his soldiers would not crush them without noticing, and Sulaiman (peace be upon him) smiled at what she said.',
     ),
     refs: [QuranRef(27, _naml, 18, 19)],
@@ -232,8 +234,10 @@ const prophetQuestions = <ProphetQuestion>[
     ),
     answer: Localized('الهدهد', 'The hoopoe'),
     wrong: [Localized('النسر', 'The eagle'), Localized('الببغاء', 'The parrot')],
+    // Indirect narration on purpose (review 2026-11-22): no reworded direct speech of a prophet.
+    // Quran 27:20: https://quran.com/27:20
     fact: Localized(
-      'تفقّد سليمان عليه السلام الطير، فسأل: لماذا لا أرى الهدهد؟',
+      'تفقّد سليمان عليه السلام الطير، فلم يرَ الهدهد بينها، فسأل عنه.',
       'Sulaiman (peace be upon him) checked on the birds and asked why he could not see the hoopoe.',
     ),
     refs: [QuranRef(27, _naml, 20)],
@@ -253,7 +257,9 @@ const prophetQuestions = <ProphetQuestion>[
   ProphetQuestion(
     id: 'yunus_whale',
     scene: ProphetScene.whale,
-    question: Localized('ماذا التقم يونس عليه السلام في البحر؟', 'What swallowed Yunus (peace be upon him) in the sea?'),
+    // Grammar fix (review 2026-11-22): "ماذا التقم يونس" read as "what did Yunus swallow";
+    // the whale is the subject (Quran 37:142: https://quran.com/saffat/142).
+    question: Localized('ما الذي التقمَ يونسَ عليه السلام في البحر؟', 'What swallowed Yunus (peace be upon him) in the sea?'),
     answer: Localized('حوت كبير', 'A big fish (a whale)'),
     wrong: [Localized('سلطعون', 'A crab'), Localized('نورس', 'A seagull')],
     fact: Localized(
