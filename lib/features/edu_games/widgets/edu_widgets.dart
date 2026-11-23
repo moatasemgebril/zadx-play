@@ -2,11 +2,13 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/l10n_ext.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../router.dart';
 import '../../../shared/art/zad_art.dart';
 import '../../../shared/widgets/zad_widgets.dart';
 import '../stars_controller.dart';
@@ -16,6 +18,9 @@ import '../stars_controller.dart';
 /// competes with the question the child is reading.
 ///
 /// [tint] is kept for API compatibility; the scene now sets the colours.
+///
+/// The app bar always has an "Exit game" button: children leave a game freely,
+/// with no confirmation, even when the game was opened without a page behind it.
 class EduGameScaffold extends StatelessWidget {
   const EduGameScaffold({super.key, required this.title, required this.child, this.tint = const Color(0xFFF4EEFF)});
 
@@ -28,11 +33,31 @@ class EduGameScaffold extends StatelessWidget {
         appBar: AppBar(
           backgroundColor: AppColors.navy,
           foregroundColor: Colors.white,
+          leading: IconButton(
+            key: const Key('eduExitGame'),
+            tooltip: context.l10n.eduExitGame,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            icon: const BackButtonIcon(),
+            onPressed: () => exitEduGame(context),
+          ),
           title: Text(title, style: AppTheme.display(22, color: Colors.white)),
           actions: const [StarBalanceChip(), SizedBox(width: 12)],
         ),
         body: ZadSceneBackground(scene: ZadScene.games, animate: false, child: SafeArea(child: child)),
       );
+}
+
+/// Leaves a learning game: back to the previous page, or to the games hub when
+/// there is none (e.g. the game was opened from a link).
+void exitEduGame(BuildContext context) {
+  final router = GoRouter.maybeOf(context);
+  if (router == null) {
+    Navigator.maybePop(context);
+  } else if (router.canPop()) {
+    router.pop();
+  } else {
+    router.go(Routes.games);
+  }
 }
 
 class StarBalanceChip extends ConsumerWidget {
@@ -61,8 +86,12 @@ class StarBalanceChip extends ConsumerWidget {
 /// Visual state of an answer button.
 enum ChoiceLook { idle, correct, tried }
 
-/// A big (≥ 64 dp) answer button. Wrong answers turn soft grey — never red —
-/// so mistakes feel gentle.
+/// A big answer button (never under 48 × 48 dp). Wrong answers turn soft grey —
+/// never red — so mistakes feel gentle.
+///
+/// The state never relies on colour alone: a correct answer shows a tick, a
+/// tried one a "try again" arrow, and screen readers hear the state after the
+/// answer (`eduChoiceCorrect` / `eduChoiceTried` strings).
 class BigChoiceButton extends StatelessWidget {
   const BigChoiceButton({
     super.key,
@@ -86,14 +115,23 @@ class BigChoiceButton extends StatelessWidget {
       ChoiceLook.correct => (AppColors.mintSoft, AppColors.mint),
       ChoiceLook.tried => (const Color(0xFFF1EFF6), const Color(0xFFD9D4E8)),
     };
+    final l10n = context.l10n;
+    final label = switch (look) {
+      ChoiceLook.idle => semanticLabel,
+      ChoiceLook.correct => l10n.eduChoiceCorrect(semanticLabel),
+      ChoiceLook.tried => l10n.eduChoiceTried(semanticLabel),
+    };
     return Semantics(
+      container: true,
       button: true,
-      label: semanticLabel,
+      label: label,
       selected: look == ChoiceLook.correct,
+      onTap: onTap,
       excludeSemantics: true,
       child: AnimatedScale(
         scale: look == ChoiceLook.correct ? 1.05 : 1,
-        duration: const Duration(milliseconds: 220),
+        // Reduce-motion: no grow effect.
+        duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 220),
         child: Material(
           color: bg,
           shape: RoundedRectangleBorder(
@@ -104,7 +142,7 @@ class BigChoiceButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             onTap: onTap,
             child: ConstrainedBox(
-              constraints: BoxConstraints(minHeight: minHeight, minWidth: 48),
+              constraints: BoxConstraints(minHeight: math.max(minHeight, 48), minWidth: 48),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Stack(alignment: Alignment.center, children: [
@@ -113,7 +151,13 @@ class BigChoiceButton extends StatelessWidget {
                     const PositionedDirectional(
                       top: 0,
                       end: 0,
-                      child: Icon(Icons.check_circle_rounded, color: AppColors.mint, size: 26),
+                      child: Icon(Icons.check_circle_rounded, key: Key('choiceCorrectMark'), color: AppColors.mint, size: 26),
+                    ),
+                  if (look == ChoiceLook.tried)
+                    const PositionedDirectional(
+                      top: 0,
+                      end: 0,
+                      child: Icon(Icons.replay_rounded, key: Key('choiceTriedMark'), color: AppColors.purpleDark, size: 24),
                     ),
                 ]),
               ),
@@ -145,7 +189,8 @@ class ChoiceGridLayout extends StatelessWidget {
       });
 }
 
-/// Short, kind feedback under the question.
+/// Short, kind feedback under the question: an icon plus text, so the meaning
+/// never depends on colour alone.
 class FeedbackLine extends StatelessWidget {
   const FeedbackLine({super.key, required this.text, required this.positive});
   final String? text;
@@ -159,17 +204,30 @@ class FeedbackLine extends StatelessWidget {
           child: text == null
               ? const SizedBox.shrink()
               : Semantics(
+                  key: ValueKey(text),
                   liveRegion: true,
-                  child: Text(
-                    text!,
-                    key: ValueKey(text),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 19,
-                      fontWeight: FontWeight.w800,
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(
+                      positive ? Icons.check_circle_rounded : Icons.replay_rounded,
+                      key: Key(positive ? 'feedbackCorrectIcon' : 'feedbackTryAgainIcon'),
                       color: positive ? AppColors.mintText : AppColors.purpleDark,
+                      size: 24,
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        text!,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: positive ? AppColors.mintText : AppColors.purpleDark,
+                        ),
+                      ),
+                    ),
+                  ]),
                 ),
         ),
       );
