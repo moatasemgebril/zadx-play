@@ -7,7 +7,9 @@ const assert = require("node:assert/strict");
 const { readFileSync } = require("fs");
 const { join } = require("path");
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require("@firebase/rules-unit-testing");
-const { doc, setDoc, updateDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, increment, arrayUnion } = require("firebase/firestore");
+const {
+  doc, collection, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, Timestamp, increment, arrayUnion,
+} = require("firebase/firestore");
 
 const DAY = "2026-11-22";
 const PARENT = "parentUid";
@@ -245,4 +247,168 @@ test("a legacy prayerPaused value does not block normal writes, and cannot be ch
   await assertSucceeds(setDoc(day(as(KID1)), { usedMinutes: increment(1) }, { merge: true }));
   await assertFails(setDoc(day(as(PARENT)), { prayerPaused: false }, { merge: true }));
   await assertFails(setDoc(day(as(KID1)), { prayerPaused: false }, { merge: true }));
+});
+
+// ---- Who may do what: child device vs parent vs stranger vs signed out ------------------------
+// (Replaces the manual Rules Playground cases that PR #36 listed in backend/README.md.)
+
+/** Server-side snapshot of c1's day (rules off), to prove a refused write changed nothing. */
+async function serverDay(child = "c1", d = DAY) {
+  let data;
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    data = (await getDoc(doc(ctx.firestore(), `families/f1/children/${child}/days/${d}`))).data();
+  });
+  return data;
+}
+
+test("child device: allowed day writes (pending request, more play time, start a prayer lock)", async () => {
+  await seed({ prayerLock: false });
+  const db = as(KID1);
+  await assertSucceeds(setDoc(day(db), {
+    day: DAY, progress: { prayer: { status: "pending", count: 0 } }, updatedAt: serverTimestamp(), updatedBy: KID1,
+  }, { merge: true }));
+  await assertSucceeds(setDoc(day(db), { progress: { room: { status: "todo", count: 0 } } }, { merge: true }));
+  await assertSucceeds(setDoc(day(db), { usedMinutes: increment(5) }, { merge: true }));
+  await assertSucceeds(setDoc(day(db), { prayerLock: true, prayerLockAt: serverTimestamp() }, { merge: true }));
+  const after = await serverDay();
+  assert.equal(after.usedMinutes, 15);
+  assert.equal(after.prayerLock, true);
+  assert.equal(after.progress.prayer.status, "pending");
+});
+
+test("child device: a self-written \"done\" status credits nothing (credits are server-only)", async () => {
+  await seed();
+  const db = as(KID1);
+  // Status is only a request marker in the server-approvals model; credits live in `approved`.
+  await assertSucceeds(setDoc(day(db), { progress: { homework: { status: "done", count: 1 } } }, { merge: true }));
+  // ...but no way to turn it into minutes, a finished required list, or an approval.
+  await assertFails(setDoc(day(db), { progress: { homework: { status: "done", count: 1 } }, approved: { homework: 20 } }, { merge: true }));
+  await assertFails(setDoc(day(db), { progress: { homework: { status: "done", count: 1 } }, earnedMinutes: 30 }, { merge: true }));
+  await assertFails(setDoc(day(db), { progress: { homework: { status: "done", count: 1 } }, requiredDone: true }, { merge: true }));
+  await assertFails(updateDoc(day(db), { approved: {} }));
+  const after = await serverDay();
+  assert.deepEqual(after.approved, { prayer: 10 });
+  assert.equal(after.earnedMinutes, 10);
+  assert.equal(after.requiredDone, false);
+});
+
+test("child device: cannot write the family doc at all (any field, delete)", async () => {
+  await seed();
+  const fam = doc(as(KID1), "families/f1");
+  await assertFails(setDoc(fam, { settings: { lockAtAdhan: false } }, { merge: true }));
+  await assertFails(updateDoc(fam, { "settings.lockAtAdhan": false }));
+  await assertFails(updateDoc(fam, { "settings.timeZone": "Pacific/Kiritimati" }));
+  await assertFails(setDoc(fam, { someField: 1 }, { merge: true }));
+  await assertFails(updateDoc(fam, { settings: {} }));
+  await assertFails(deleteDoc(fam));
+});
+
+test("child device: cannot create, change or delete child profiles (own or sibling)", async () => {
+  await seed();
+  const db = as(KID1);
+  await assertFails(setDoc(doc(db, "families/f1/children/c1"), { nickname: "Boss", avatar: "moon" }));
+  await assertFails(updateDoc(doc(db, "families/f1/children/c1"), { nickname: "Boss" }));
+  await assertFails(deleteDoc(doc(db, "families/f1/children/c1")));
+  await assertFails(setDoc(doc(db, "families/f1/children/c9"), { nickname: "New", avatar: "moon" }));
+  await assertFails(getDoc(doc(db, "families/f1/children/c2")));
+  await assertSucceeds(getDoc(doc(db, "families/f1/children/c1")));
+});
+
+test("child device: cannot delete any day, its own or a sibling's", async () => {
+  await seed();
+  await assertFails(deleteDoc(day(as(KID1))));
+  await assertFails(deleteDoc(day(as(KID1), "c2")));
+  assert.ok(await serverDay());
+});
+
+test("parent device: approvals stay with approveTask, everything else is allowed", async () => {
+  await seed({ lockMinutesAgo: 1 });
+  const db = as(PARENT2); // a second parent phone is a parent too
+  // Ends a prayer lock inside the window (a child cannot).
+  await assertSucceeds(setDoc(day(db), { prayerLock: false }, { merge: true }));
+  // Sets a task back to todo / marks it done on its own device.
+  await assertSucceeds(setDoc(day(db), { progress: { homework: { status: "done", count: 1 } } }, { merge: true }));
+  // Creates a day and manages child profiles (nickname + avatar only, COPPA).
+  await assertSucceeds(setDoc(day(db, "c2", "2026-11-23"), { day: "2026-11-23", progress: {}, usedMinutes: 0 }));
+  await assertSucceeds(setDoc(doc(db, "families/f1/children/c3"), { nickname: "Maryam", avatar: "star" }));
+  await assertFails(setDoc(doc(db, "families/f1/children/c4"), { nickname: "Ali", avatar: "star", birthday: "2019-01-01" }));
+  await assertFails(setDoc(doc(db, "families/f1/children/c4"), { nickname: "Ali", avatar: "star", school: "X" }));
+  await assertSucceeds(deleteDoc(doc(db, "families/f1/children/c3")));
+  // Changes family settings and deletes a day.
+  await assertSucceeds(updateDoc(doc(db, "families/f1"), { "settings.lockAtAdhan": false }));
+  await assertSucceeds(deleteDoc(day(db, "c2")));
+  // Credits only through the approveTask Cloud Function (admin SDK), never a client write.
+  await assertFails(setDoc(day(db), { earnedMinutes: 20 }, { merge: true }));
+  await assertFails(setDoc(day(db), { requiredDone: true }, { merge: true }));
+  await assertFails(setDoc(day(db), { approved: { homework: 20 } }, { merge: true }));
+});
+
+test("unrelated signed-in user: reads and writes nothing in the family", async () => {
+  await seed();
+  const db = as(STRANGER);
+  // Reads.
+  await assertFails(getDoc(doc(db, "families/f1")));
+  await assertFails(getDoc(doc(db, "families/f1/children/c1")));
+  await assertFails(getDocs(collection(db, "families/f1/children")));
+  await assertFails(getDoc(day(db)));
+  await assertFails(getDocs(collection(db, "families/f1/children/c1/days")));
+  await assertFails(getDoc(doc(db, "families/f1/assistantUsage/" + DAY)));
+  // Writes.
+  await assertFails(setDoc(doc(db, "families/f1"), { settings: { lockAtAdhan: false } }, { merge: true }));
+  await assertFails(updateDoc(doc(db, "families/f1"), { members: arrayUnion(STRANGER) }));
+  await assertFails(deleteDoc(doc(db, "families/f1")));
+  await assertFails(setDoc(doc(db, "families/f1/children/c9"), { nickname: "x", avatar: "moon" }));
+  await assertFails(updateDoc(doc(db, "families/f1/children/c1"), { nickname: "x" }));
+  await assertFails(deleteDoc(doc(db, "families/f1/children/c1")));
+  await assertFails(setDoc(day(db), { usedMinutes: increment(1) }, { merge: true }));
+  await assertFails(setDoc(day(db, "c1", "2026-11-23"), { day: "2026-11-23" }));
+  await assertFails(deleteDoc(day(db)));
+  // Cannot plant a family that lists someone else, or binds a device.
+  await assertFails(setDoc(doc(db, "families/f9"), { members: [STRANGER, PARENT] }));
+  await assertFails(setDoc(doc(db, "families/f9"), { members: [PARENT] }));
+  await assertFails(setDoc(doc(db, "families/f9"), { members: [STRANGER], childDevices: { [STRANGER]: "c1" } }));
+  await assertFails(setDoc(doc(db, "families/f9"), { members: [STRANGER], parentDevices: { [STRANGER]: 1 } }));
+});
+
+test("a device bound in childDevices but no longer a member gets nothing", async () => {
+  await seed();
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(doc(ctx.firestore(), "families/f1"), { members: [PARENT, PARENT2, KID2] });
+  });
+  const db = as(KID1);
+  await assertFails(getDoc(doc(db, "families/f1")));
+  await assertFails(getDoc(day(db)));
+  await assertFails(setDoc(day(db), { progress: { homework: { status: "pending", count: 0 } } }, { merge: true }));
+});
+
+test("signed out: denied everywhere", async () => {
+  await seed();
+  const db = env.unauthenticatedContext().firestore();
+  await assertFails(getDoc(doc(db, "families/f1")));
+  await assertFails(getDoc(doc(db, "families/f1/children/c1")));
+  await assertFails(getDoc(day(db)));
+  await assertFails(setDoc(day(db), { usedMinutes: increment(1) }, { merge: true }));
+  await assertFails(setDoc(doc(db, "families/f9"), { members: [] }));
+  await assertFails(setDoc(doc(db, "families/f9"), { members: [null] }));
+  await assertFails(updateDoc(doc(db, "families/f1"), { "settings.lockAtAdhan": false }));
+  await assertFails(getDoc(doc(db, "pairingCodes/123456")));
+});
+
+test("server-only collections are closed to every client (parent included)", async () => {
+  await seed();
+  const paths = [
+    "families/f1/devices/d1", "families/f1/private/billing", "families/f1/assistantUsage/" + DAY,
+    "purchases/h1", "pairingCodes/123456", "referralCodes/ABC", "deviceHeartbeats/h1", "rateLimits/k1",
+    "families/f1/children/c1/secret/x", "somethingElse/x",
+  ];
+  for (const uid of [PARENT, KID1, STRANGER]) {
+    const db = as(uid);
+    for (const p of paths) {
+      await assertFails(setDoc(doc(db, p), { x: 1 }), `${uid} write ${p}`);
+      if (!p.includes("assistantUsage")) await assertFails(getDoc(doc(db, p)), `${uid} read ${p}`);
+    }
+  }
+  // assistantUsage is readable by family members only.
+  await assertSucceeds(getDoc(doc(as(PARENT), "families/f1/assistantUsage/" + DAY)));
+  await assertFails(getDoc(doc(as(STRANGER), "families/f1/assistantUsage/" + DAY)));
 });
