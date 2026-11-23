@@ -103,6 +103,8 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - [x] Parent PIN session re-locks after 2 min idle and when the app goes to the background / screen off.
 - [ ] Native (other branch): honour `LockPolicy.prayerAutoEndMinutes` so a Free prayer lock ends without Zad X running.
 - [ ] Server-side trial per family (a reinstall / clear-data restarts the on-device trial).
+- [x] Rules emulator tests in CI (R-32/R-33): `@firebase/rules-unit-testing` against the Firestore emulator in the light `backend` job (`npm run test:rules`); PR #36 (2026-11-23) adds child / parent / stranger / signed-out cases replacing the manual README cases. The rest of the old PR #36 follow-ups (approveTask callable, server-side earnedMinutes/requiredDone, child-side patches) shipped in #39.
+- [ ] P3 (R-32 residual): a child device can still write progress status "done" (display only, credits nothing). Option: a `childTask`-style one-entry check so child writes may set only todo/pending; needs a client change in `FirestoreFamilyRepository.saveDay`.
 
 ## Done
 
