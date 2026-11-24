@@ -92,7 +92,9 @@ class _LettersGameScreenState extends ConsumerState<LettersGameScreen> {
     final stars = starsForRound(firstTryCorrect: _firstTry, total: _questions.length);
     ref.read(starsProvider.notifier).earn(stars);
     ref.read(lettersProgressProvider.notifier).record(_level.number, stars);
-    ref.read(eduGameHooksProvider).onRoundComplete(stars);
+    final hooks = ref.read(eduGameHooksProvider);
+    hooks.onRoundComplete(stars); // win combo
+    hooks.onStarsEarned(stars); // then one coin ping per star
     setState(() {
       _earned = stars;
       _phase = _Phase.done;

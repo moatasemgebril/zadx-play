@@ -4,6 +4,10 @@ The orchestrator reads this file at the start of every cycle (see CLAUDE.md).
 Owner requests come first within the priority order. Close an item by moving it
 to "Done" with the PR link; record decisions in the ZADX LOG.
 
+## Owner requests — 2026-11-23
+
+- [x] **Game-feel sounds** (owner: page sound like in games, a "row cleared" style win sound, a coin/point sound). → **Done in branch `feat/game-sfx`, pending CI + Quality Gate** (2026-11-23): original sounds from `tools/gen_sfx.py` (`transition.wav` whoosh + chime, `win_combo.wav`, `coin*.wav` with 4 pitch variants; nothing copied from other games, see `assets/sfx/LICENSE.txt`). Page sound on child route changes, debounced 350 ms, silent into the parent area/settings/subscription/Quran tab; win combo on game round won (replaces levelUp there); coin pings per earned star and when a parent approval adds minutes (replaces star there). All effects still silent during adhan/Quran and follow mute + volume. Tests: `test/sfx_rules_test.dart`, `test/edu_game_hooks_test.dart`. Needs an ear check on a real phone (volume balance).
+
 ## Owner requests — 2026-11-20 (the team decides and solves these itself)
 
 The owner asked that the team handle these open questions on its own. Make

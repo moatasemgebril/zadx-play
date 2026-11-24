@@ -31,9 +31,14 @@ class _MosqueGameScreenState extends ConsumerState<MosqueGameScreen> {
   void _build() {
     final result = ref.read(mosqueProvider.notifier).buildNext();
     if (result != BuildResult.built) return;
-    ref.read(eduGameHooksProvider).onPartBuilt();
     final built = ref.read(mosqueProvider);
-    if (built >= mosqueParts.length) ref.read(eduGameHooksProvider).onRoundComplete(3);
+    final hooks = ref.read(eduGameHooksProvider);
+    // The last part completes the mosque: only the win sound, not two at once.
+    if (built >= mosqueParts.length) {
+      hooks.onRoundComplete(3);
+    } else {
+      hooks.onPartBuilt();
+    }
     setState(() {
       _shownPart = built - 1;
       _justBuilt = true;
