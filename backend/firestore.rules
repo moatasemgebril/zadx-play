@@ -149,6 +149,13 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Device-removal audit (removeLinkedDevice, BACKLOG P1-3): uids + role + time. Cloud Functions only.
+      // Removing a member is done only by that Function: `members`, `childDevices` and
+      // `parentDevices` are server-only above, and a removed device fails `isMember` everywhere.
+      match /audit/{entryId} {
+        allow read, write: if false;
+      }
+
       // private/billing = { purchaseToken } (raw store token): Cloud Functions only.
       match /private/{docId} {
         allow read, write: if false;

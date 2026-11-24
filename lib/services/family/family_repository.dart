@@ -87,6 +87,54 @@ class ApprovalRejected implements Exception {
   String toString() => 'ApprovalRejected($code)';
 }
 
+/// A phone linked to the family (BACKLOG P1-3): its anonymous Firebase uid and its role, read from
+/// the server-written `members` / `childDevices` maps. No name or other personal data.
+class LinkedDevice {
+  const LinkedDevice({required this.uid, this.childId, this.isThisDevice = false});
+
+  final String uid;
+
+  /// The child this device is bound to (`childDevices`); null for a parent phone.
+  final String? childId;
+
+  /// The phone this app runs on (never offered for removal in the UI).
+  final bool isThisDevice;
+
+  bool get isParent => childId == null;
+}
+
+/// Devices of a family doc: every `members` uid; a uid bound in `childDevices` is a child device,
+/// any other member a parent phone (same rule as `isParent` in firestore.rules). Parents first,
+/// this phone first among them; malformed entries are skipped.
+List<LinkedDevice> parseLinkedDevices(Map<String, dynamic> data, String? myUid) {
+  final members = data['members'];
+  final bound = data['childDevices'];
+  final out = <LinkedDevice>[];
+  final seen = <String>{};
+  if (members is! List) return out;
+  for (final m in members) {
+    if (m is! String || m.isEmpty || !seen.add(m)) continue;
+    final child = bound is Map ? bound[m] : null;
+    out.add(LinkedDevice(uid: m, childId: child is String ? child : null, isThisDevice: m == myUid));
+  }
+  // Stable order: this phone, then the other parent phones, then child devices (members order).
+  return [
+    ...out.where((d) => d.isThisDevice),
+    ...out.where((d) => !d.isThisDevice && d.isParent),
+    ...out.where((d) => !d.isThisDevice && !d.isParent),
+  ];
+}
+
+/// The server refused to remove a device (`last_parent`, `parent_required`, `device_not_found`,
+/// `not_member`, or a transport code such as `unavailable`). The UI shows a friendly message.
+class DeviceRemovalRejected implements Exception {
+  const DeviceRemovalRejected(this.reason);
+  final String reason;
+  bool get isLastParent => reason == 'last_parent';
+  @override
+  String toString() => 'DeviceRemovalRejected($reason)';
+}
+
 /// The store app of this build ('play' | 'kids'); each app only uses its own family plan.
 const String currentStoreApp = kIsKids ? 'kids' : 'play';
 
@@ -180,6 +228,14 @@ abstract class FamilyRepository {
   /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
   /// `accessibility_off`. The backend alerts the parent devices once per new reason.
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
+
+  /// Phones linked to the family ([parseLinkedDevices]). Emits nothing for local-only.
+  Stream<List<LinkedDevice>> watchLinkedDevices();
+
+  /// Parent device only (the server checks the role): removes [deviceUid] (a child device or
+  /// another parent phone, e.g. a lost one) from the family via the `removeLinkedDevice` Cloud
+  /// Function. Throws [DeviceRemovalRejected] on any failure; the last parent phone is refused.
+  Future<void> removeLinkedDevice(String deviceUid);
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -224,6 +280,12 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {}
+
+  @override
+  Stream<List<LinkedDevice>> watchLinkedDevices() => const Stream<List<LinkedDevice>>.empty();
+
+  @override
+  Future<void> removeLinkedDevice(String deviceUid) async => throw const DeviceRemovalRejected('local_family');
 }
 
 /// True when Firebase initialised (overridden in main()).

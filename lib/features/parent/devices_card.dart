@@ -12,6 +12,7 @@ import '../../services/family/family_repository.dart';
 import '../../services/family/pairing_service.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import 'children_card.dart';
+import 'linked_devices_list.dart';
 
 /// Parent side: create a code to link the child's phone or a Windows PC (Zad X Guard).
 class DevicesCard extends ConsumerStatefulWidget {
@@ -115,6 +116,7 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
             label: Text(l10n.downloadWindows, style: const TextStyle(fontSize: 16)),
           ),
         ],
+        const LinkedDevicesList(), // BACKLOG P1-3: remove a linked phone
       ]),
     );
   }

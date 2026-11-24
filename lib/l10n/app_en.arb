@@ -474,5 +474,16 @@
   "hijriAdjustHelp": "In Ramadan, Isha is 2 hours after Maghrib in the Umm al-Qura calendar. If Ramadan started a day before or after the calendar where you live, choose it here.",
   "hijriAdjustEarlier": "Started 1 day earlier",
   "hijriAdjustNone": "As the calendar",
-  "hijriAdjustLater": "Started 1 day later"
+  "hijriAdjustLater": "Started 1 day later",
+  "linkedDevicesTitle": "Linked devices",
+  "linkedDeviceParent": "Parent phone",
+  "linkedDeviceThis": "This phone (you)",
+  "linkedDeviceChild": "{name}'s device",
+  "deviceRemove": "Remove device",
+  "deviceRemoveTitle": "Remove this device?",
+  "deviceRemoveBody": "This device is unlinked from your family right away and can no longer see or change anything. You can link it again later with a new link code.",
+  "deviceRemoveConfirm": "Remove",
+  "deviceRemoved": "Device removed",
+  "deviceRemoveLastParent": "You can't remove the family's last parent phone.",
+  "deviceRemoveError": "Couldn't remove the device right now. Please try again soon."
 }

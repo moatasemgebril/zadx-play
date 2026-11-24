@@ -12,6 +12,8 @@ import '../../data/models/plan.dart';
 /// families/{familyId}
 ///   members: [uid...]          parents + paired child devices
 ///   childDevices: {uid: childId} paired child devices (Cloud Functions only)
+///   parentDevices: {uid: linkedAt} linked parent phones (Cloud Functions only); a member is
+///                              removed only by the removeLinkedDevice Cloud Function (P1-3)
 ///   children/{childId}         {nickname, avatar} — no other personal data
 ///     days/{yyyy-MM-dd}        FamilyDay (`approved`, `earnedMinutes`, `requiredDone` are
 ///                              written only by the approveTask Cloud Function, R-32)
@@ -193,6 +195,27 @@ class FirestoreFamilyRepository implements FamilyRepository {
       'childId': childId,
       'status': {'platform': platform, 'reasons': reasons},
     });
+  }
+
+  @override
+  Stream<List<LinkedDevice>> watchLinkedDevices() => _db
+      .doc('families/$familyId')
+      .snapshots()
+      .where((s) => s.exists)
+      .map((s) => parseLinkedDevices(s.data()!, FirebaseAuth.instance.currentUser?.uid));
+
+  /// Reasons the `removeLinkedDevice` Function sends as the error message.
+  static const _removalReasons = {'last_parent', 'parent_required', 'device_not_found', 'not_member'};
+
+  @override
+  Future<void> removeLinkedDevice(String deviceUid) async {
+    try {
+      await _functions.httpsCallable('removeLinkedDevice').call({'familyId': familyId, 'deviceUid': deviceUid});
+    } on FirebaseFunctionsException catch (e) {
+      throw DeviceRemovalRejected(_removalReasons.contains(e.message) ? e.message! : e.code);
+    } catch (_) {
+      throw const DeviceRemovalRejected('unknown');
+    }
   }
 
   /// Signs in anonymously (cached after the first launch) and returns the uid.

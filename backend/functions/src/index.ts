@@ -9,11 +9,13 @@
  *  appStoreNotifications – App Store Server Notifications v2: keeps iOS entitlements current
  *  approveTask / rejectTask – parent devices approve a child's task; minutes are credited only here (R-32)
  *  createPairingCode / redeemPairingCode – link child phones and Windows PCs to a family
+ *  removeLinkedDevice – a parent removes a linked phone (child device or another parent phone)
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
  *                     was turned off, or stops reporting for a day (docs/decisions/DEVICE-PROTECTION.md)
  */
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { defineSecret, defineString } from "firebase-functions/params";
@@ -42,6 +44,8 @@ import {
   latestAppleEntitlement, verifyAppleSubscription,
 } from "./apple-logic";
 import { APPLE_PRIVATE_KEY, appleDeps } from "./apple";
+// Removing a linked device (BACKLOG P1-3).
+import { deviceRemovalAudit, parseRemoveDeviceRequest, removeDeviceDecision } from "./devices-logic";
 
 initializeApp();
 const db = getFirestore();
@@ -699,6 +703,66 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
   );
   const child = await familyRef.collection("children").doc(childId).get();
   return { familyId, childId, nickname: child.get("nickname") ?? "", avatar: child.get("avatar") ?? "star" };
+});
+
+// ---------------------------------------------------------------------------
+// Removing a linked device (BACKLOG P1-3): a lost phone, or a device linked by mistake.
+// ---------------------------------------------------------------------------
+
+/**
+ * A PARENT device removes a member phone (a child device or another parent phone) from its family.
+ * The decision (devices-logic.ts) runs in a transaction on the live family doc: the caller must be
+ * a parent member, the target a member of the same family, and the last parent device is never
+ * removed (`last_parent`). The target leaves `members`, `childDevices` and `parentDevices`, so
+ * firestore.rules (`isMember`) deny it every family read and write from then on; its refresh
+ * tokens are revoked (each device signs in with its own anonymous uid). An audit entry
+ * (families/{id}/audit, server-only) records who removed whom and when, with no child data.
+ * Windows guards are not members (device secret, devices/{id}) and are not handled here.
+ */
+export const removeLinkedDevice = onCall({ region: "europe-west1" }, async (req) => {
+  const uid = requireUid(req.auth);
+  const request = parseRemoveDeviceRequest(req.data);
+  if (!request) throw new HttpsError("invalid-argument", "Bad request.");
+  const { familyId, deviceUid } = request;
+  await enforceRateLimit("removeDevice", uid, 10, 60 * 60_000);
+  // Membership first, so a stranger cannot use up a family's daily budget.
+  await requireFamilyMember(familyId, uid);
+  await enforceRateLimit("removeDeviceFamily", familyId, 20, 24 * 60 * 60_000);
+
+  const familyRef = db.doc(`families/${familyId}`);
+  const auditRef = familyRef.collection("audit").doc();
+  const decision = await db.runTransaction(async (tx) => {
+    const family = await tx.get(familyRef);
+    if (!family.exists) throw new HttpsError("permission-denied", "not_member");
+    const d = removeDeviceDecision({ members: family.get("members"), childDevices: family.get("childDevices") }, uid, deviceUid);
+    if (!d.ok) throw new HttpsError(d.code, d.reason);
+    tx.update(
+      familyRef,
+      new FieldPath("members"), FieldValue.arrayRemove(deviceUid),
+      new FieldPath("childDevices", deviceUid), FieldValue.delete(),
+      new FieldPath("parentDevices", deviceUid), FieldValue.delete(),
+    );
+    tx.set(auditRef, deviceRemovalAudit(uid, deviceUid, d.targetRole, Date.now()));
+    return d;
+  });
+
+  // Best effort after the membership change (which alone already ends Firestore access).
+  try {
+    await getAuth().revokeRefreshTokens(deviceUid);
+  } catch (e) {
+    // auth/user-not-found (uid already deleted) is fine; log the error type only.
+    console.error("removeLinkedDevice: revoke failed", e instanceof Error ? e.name : typeof e);
+  }
+  try {
+    // No "device stopped reporting" alert for a phone the parent removed on purpose.
+    await db.doc(`deviceHeartbeats/${familyId}__${deviceUid}`).delete();
+    // Unused link codes a removed parent phone created for this family stop working too.
+    const codes = await db.collection("pairingCodes").where("createdBy", "==", deviceUid).limit(50).get();
+    await Promise.all(codes.docs.filter((c) => c.get("familyId") === familyId).map((c) => c.ref.delete()));
+  } catch (e) {
+    console.error("removeLinkedDevice: cleanup failed", e instanceof Error ? e.name : typeof e);
+  }
+  return { removed: true, role: decision.targetRole };
 });
 
 // ---------------------------------------------------------------------------

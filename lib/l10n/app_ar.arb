@@ -932,5 +932,23 @@
   "hijriAdjustHelp": "في رمضان يكون العشاء بعد المغرب بساعتين حسب تقويم أم القرى. إذا بدأ رمضان عندكم قبل التقويم أو بعده بيوم، اختر ذلك هنا.",
   "hijriAdjustEarlier": "بدأ قبل التقويم بيوم",
   "hijriAdjustNone": "حسب التقويم",
-  "hijriAdjustLater": "بدأ بعد التقويم بيوم"
+  "hijriAdjustLater": "بدأ بعد التقويم بيوم",
+  "linkedDevicesTitle": "الأجهزة المربوطة",
+  "linkedDeviceParent": "موبايل ولي أمر",
+  "linkedDeviceThis": "الموبايل ده (إنت)",
+  "linkedDeviceChild": "جهاز {name}",
+  "@linkedDeviceChild": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRemove": "إزالة الجهاز",
+  "deviceRemoveTitle": "إزالة الجهاز ده؟",
+  "deviceRemoveBody": "الجهاز ده هيتفصل عن العيلة فورًا ومش هيقدر يشوف أو يغيّر أي حاجة. تقدر تربطه تاني بعدين بكود ربط جديد.",
+  "deviceRemoveConfirm": "إزالة",
+  "deviceRemoved": "تمت إزالة الجهاز",
+  "deviceRemoveLastParent": "مينفعش تشيل آخر موبايل ولي أمر في العيلة.",
+  "deviceRemoveError": "مقدرناش نشيل الجهاز دلوقتي. جرّب تاني بعد شوية."
 }
