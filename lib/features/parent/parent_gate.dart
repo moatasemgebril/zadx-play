@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../onboarding/onboarding_pin_screen.dart';
 import '../settings/settings_controller.dart';
 import 'parent_session.dart';
 import 'pin_security.dart';
@@ -20,7 +21,11 @@ String hashPin(String pin) => PinSecurity.hashPin(pin);
 const _failuresKey = 'parent.pinFailures';
 const _lockedUntilKey = 'parent.pinLockedUntil';
 
-/// Shows [child] only after the parent PIN is entered (or created the first time).
+/// Shows [child] only after the parent PIN is entered.
+///
+/// The PIN is created only in onboarding ([FirstRunGate] / [OnboardingPinScreen]), never here:
+/// this gate is reachable from child-facing entries ("Ask a parent"), so if no PIN exists it
+/// shows a clear "for parents" card that opens the onboarding PIN step.
 class ParentGate extends ConsumerStatefulWidget {
   const ParentGate({super.key, required this.child});
   final Widget child;
@@ -83,9 +88,9 @@ class _ParentGateState extends ConsumerState<ParentGate> {
     if (pin.length < 4) return setState(() => _error = true);
     final settings = ref.read(settingsProvider.notifier);
     final stored = ref.read(settingsProvider).parentPinHash;
-    if (stored == null) {
-      settings.setParentPinHash(PinSecurity.hashPin(pin));
-    } else if (!PinSecurity.verifyPin(pin, stored)) {
+    // No PIN yet: never create one silently from here (a child could). See [openOnboardingPin].
+    if (stored == null) return;
+    if (!PinSecurity.verifyPin(pin, stored)) {
       _ctrl.clear();
       _recordFailure();
       return setState(() => _error = true);
@@ -111,6 +116,9 @@ class _ParentGateState extends ConsumerState<ParentGate> {
       );
     }
     final l10n = context.l10n;
+    if (ref.watch(settingsProvider.select((s) => s.parentPinHash == null))) {
+      return const _ParentSetupNeeded();
+    }
     final lockedFor = _lockSecondsLeft();
 
     return Center(
@@ -151,13 +159,45 @@ class _ParentGateState extends ConsumerState<ParentGate> {
   }
 }
 
+/// No parent PIN yet: a clear "for parents" card. Its button opens the onboarding PIN step;
+/// nothing here can set a PIN by itself.
+class _ParentSetupNeeded extends StatelessWidget {
+  const _ParentSetupNeeded();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: ZadCard(
+          key: const Key('parentSetupNeeded'),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            const ExcludeSemantics(child: Icon(Icons.family_restroom_rounded, size: 48, color: AppColors.purple)),
+            const SizedBox(height: 8),
+            Text(l10n.parentSetupNeededTitle, textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(l10n.parentSetupNeededBody, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, height: 1.5)),
+            const SizedBox(height: 12),
+            FilledButton(
+              key: const Key('openOnboardingPin'),
+              onPressed: () => openOnboardingPin(context),
+              child: Text(l10n.parentSetupNeededButton),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
 /// Asks for the parent PIN again before a sensitive step, even inside the unlocked parent area
 /// (the area may have been left open on the child's phone). Used to open the phone's Settings for
 /// a few minutes and to turn device protection off (docs/decisions/DEVICE-PROTECTION.md).
 /// Shares the wrong-PIN counter and lock-out with [ParentGate].
 Future<bool> confirmParentPin(BuildContext context, WidgetRef ref) async {
   final stored = ref.read(settingsProvider).parentPinHash;
-  if (stored == null) return false; // the parent area always creates a PIN first
+  if (stored == null) return false; // the PIN is created in onboarding (FirstRunGate)
   final ok = await showDialog<bool>(
     context: context,
     barrierDismissible: false,

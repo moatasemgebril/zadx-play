@@ -13,6 +13,8 @@
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
  *                     was turned off, or stops reporting for a day (docs/decisions/DEVICE-PROTECTION.md)
+ *  setFreeChild     – parent picks the child that stays active on the Free plan (one child);
+ *                     the others are paused, never deleted (docs/decisions/FREE-ONE-CHILD.md)
  */
 import { initializeApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -24,7 +26,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
-  HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, heartbeatAction, hexDigestEquals,
+  DEFAULT_CHILD_ID, HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, childPaused, heartbeatAction,
+  hexDigestEquals, pairingRedeemRefusal, pausePlanOf,
   familyPlanFor, isPairingCode, parentNotificationBody, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, planForRequest, protectionAlertText, rateLimitDecision,
   rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
@@ -204,6 +207,8 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
   }
   const family = await requireFamilyMember(familyId, uid);
   assertChildAccess(family, uid, childId);
+  // A child paused on the Free plan is not monitored as a separate child.
+  if (isChildPaused(family, childId)) return { sent: 0, paused: true };
   await enforceRateLimit("notify", uid, 30, 60 * 60_000); // no push spam to parents
   const settings = family.get("settings") ?? {};
   if (type === "task_submitted" && settings.notifyOnTasks === false) return { sent: 0 };
@@ -531,7 +536,6 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
 // (families/{id}.childDevices = { uid: childId }, written only here).
 // ---------------------------------------------------------------------------
 
-const DEFAULT_CHILD_ID = "child-1";
 const CHILD_ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
 
 function boundChildOf(family: FirebaseFirestore.DocumentSnapshot, uid: string): string | null {
@@ -546,12 +550,45 @@ function parseChildId(raw: unknown): string {
   return childId;
 }
 
+/** Free plan = one child: true when [childId] is paused for this family right now. */
+function isChildPaused(family: FirebaseFirestore.DocumentSnapshot, childId: string): boolean {
+  const created = family.get("createdAt");
+  const now = Date.now();
+  // Per-app plans (plans.play / plans.kids, main 2026-11-22): see pausePlanOf.
+  const plan = pausePlanOf(family.data(), now);
+  return childPaused({
+    plan: plan.plan,
+    planExpiresAt: plan.planExpiresAt,
+    createdAtMs: created && typeof created.toMillis === "function" ? created.toMillis() : undefined,
+    freeChildId: family.get("freeChildId"),
+    childId,
+    now,
+  });
+}
+
 /** Child devices may act only for the child they are bound to. */
 function assertChildAccess(family: FirebaseFirestore.DocumentSnapshot, uid: string, rawChildId: unknown) {
   const childId = parseChildId(rawChildId);
   const bound = boundChildOf(family, uid);
   if (bound !== null && bound !== childId) throw new HttpsError("permission-denied", "Not this child's device.");
 }
+
+/**
+ * Parent device: the child that stays active on the Free plan (one child). Server-only field
+ * `families/{id}.freeChildId` (firestore.rules), so a child device cannot pick itself.
+ */
+export const setFreeChild = onCall({ region: "europe-west1" }, async (req) => {
+  const uid = requireUid(req.auth);
+  const family = await requireFamilyMember(req.data?.familyId, uid);
+  if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
+  await enforceRateLimit("freeChild", uid, 20, 60 * 60_000);
+  const childId = parseChildId(req.data?.childId);
+  if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
+    throw new HttpsError("not-found", "Unknown child.");
+  }
+  await family.ref.update({ freeChildId: childId });
+  return { freeChildId: childId };
+});
 
 // ---------------------------------------------------------------------------
 // Device pairing
@@ -632,6 +669,8 @@ export const createPairingCode = onCall({ region: "europe-west1" }, async (req) 
   if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
     throw new HttpsError("not-found", "Unknown child.");
   }
+  // Free plan = one child: no new device for a paused child.
+  if (isChildPaused(family, childId)) throw new HttpsError("failed-precondition", "child_paused");
   for (let attempt = 0; attempt < 10; attempt++) {
     const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
     const ref = db.collection("pairingCodes").doc(code);
@@ -677,8 +716,23 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
     if (t !== "windows" && req.auth?.uid === snap.get("createdBy")) {
       throw new HttpsError("failed-precondition", "own_code");
     }
+    const codeChildId = parseChildId(snap.get("childId"));
+    // Free plan = one child: the family may have dropped to Free since the code was created.
+    // Refuse before burning the code, so it still works if the parent subscribes in time.
+    const codeFamilyId = snap.get("familyId");
+    if (!isSafeId(codeFamilyId)) throw new HttpsError("not-found", "invalid_code");
+    const family = await tx.get(db.doc(`families/${codeFamilyId}`));
+    // A parent code has no child (codeChildId falls back to child-1): never refuse it as paused.
+    const refusal = pairingRedeemRefusal({
+      target: t,
+      familyExists: family.exists,
+      paused: t !== "parent" && family.exists && isChildPaused(family, codeChildId),
+    });
+    if (refusal !== null) {
+      throw new HttpsError("failed-precondition", "child_paused");
+    }
     tx.delete(ref); // single use
-    return { familyId: snap.get("familyId") as string, target: t, childId: parseChildId(snap.get("childId")) };
+    return { familyId: codeFamilyId as string, target: t, childId: codeChildId };
   });
 
   if (target === "windows") {
@@ -818,10 +872,13 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
     const requiredDone = dayDoc.get("requiredDone") ?? false;
     const prayerLock = dayDoc.get("prayerLock") ?? false;
     const remaining = Math.max(0, earned - used);
+    // Free plan = one child. The guard is unlocked on Free anyway (planActive false); `paused` is informational.
+    const paused = isChildPaused(family, String(device.get("childId") ?? DEFAULT_CHILD_ID));
     // Zad X Guard (Windows) is part of Zad X Play: only the Play plan counts.
     const playPlan = familyPlanFor(family.data(), "play");
     res.json({
       day,
+      paused,
       locked: !(requiredDone && !prayerLock && remaining > 0),
       reason: prayerLock ? "prayer" : !requiredDone ? "requiredTasks" : remaining <= 0 ? "noTime" : "none",
       remainingMinutes: remaining,
@@ -857,6 +914,11 @@ export const reportUsage = onRequest({ region: "europe-west1" }, async (req, res
     const { familyId, device } = await authenticateDevice(req);
     const minutes = Math.max(0, Math.min(60, Math.floor(Number(req.body?.minutes) || 0)));
     const family = await db.doc(`families/${familyId}`).get();
+    // A paused child (Free plan) is not monitored: its play time is not counted.
+    if (isChildPaused(family, String(device.get("childId") ?? DEFAULT_CHILD_ID))) {
+      res.json({ ok: true, paused: true });
+      return;
+    }
     const day = localDay(family.get("settings")?.timeZone ?? "UTC");
     await db.doc(`families/${familyId}/children/${device.get("childId")}/days/${day}`).set(
       { day, usedMinutes: FieldValue.increment(minutes), updatedBy: `device:${device.id}` },
@@ -905,6 +967,12 @@ export const reportProtection = onCall({ region: "europe-west1" }, async (req) =
   if (!report) throw new HttpsError("invalid-argument", "Bad report.");
 
   const ref = db.doc(`deviceHeartbeats/${familyId}__${uid}`);
+  // A child paused on the Free plan is not monitored: no alerts, and no heartbeat that could
+  // later raise a "device silent" alert. Monitoring starts again when the family subscribes.
+  if (isChildPaused(family, child)) {
+    await ref.delete();
+    return { alerted: [], sent: 0, paused: true };
+  }
   const prev = await ref.get();
   const now = Date.now();
   // New reasons only, and the same reason from this device at most once per hour.
@@ -960,7 +1028,10 @@ export const checkHeartbeats = onSchedule({ schedule: "every 6 hours", region: "
     if (action === "delete") {
       await doc.ref.delete();
     } else if (action === "alert" && family) {
-      await pushToParents(family, "stale", childId);
+      // Paused children (Free plan) are not monitored: mark without alerting.
+      if (!isChildPaused(family, typeof childId === "string" ? childId : DEFAULT_CHILD_ID)) {
+        await pushToParents(family, "stale", childId);
+      }
       await doc.ref.set({ staleAlerted: true }, { merge: true });
     } else {
       // Should not happen with this query; mark it so it cannot block the batch again.

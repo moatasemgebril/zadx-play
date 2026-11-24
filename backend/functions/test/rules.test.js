@@ -189,6 +189,21 @@ test("family create is idempotent (FirestoreFamilyRepository.createFamily, retri
   await assertFails(setDoc(doc(as(STRANGER), "families/f1"), { members: arrayUnion(STRANGER) }, { merge: true }));
 });
 
+test("family create stamps createdAt with server time only; a retry falls back to members (Free = one child)", async () => {
+  await env.clearFirestore();
+  const NEW = "newPhoneUid";
+  const fam = doc(as(NEW), "families/local-id-2");
+  // A client cannot backdate createdAt to stretch the server's 7-day family trial.
+  await assertFails(setDoc(fam, { members: arrayUnion(NEW), createdAt: Timestamp.fromMillis(Date.now() + 30 * 86_400_000) }, { merge: true }));
+  await assertSucceeds(setDoc(fam, { members: arrayUnion(NEW), createdAt: serverTimestamp() }, { merge: true }));
+  // createFamily retry after a write that did land: createdAt is server-only now ...
+  await assertFails(setDoc(fam, { members: arrayUnion(NEW), createdAt: serverTimestamp() }, { merge: true }));
+  // ... so it falls back to the plain members write, which still succeeds.
+  await assertSucceeds(setDoc(fam, { members: arrayUnion(NEW) }, { merge: true }));
+  // freeChildId is chosen through the setFreeChild function only.
+  await assertFails(setDoc(fam, { freeChildId: "c2" }, { merge: true }));
+});
+
 // ---- parents ---------------------------------------------------------------------------------
 
 test("parent manages the day but cannot credit minutes outside approveTask", async () => {

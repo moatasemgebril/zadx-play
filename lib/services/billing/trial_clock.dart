@@ -102,7 +102,7 @@ Entitlement resolveEntitlement({Entitlement? store, Entitlement? family, PlanTie
   final paid = bestVerifiedEntitlement(store, family);
   if (paid != null && !paid.isFree) return paid;
   if (cachedTier != null) return Entitlement(tier: cachedTier);
-  if (trial.active) return Entitlement(tier: PlanTier.plus, inTrial: true, trialDaysLeft: trial.daysLeft);
+  if (trial.active) return Entitlement(tier: PlanTier.plus, inTrial: true, trialDaysLeft: trial.daysLeft, deviceTrial: true);
   return const Entitlement();
 }
 

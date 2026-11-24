@@ -12,11 +12,13 @@ import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../router.dart';
 import '../../services/billing/subscription_service.dart';
+import '../../services/family/child_pause.dart';
 import '../../services/family/children_controller.dart';
 import '../../shared/widgets/zad_widgets.dart';
 import '../prayer/prayer_providers.dart';
 import '../settings/settings_controller.dart';
 import '../tasks/wallet_controller.dart';
+import 'parent_gate.dart' show confirmParentPin;
 
 extension ChildAvatarLook on ChildAvatar {
   IconData get icon => switch (this) {
@@ -77,6 +79,8 @@ class ChildrenCard extends ConsumerWidget {
     final children = ref.watch(childrenProvider);
     final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
     final maxChildren = ent.limits.maxChildren;
+    final pause = ref.watch(childPauseProvider);
+    final activeId = ref.watch(activeChildIdProvider);
 
     if (children.isBound) {
       final c = children.active;
@@ -103,7 +107,24 @@ class ChildrenCard extends ConsumerWidget {
         ]),
         const SizedBox(height: 6),
         for (final c in children.children)
-          _ChildRow(child: c, active: c.id == children.activeId, canRemove: children.children.length > 1),
+          _ChildRow(
+            child: c,
+            active: c.id == activeId,
+            paused: pause.isPaused(c.id),
+            canRemove: children.children.length > 1,
+          ),
+        // Free plan = one child: the others are paused, never deleted (FREE-ONE-CHILD.md).
+        if (pause.anyPaused) ...[
+          const SizedBox(height: 8),
+          Banner2(text: l10n.pausedChildrenNote, bg: AppColors.cream, fg: AppColors.ink),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            key: const Key('chooseFreeChildButton'),
+            onPressed: () => _chooseFreeChild(context, ref, pause),
+            icon: const Icon(Icons.swap_horiz_rounded),
+            label: Text(l10n.chooseFreeChild, style: const TextStyle(fontSize: 16)),
+          ),
+        ],
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: () => _add(context, ref, maxChildren),
@@ -137,6 +158,42 @@ class ChildrenCard extends ConsumerWidget {
     }
   }
 
+  /// Free plan: the parent picks which child stays active (PIN asked again first). The
+  /// others stay paused with all their progress kept.
+  Future<void> _chooseFreeChild(BuildContext context, WidgetRef ref, ChildPause pause) async {
+    final l10n = context.l10n;
+    if (!await confirmParentPin(context, ref) || !context.mounted) return;
+    final kids = ref.read(childrenProvider).children;
+    final chosen = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: Text(l10n.chooseFreeChildTitle),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+            child: Text(l10n.chooseFreeChildBody, style: const TextStyle(fontSize: 15, height: 1.5)),
+          ),
+          for (final c in kids)
+            SimpleDialogOption(
+              key: Key('freeChild-${c.id}'),
+              onPressed: () => Navigator.of(ctx).pop(c.id),
+              child: Row(children: [
+                ChildAvatarBadge(avatar: c.avatar, size: 36),
+                const SizedBox(width: 10),
+                Expanded(child: Text(childDisplayName(c, l10n), style: const TextStyle(fontSize: 17))),
+                if (c.id == pause.freeChildId) const Icon(Icons.check_circle_rounded, color: AppColors.mintText),
+              ]),
+            ),
+        ],
+      ),
+    );
+    if (chosen == null || !context.mounted) return;
+    if (ref.read(childrenProvider.notifier).chooseFreeChild(chosen)) {
+      final name = childDisplayName(ref.read(childrenProvider).byId(chosen)!, l10n);
+      showToast(context, l10n.freeChildChosen(name));
+    }
+  }
+
   Future<void> _showUpsell(BuildContext context, int maxChildren) async {
     final l10n = context.l10n;
     final lang = context.lang;
@@ -158,9 +215,12 @@ class ChildrenCard extends ConsumerWidget {
 }
 
 class _ChildRow extends ConsumerWidget {
-  const _ChildRow({required this.child, required this.active, required this.canRemove});
+  const _ChildRow({required this.child, required this.active, required this.paused, required this.canRemove});
   final ChildProfile child;
   final bool active;
+
+  /// Paused on the Free plan: greyed, not selectable, data kept.
+  final bool paused;
   final bool canRemove;
 
   @override
@@ -183,15 +243,16 @@ class _ChildRow extends ConsumerWidget {
       child: Row(children: [
         Expanded(
           child: Semantics(
-            button: !active,
+            button: !active && !paused,
             selected: active,
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: active ? null : () => ref.read(childrenProvider.notifier).select(child.id),
+              onTap: active || paused ? null : () => ref.read(childrenProvider.notifier).select(child.id),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Row(children: [
-                  ChildAvatarBadge(avatar: child.avatar),
+                  // Paused (Free plan): greyed avatar and name; the text keeps AA contrast.
+                  Opacity(opacity: paused ? 0.45 : 1, child: ChildAvatarBadge(avatar: child.avatar)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -199,7 +260,8 @@ class _ChildRow extends ConsumerWidget {
                         Flexible(
                           child: Text(name,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                              style: TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.w800, color: paused ? AppColors.muted : null)),
                         ),
                         if (active) ...[
                           const SizedBox(width: 6),
@@ -220,7 +282,11 @@ class _ChildRow extends ConsumerWidget {
                         ),
                         style: const TextStyle(fontSize: 15, color: AppColors.muted),
                       ),
-                      if (!kIsKids && wallet.prayerLock)
+                      if (paused)
+                        Text(l10n.childPausedLabel,
+                            key: Key('childPaused-${child.id}'),
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.purpleDark))
+                      else if (!kIsKids && wallet.prayerLock)
                         Text(l10n.childPrayerLocked,
                             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.lockText)),
                     ]),

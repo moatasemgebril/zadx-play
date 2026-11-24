@@ -10,6 +10,7 @@ import 'package:zadx/features/prayer/prayer_calculator.dart';
 import 'package:zadx/features/prayer/prayer_providers.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
 import 'package:zadx/features/tasks/wallet_controller.dart';
+import 'package:zadx/services/billing/subscription_service.dart';
 import 'package:zadx/services/family/child_storage.dart';
 import 'package:zadx/services/family/children_controller.dart';
 
@@ -22,6 +23,9 @@ Future<(ProviderContainer, SharedPreferences)> makeContainer(Map<String, Object>
     sharedPrefsProvider.overrideWithValue(prefs),
     cityNowProvider.overrideWithValue(CityNow(DateTime(2026, 11, 20, 10), 2)),
     nextPrayerProvider.overrideWithValue(Prayer.dhuhr),
+    // A paid plan: these tests are about several children (Free pauses all but one,
+    // see test/free_one_child_test.dart).
+    planEntitlementProvider.overrideWithValue(const Entitlement(tier: PlanTier.plus)),
   ]);
   addTearDown(container.dispose);
   return (container, prefs);

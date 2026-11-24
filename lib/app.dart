@@ -9,6 +9,7 @@ import 'services/family/children_controller.dart';
 import 'services/family/family_repository.dart';
 import 'core/platform.dart';
 import 'core/theme/app_theme.dart';
+import 'features/onboarding/onboarding_pin_screen.dart';
 import 'features/prayer/prayer_calculator.dart';
 import 'features/shell/sound_coordinator.dart';
 import 'features/schedule/schedule_controller.dart';
@@ -58,6 +59,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
       },
       fireImmediately: true,
     );
+    // Free plan = one child: tell the server which child stays active, only if it changed.
+    ref.read(childrenProvider.notifier).syncFreeChild();
     if (kIsKids) {
       ref.listenManual<List<ScheduledLock>>(scheduleProvider, (_, __) => _syncKidsSettings(ref, ref.read(settingsProvider)));
     }
@@ -94,6 +97,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: appRouter,
+      // First run: the parent creates the PIN before child mode is reachable.
+      builder: (context, child) => FirstRunGate(child: child ?? const SizedBox.shrink()),
     );
   }
 

@@ -28,6 +28,15 @@ class ChildStorage {
   /// Set on a child's device after pairing: the device belongs to this child only.
   static const boundKey = 'children.bound';
 
+  /// The child the parent keeps active on the Free plan (docs/decisions/FREE-ONE-CHILD.md).
+  static const freeChildKey = 'children.free';
+
+  /// The free child the server last confirmed (`setFreeChild`); absent = `child-1`.
+  static const freeChildSyncedKey = 'children.freeSynced';
+
+  /// Child device: cached server-written plan fields of the family.
+  static const familyStatusKey = 'family.planStatus';
+
   static String walletKey(String childId) => 'wallet.child.$childId.state';
   static String tasksKey(String childId) => 'wallet.child.$childId.tasks';
   static String adhkarKey(String childId) => 'adhkar.child.$childId.counts';

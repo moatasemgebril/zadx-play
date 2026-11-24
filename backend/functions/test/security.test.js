@@ -234,6 +234,94 @@ test("tamperReasonsToAlert applies a per-device cooldown per reason", () => {
   assert.deepEqual(s.tamperReasonsToAlert([], [], { bad: 1, accessibility_off: "x" }, now).alertedAt, {});
 });
 
+// Free plan = one child (owner decision 2026-11-21, docs/decisions/FREE-ONE-CHILD.md).
+test("childPaused: Free keeps only the first child (child-1) active", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const old = now - 30 * 24 * 60 * 60_000; // family created a month ago: trial over
+  const base = { plan: undefined, planExpiresAt: undefined, createdAtMs: old, freeChildId: undefined, now };
+  assert.equal(s.childPaused({ ...base, childId: "child-1" }), false);
+  assert.equal(s.childPaused({ ...base, childId: "cabc123" }), true);
+});
+
+test("childPaused: the parent's chosen child stays active instead", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const base = { plan: null, planExpiresAt: null, createdAtMs: 0, freeChildId: "cabc123", now };
+  assert.equal(s.childPaused({ ...base, childId: "cabc123" }), false);
+  assert.equal(s.childPaused({ ...base, childId: "child-1" }), true);
+  // A malformed choice falls back to child-1, never to "everyone active".
+  assert.equal(s.childPaused({ ...base, freeChildId: "../x", childId: "child-1" }), false);
+  assert.equal(s.childPaused({ ...base, freeChildId: "../x", childId: "cabc123" }), true);
+});
+
+test("childPaused: nobody is paused on a paid plan or during the first 7 days", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const future = new Date(now + 86_400_000).toISOString();
+  const past = new Date(now - 1).toISOString();
+  assert.equal(s.childPaused({ plan: "basic", planExpiresAt: future, createdAtMs: 0, freeChildId: undefined, childId: "c2", now }), false);
+  assert.equal(s.childPaused({ plan: "plus", planExpiresAt: future, createdAtMs: 0, freeChildId: undefined, childId: "c2", now }), false);
+  // Expired plan: paused again (data is kept; resumes when the family subscribes).
+  assert.equal(s.childPaused({ plan: "plus", planExpiresAt: past, createdAtMs: 0, freeChildId: undefined, childId: "c2", now }), true);
+  // Server-side 7-day trial from the family's creation time.
+  assert.equal(s.childPaused({ plan: null, planExpiresAt: null, createdAtMs: now - 6 * 86_400_000, freeChildId: undefined, childId: "c2", now }), false);
+  assert.equal(s.childPaused({ plan: null, planExpiresAt: null, createdAtMs: now - 7 * 86_400_000, freeChildId: undefined, childId: "c2", now }), true);
+  // Missing or bad creation time: no trial.
+  assert.equal(s.childPaused({ plan: null, planExpiresAt: null, createdAtMs: "x", freeChildId: undefined, childId: "c2", now }), true);
+});
+
+test("freeChildIdOf defaults to child-1", () => {
+  assert.equal(s.freeChildIdOf(undefined), "child-1");
+  assert.equal(s.freeChildIdOf("cAbc_1"), "cAbc_1");
+  assert.equal(s.freeChildIdOf("a/b"), "child-1");
+  assert.equal(s.freeChildIdOf(42), "child-1");
+});
+
+test("redeemPairingCode refuses a code for a child paused on Free (child_paused)", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const free = { plan: null, planExpiresAt: null, createdAtMs: now - 30 * 86_400_000, freeChildId: undefined, now };
+  const refuse = (target, familyExists, paused) => s.pairingRedeemRefusal({ target, familyExists, paused });
+  const paused = s.childPaused({ ...free, childId: "cyusuf" });
+  assert.equal(refuse("phone", true, paused), "child_paused");
+  assert.equal(refuse("windows", true, paused), "child_paused");
+  // The free child, a paid family or a trial family can still redeem.
+  assert.equal(refuse("phone", true, s.childPaused({ ...free, childId: "child-1" })), null);
+  const paid = { ...free, plan: "basic", planExpiresAt: new Date(now + 86_400_000).toISOString() };
+  assert.equal(refuse("phone", true, s.childPaused({ ...paid, childId: "cyusuf" })), null);
+  assert.equal(refuse("phone", true, s.childPaused({ ...free, createdAtMs: now - 86_400_000, childId: "cyusuf" })), null);
+  assert.equal(refuse("phone", false, true), null);
+});
+
+// BACKLOG P1 merge note (PR #28): a parent code has no child; its childId falls back to child-1.
+test("redeemPairingCode: a parent code works while child-1 is paused on Free", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  // Free family past its trial; the parent chose "cyusuf" as the free child, so child-1 is paused.
+  const free = { plan: null, planExpiresAt: null, createdAtMs: now - 30 * 86_400_000, freeChildId: "cyusuf", now };
+  const child1Paused = s.childPaused({ ...free, childId: "child-1" });
+  assert.equal(child1Paused, true);
+  assert.equal(s.pairingRedeemRefusal({ target: "parent", familyExists: true, paused: child1Paused }), null);
+  // A child code for that same paused child is still refused.
+  assert.equal(s.pairingRedeemRefusal({ target: "phone", familyExists: true, paused: child1Paused }), "child_paused");
+  assert.equal(s.pairingRedeemRefusal({ target: "windows", familyExists: true, paused: child1Paused }), "child_paused");
+});
+
+test("pausePlanOf: an active plan of either app keeps every child active", () => {
+  const now = Date.parse("2026-12-10T12:00:00Z");
+  const future = new Date(now + 86_400_000).toISOString();
+  const past = new Date(now - 1).toISOString();
+  const old = { createdAtMs: now - 30 * 86_400_000, freeChildId: undefined, childId: "c2", now };
+  const pausedFor = (family) => {
+    const p = s.pausePlanOf(family, now);
+    return s.childPaused({ ...old, plan: p.plan, planExpiresAt: p.planExpiresAt });
+  };
+  assert.equal(pausedFor({}), true);
+  assert.equal(pausedFor(undefined), true);
+  // Legacy top-level plan (no planApp = Zad X Play).
+  assert.equal(pausedFor({ plan: "basic", planExpiresAt: future }), false);
+  assert.equal(pausedFor({ plans: { play: { plan: "plus", planExpiresAt: future } } }), false);
+  assert.equal(pausedFor({ plans: { kids: { plan: "basic", planExpiresAt: future } } }), false);
+  assert.equal(pausedFor({ plans: { play: { plan: "plus", planExpiresAt: past } } }), true);
+  assert.equal(pausedFor({ plans: { play: { plan: "gold", planExpiresAt: future } } }), true);
+});
+
 // ---------------------------------------------------------------------------
 // Zad X Kids (docs/decisions/ZADX-KIDS-VARIANT.md)
 // ---------------------------------------------------------------------------

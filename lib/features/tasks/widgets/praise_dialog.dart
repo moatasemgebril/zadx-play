@@ -14,7 +14,8 @@ final praisePickerProvider = Provider<PraisePicker>((ref) => PraisePicker());
 /// child's form of address, plus [note] (e.g. "sent for approval"). No sound.
 Future<void> showPraiseDialog(BuildContext context, WidgetRef ref, {required String note}) {
   final l10n = context.l10n;
-  final address = ref.read(childrenProvider).active.address;
+  final kids = ref.read(childrenProvider);
+  final address = (kids.byId(ref.read(activeChildIdProvider)) ?? kids.active).address;
   final phrase = ref.read(praisePickerProvider).next(address, context.lang);
   return showDialog<void>(
     context: context,

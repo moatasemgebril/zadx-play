@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_variant.dart';
 import '../../data/models/child_profile.dart';
+import 'child_pause.dart';
 import 'firestore_family_repository.dart';
 import '../../data/models/plan.dart';
 
@@ -236,6 +237,14 @@ abstract class FamilyRepository {
   /// another parent phone, e.g. a lost one) from the family via the `removeLinkedDevice` Cloud
   /// Function. Throws [DeviceRemovalRejected] on any failure; the last parent phone is refused.
   Future<void> removeLinkedDevice(String deviceUid);
+
+  /// Server-written plan fields of the family (read on paired child devices to know whether
+  /// their child is paused on Free). Emits nothing for local-only.
+  Stream<FamilyPlanStatus> watchFamilyStatus();
+
+  /// Parent device: tells the server which child stays active on Free (`setFreeChild`).
+  /// Returns true once the server stored it; false when there is no server (local mode).
+  Future<bool> setFreeChild(String childId);
 }
 
 class LocalFamilyRepository implements FamilyRepository {
@@ -286,6 +295,12 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> removeLinkedDevice(String deviceUid) async => throw const DeviceRemovalRejected('local_family');
+
+  @override
+  Stream<FamilyPlanStatus> watchFamilyStatus() => const Stream.empty();
+
+  @override
+  Future<bool> setFreeChild(String childId) async => false;
 }
 
 /// True when Firebase initialised (overridden in main()).

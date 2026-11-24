@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../core/backend.dart';
 import '../../data/models/child_profile.dart';
+import 'child_pause.dart';
 import 'family_repository.dart';
 import '../../data/models/plan.dart';
 
@@ -218,6 +219,24 @@ class FirestoreFamilyRepository implements FamilyRepository {
     }
   }
 
+  @override
+  Stream<FamilyPlanStatus> watchFamilyStatus() => _db.doc('families/$familyId').snapshots().where((s) => s.exists).map((s) {
+        final d = Map<String, dynamic>.from(s.data()!);
+        final created = d['createdAt'];
+        if (created is Timestamp) d['createdAt'] = created.millisecondsSinceEpoch;
+        // Per-app plans (plans.<app>): this build's own plan, same as parseFamilyEntitlement.
+        final plan = familyPlanFieldsFor(d, currentStoreApp);
+        d['plan'] = plan['plan'];
+        d['planExpiresAt'] = plan['planExpiresAt'];
+        return FamilyPlanStatus.fromFamilyDoc(d);
+      });
+
+  @override
+  Future<bool> setFreeChild(String childId) async {
+    await _functions.httpsCallable('setFreeChild').call({'familyId': familyId, 'childId': childId});
+    return true;
+  }
+
   /// Signs in anonymously (cached after the first launch) and returns the uid.
   static Future<String> signIn() async {
     final auth = FirebaseAuth.instance;
@@ -234,8 +253,23 @@ class FirestoreFamilyRepository implements FamilyRepository {
   /// firestore.rules); when an earlier, timed-out attempt already landed, `arrayUnion` of a uid
   /// that is already there changes nothing. Pairing a second device (parent ⇄ child) adds its uid
   /// to `members` via a short pairing code — see docs/ARCHITECTURE.md.
-  static Future<void> createFamily(String familyId, String uid) =>
-      FirebaseFirestore.instance.doc('families/$familyId').set({
+  ///
+  /// Free plan = one child: the server's 7-day family trial counts from `createdAt` (server time;
+  /// firestore.rules only accepts `request.time`). `createdAt` is server-only after the create, so
+  /// a retry whose earlier attempt already landed is refused with permission-denied and falls
+  /// back to the plain `members` write.
+  static Future<void> createFamily(String familyId, String uid) async {
+    final doc = FirebaseFirestore.instance.doc('families/$familyId');
+    try {
+      await doc.set({
+        'members': FieldValue.arrayUnion([uid]),
+        'createdAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied') rethrow;
+      await doc.set({
         'members': FieldValue.arrayUnion([uid]),
       }, SetOptions(merge: true));
+    }
+  }
 }
