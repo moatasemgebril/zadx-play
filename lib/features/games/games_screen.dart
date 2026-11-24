@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
@@ -14,8 +15,13 @@ import '../../data/models/plan.dart';
 import '../../l10n/app_localizations.dart';
 import '../../router.dart';
 import '../../services/app_lock/app_lock_service.dart';
+import '../../services/family/children_controller.dart';
 import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../edu_games/letters/letters_progress.dart';
+import '../edu_games/letters/letters_quiz.dart';
+import '../schedule/schedule_controller.dart';
+import '../schedule/schedule_widgets.dart';
 import '../settings/settings_controller.dart';
 import '../subscription/paid_feature_gate.dart';
 import '../tasks/wallet_controller.dart';
@@ -31,30 +37,36 @@ class GamesScreen extends ConsumerWidget {
     final wallet = ref.watch(walletProvider);
     final enabledIds = ref.watch(settingsProvider.select((s) => s.controlledGameIds));
     final games = controlledGames.where((g) => enabledIds.contains(g.id)).toList();
+    // Zad X Kids: a study / bedtime / reading schedule locks every game while it runs.
+    final schedule = ref.watch(activeScheduleProvider);
+    final unlocked = wallet.gamesUnlocked && schedule == null;
 
     return ZadSceneBackground(
       scene: ZadScene.games,
       child: ListView(padding: const EdgeInsets.all(16), children: [
         _GamesHero(title: l10n.gamesHeroTitle, sub: l10n.gamesHeroSub),
         const SizedBox(height: 16),
-        Text(l10n.zadGames, style: Theme.of(context).textTheme.titleMedium),
-        Text(l10n.zadGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
-        const SizedBox(height: 10),
-        PaidFeatureGate(
-          feature: AppFeature.eduGames,
-          child: Row(children: [
-            for (final g in zadGames) ...[
-              Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
-              if (g != zadGames.last) const SizedBox(width: 10),
-            ],
-          ]),
-        ),
-        const SizedBox(height: 18),
+        // Built-in learning games (Zad X Play). Zad X Kids has none yet, so no empty section.
+        if (activeZadGames.isNotEmpty) ...[
+          Text(l10n.zadGames, style: Theme.of(context).textTheme.titleMedium),
+          Text(l10n.zadGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
+          const SizedBox(height: 10),
+          PaidFeatureGate(
+            feature: AppFeature.eduGames,
+            child: Row(children: [
+              for (final g in activeZadGames) ...[
+                Expanded(child: _ZadGameTile(game: g, title: _zadTitle(l10n, g.id))),
+                if (g != activeZadGames.last) const SizedBox(width: 10),
+              ],
+            ]),
+          ),
+          const SizedBox(height: 18),
+        ],
         Text(l10n.deviceGames, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.deviceGamesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted)),
         const SizedBox(height: 10),
-        _LockBanner(wallet: wallet),
-        if (wallet.prayerLock) ...[const SizedBox(height: 10), const _PrayerLockCard()],
+        _LockBanner(wallet: wallet, schedule: schedule),
+        if (!kIsKids && wallet.prayerLock) ...[const SizedBox(height: 10), const _PrayerLockCard()],
         const SizedBox(height: 10),
         PaidFeatureGate(
           feature: AppFeature.games,
@@ -69,7 +81,7 @@ class GamesScreen extends ConsumerWidget {
               mainAxisSpacing: 10,
               crossAxisSpacing: 10,
               childAspectRatio: 0.62,
-              children: [for (final g in games) _GameTile(game: g, unlocked: wallet.gamesUnlocked)],
+              children: [for (final g in games) _GameTile(game: g, unlocked: unlocked)],
             ),
           ]),
         ),
@@ -127,21 +139,54 @@ class _ZadGameTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           SizedBox(height: 40, child: Center(child: Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)))),
+          // Same height on every tile so the row stays aligned.
+          SizedBox(height: 26, child: game.id == 'letters' ? const _LettersBestStars() : null),
           FilledButton(onPressed: () => context.push(Routes.eduGame(game.id)), child: Text(context.l10n.play)),
         ]),
       );
 }
 
+/// The active child's best stars in Quran Letters (sum of the best per level),
+/// read from the local per-child progress store.
+class _LettersBestStars extends ConsumerWidget {
+  const _LettersBestStars();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final lang = context.lang;
+    final best = ref.watch(lettersProgressProvider).values.fold<int>(0, (sum, s) => sum + s);
+    final total = letterLevels.length * 3;
+    return Semantics(
+      key: const Key('lettersBestStars'),
+      label: context.l10n.eduBestStars(Fmt.digits(best, lang), Fmt.digits(total, lang)),
+      excludeSemantics: true,
+      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        const Icon(Icons.star_rounded, color: AppColors.yellow, size: 20),
+        const SizedBox(width: 2),
+        Text(
+          '${Fmt.digits(best, lang)}/${Fmt.digits(total, lang)}',
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: AppColors.purpleDark),
+        ),
+      ]),
+    );
+  }
+}
+
 class _LockBanner extends StatelessWidget {
-  const _LockBanner({required this.wallet});
+  const _LockBanner({required this.wallet, this.schedule});
   final WalletState wallet;
+  final ScheduledLock? schedule;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final schedule = this.schedule;
+    if (schedule != null) {
+      return Banner2(text: schedule.kind.lockBanner.of(context.lang), bg: AppColors.lockBg, fg: AppColors.lockText, icon: schedule.kind.icon);
+    }
     if (wallet.gamesUnlocked) {
       return Banner2(
-        text: l10n.gamesOpen(Fmt.digits(wallet.remainingMinutes, context.lang)),
+        text: l10n.gamesOpen(wallet.remainingMinutes, Fmt.digits(wallet.remainingMinutes, context.lang)),
         bg: AppColors.mintSoft,
         fg: AppColors.mintText,
         icon: Icons.lock_open_rounded,
@@ -165,6 +210,8 @@ class _PrayerLockCard extends ConsumerWidget {
     final wallet = ref.watch(walletProvider);
     final prayerName = wallet.lockedPrayer == null ? '' : l10n.prayerName(wallet.lockedPrayer!);
     final submitted = wallet.pending.any((t) => t.kind == TaskKind.prayer);
+    // Gender-aware wording from the child's form of address (unset = masculine/neutral form).
+    final form = ref.watch(childrenProvider).active.address?.name ?? 'other';
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -173,14 +220,14 @@ class _PrayerLockCard extends ConsumerWidget {
         const Icon(Icons.nightlight_round, color: Colors.white, size: 38),
         const SizedBox(height: 6),
         Text(l10n.prayerNow(prayerName), textAlign: TextAlign.center, style: AppTheme.display(24, color: Colors.white)),
-        Text(l10n.prayerSub, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
+        Text(l10n.prayerSub(form), textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 16)),
         const SizedBox(height: 12),
         if (!submitted)
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.yellow, foregroundColor: AppColors.ink),
             onPressed: () {
               ref.read(walletProvider.notifier).markPrayed();
-              showPraiseDialog(context, ref, note: l10n.waitParent);
+              showPraiseDialog(context, ref, note: '${l10n.waitParent}\n${l10n.prayerIkhlas}');
             },
             child: Text(l10n.iPrayed),
           )

@@ -31,9 +31,14 @@ class _MosqueGameScreenState extends ConsumerState<MosqueGameScreen> {
   void _build() {
     final result = ref.read(mosqueProvider.notifier).buildNext();
     if (result != BuildResult.built) return;
-    ref.read(eduGameHooksProvider).onPartBuilt();
     final built = ref.read(mosqueProvider);
-    if (built >= mosqueParts.length) ref.read(eduGameHooksProvider).onRoundComplete(3);
+    final hooks = ref.read(eduGameHooksProvider);
+    // The last part completes the mosque: only the win sound, not two at once.
+    if (built >= mosqueParts.length) {
+      hooks.onRoundComplete(3);
+    } else {
+      hooks.onPartBuilt();
+    }
     setState(() {
       _shownPart = built - 1;
       _justBuilt = true;
@@ -75,7 +80,8 @@ class _MosqueGameScreenState extends ConsumerState<MosqueGameScreen> {
                     child: TweenAnimationBuilder<double>(
                       key: ValueKey(built),
                       tween: Tween(begin: 0.96, end: 1),
-                      duration: const Duration(milliseconds: 500),
+                      // Reduce-motion: the new part simply appears.
+                      duration: MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds: 500),
                       curve: Curves.elasticOut,
                       builder: (context, v, child) => Transform.scale(scale: v, child: child),
                       child: CustomPaint(painter: MosquePainter(built: built)),

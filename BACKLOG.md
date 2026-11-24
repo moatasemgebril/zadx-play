@@ -4,6 +4,10 @@ The orchestrator reads this file at the start of every cycle (see CLAUDE.md).
 Owner requests come first within the priority order. Close an item by moving it
 to "Done" with the PR link; record decisions in the ZADX LOG.
 
+## Owner requests — 2026-11-23
+
+- [x] **Game-feel sounds** (owner: page sound like in games, a "row cleared" style win sound, a coin/point sound). → **Done in branch `feat/game-sfx`, pending CI + Quality Gate** (2026-11-23): original sounds from `tools/gen_sfx.py` (`transition.wav` whoosh + chime, `win_combo.wav`, `coin*.wav` with 4 pitch variants; nothing copied from other games, see `assets/sfx/LICENSE.txt`). Page sound on child route changes, debounced 350 ms, silent into the parent area/settings/subscription/Quran tab; win combo on game round won (replaces levelUp there); coin pings per earned star and when a parent approval adds minutes (replaces star there). All effects still silent during adhan/Quran and follow mute + volume. Tests: `test/sfx_rules_test.dart`, `test/edu_game_hooks_test.dart`. Needs an ear check on a real phone (volume balance).
+
 ## Owner requests — 2026-11-20 (the team decides and solves these itself)
 
 The owner asked that the team handle these open questions on its own. Make
@@ -103,6 +107,8 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - [x] Parent PIN session re-locks after 2 min idle and when the app goes to the background / screen off.
 - [ ] Native (other branch): honour `LockPolicy.prayerAutoEndMinutes` so a Free prayer lock ends without Zad X running.
 - [ ] Server-side trial per family (a reinstall / clear-data restarts the on-device trial).
+- [x] Rules emulator tests in CI (R-32/R-33): `@firebase/rules-unit-testing` against the Firestore emulator in the light `backend` job (`npm run test:rules`); PR #36 (2026-11-23) adds child / parent / stranger / signed-out cases replacing the manual README cases. The rest of the old PR #36 follow-ups (approveTask callable, server-side earnedMinutes/requiredDone, child-side patches) shipped in #39.
+- [ ] P3 (R-32 residual): a child device can still write progress status "done" (display only, credits nothing). Option: a `childTask`-style one-entry check so child writes may set only todo/pending; needs a client change in `FirestoreFamilyRepository.saveDay`.
 
 ## Done
 
@@ -136,3 +142,40 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 ## Owner request 2026-11-21: adhkar read aloud by a sheikh (P1, Approvals & Licensing)
 - No freely-licensed adhkar audio found yet. Contact the official Hisn al-Muslim site (binwahaf.com, the late Sheikh Saeed bin Wahf al-Qahtani) for permission to use its audio in a paid kids app; find the official contact on the site itself. Alternatives: a recognised Islamic institution with recordings, or a local imam/sheikh recording the adhkar for us with written permission (owner then owns the recordings).
 - When licensed: per-dhikr audio in adhkar_view with a play button, attribution, offline bundling.
+- [ ] Owner decision 2026-11-23 (branch `feat/adhkar-quran-audio`, pending CI + Quality Gate): **Quranic
+  adhkar → Mishary Alafasy via the QF-approved Quran pipeline** (voice `afasy`, `licenceConfirmed`,
+  same per-ayah player as the Quran screen, `PlayerKind.quran` so effects stay silent and the adhan is
+  never mixed; credit «مشاري العفاسي · Mishary Alafasy»; hidden in release if the licence flag is off;
+  offline → gentle inline hint). Today this covers the three Quls of the reminder card (112, 113, 114,
+  whole). No catalogue dhikr is exactly Quran ayat: hasbi is only part of At-Tawbah 9:129 (text-only);
+  Ayat al-Kursi and Al-Baqarah 2:285–286 are not in the catalogue (Islamic Content Reviewer decides
+  whether to add them; text would come from the Quran API, Al-Baqarah needs a SurahInfo entry).
+  **Non-Quranic adhkar stay text-only until a licence for adhkar recordings exists.** Still blocked by
+  the P1 above: the recitation source is everyayah.com, not a QF host, until the QF API migration.
+
+## Findings from the 2026-11-21 PM cycle (Approvals + Marketing + Skills & Add-ons)
+Details: docs/ADDONS-REGISTRY.md, docs/marketing/STORE-LISTING.md, docs/approvals/OUTREACH-2026-11-21-PM.md.
+- [x] **P1 child safety:** the AI assistant card (lib/features/help/help_screen.dart) is gated only by `PaidFeatureGate`, not the parent PIN, and Help opens from the main shell → a child in a paid family can chat with the Anthropic API. Put it behind the parent gate (check whether PR #28 "assistant gate" already does this before starting). → **Fixed in fix/child-privacy-p1, pending CI** (2026-11-22): `AssistantParentLock` (lib/features/help/assistant_parent_lock.dart) reuses the parent PIN session; test/assistant_parent_lock_test.dart.
+- [ ] **P1 privacy/offline:** `google_fonts` downloaded Tajawal / Baloo Bhaijaan 2 / Amiri Quran from Google at runtime on the child's device. → **Fixed in branch `fix/bundled-fonts` (2026-11-23), pending CI + Quality Gate:** the OFL TTFs from google/fonts are bundled in `assets/fonts/<family>/` (per-family OFL.txt, SHA-256 registry in docs/FONTS.md), declared under `flutter: fonts:`, and the `google_fonts` package is removed. Test: `test/bundled_fonts_test.dart`.
+- [x] **P2:** `geolocator` is declared and the Android manifest asks for ACCESS_COARSE_LOCATION but no code uses it → remove until the location-map review is done (Families policy). → **Fixed in fix/child-privacy-p1, pending CI** (2026-11-22): package, ACCESS_COARSE_LOCATION and the iOS NSLocationWhenInUseUsageDescription note removed.
+- [x] **P2:** commit `backend/functions/package-lock.json`, switch CI to `npm ci` → **done, pending CI, 2026-11-23 PM** (branch `addons/p2-licences-lockfile`; local `npm ci` + build + 49/49 tests pass; `npm audit --audit-level=high` passes, 10 moderate via uuid in googleapis/firebase-admin deps).
+- [ ] **P2 (still open):** commit `pubspec.lock` — flutter is not available in the tooling session; CI could generate it (`flutter pub get`) and upload it as an artifact for review.
+- [ ] **P2 (still open):** pin third-party GitHub Actions (dorny/paths-filter, softprops/action-gh-release, subosito/flutter-action, reactivecircus/android-emulator-runner, google-github-actions/*) to commit SHAs — needs read access to those repos to get verified SHAs; not guessed.
+- [x] **P2:** the CC BY 3.0 adhan credit in lib/features/parent/credits_card.dart lacks the licence URL and the source link → **done, pending CI, 2026-11-23 PM**: licence URL, Commons source link and changes (trimmed, normalised, converted to MP3) shown as selectable text in AR/EN; test `test/credits_card_test.dart`.
+- [x] **P2:** remove/trim .github/workflows/fetch-adhan.yml — re-running it would re-add CC BY-SA adhans and overwrite ADHAN-CREDITS.txt → **done, pending CI, 2026-11-23 PM**: workflow removed; adhans are added by hand only after licence review (docs/ADDONS-REGISTRY.md §3).
+- **Docs:** ARCHITECTURE.md plans table still lists adhkar under Basic (owner made adhkar free on 2026-11-21); STORE_CHECKLIST says a 14-day intro offer while the app gives a 7-day trial → owner decides one.
+- **Owner decision:** Cloud Functions + Secret Manager need the Blaze plan (Spark can't run them); decide Blaze with a budget alert/cap before backend launch.
+
+## Family setup & payment review (product manager, 2026-11-21 evening, owner question)
+Flow today: same Zad X app on the parent phone and the child device (Windows = Zad X Guard); parent creates the PIN on the device (PR #28 adds a first-run PIN screen with confirm); children added in the Parent dashboard (Free 1 / Basic 2 / Plus 5); child device linked with a 6-digit code from the parent phone (10 min); payment = store in-app subscription (Google Play / App Store), verified by `verifyPurchase`; no code/password is ever sent after payment. One-device mode works offline today; linking + payments need Firebase (apps, Firestore, Blaze for Functions) and store products.
+- ~~**P0:** the paid plan never reaches the child's device — the app does not read the entitlement `verifyPurchase` stores on the family doc; the child device falls back to Free after its own 7-day trial.~~ Fixed in fix/family-entitlement-restore (pending CI).
+- ~~**P0:** restore on a new phone fails — each install signs in anonymously = new family; the server rejects the old purchase as used by another family. Needs a family recovery path (e.g. parent sign-in) before launch.~~ Fixed in fix/family-entitlement-restore (pending CI): restore = link the new phone from an existing parent phone ("Add a parent phone" code). The store token never auto-joins a family (AppSec: bearer secret); `verifyPurchase` answers `purchase_in_other_family` and the subscription screen explains the steps. Run `scripts/migrate-purchase-tokens.js` at deploy (backend/README.md).
+- **P1-3 (open):** no way to remove a linked device (parent or child) from the family; needed so a parent can revoke a lost phone or a wrongly linked device.
+- ~~**P1 (merge note for PR #28):** its `redeemPairingCode` pause check runs for every non-Windows code; a parent code has no child, so it falls back to `child-1` and is refused with `child_paused` when `child-1` is paused on Free → skip that check for `target === "parent"` when both branches meet.~~ Fixed in PR #28 (2026-11-24, pending Quality Gate): `pairingRedeemRefusal({target, ...})` never refuses a parent code; backend tests cover parent code while child-1 is paused (succeeds) and child/Windows code for a paused child (`child_paused`). Same merge: the server pause check reads the per-app plans (`pausePlanOf`: an active Play or Kids plan keeps all children active) and `createFamily` stamps `createdAt` again (server-time 7-day family trial).
+- **P2 (follow-up):** a newly linked parent phone keeps its own local child list; it should load the family's `children/` after switching family. The family doc's `planExpiresAt` is refreshed only when a parent phone re-verifies (every Android launch); child devices fall back to the 7-day cache if no parent opens the app after a renewal → add RTDN renewal handling that updates the family plan. Per-uid rate limits are weak (anonymous uids are free): IP, global and per-family limits carry the load.
+- **P0 (before iOS):** App Store receipt verification returns `unimplemented`.
+- ~~**P1:** no way to link a second parent phone (every redeemed code becomes a child device).~~ Fixed in fix/family-entitlement-restore (pending CI): Link devices → "Add a parent phone".
+- **P1:** no PIN recovery (store-account or email-based reset that a child can't trigger).
+- **P1:** even after PR #28, the paid-plan assistant lives on the Help screen, which children can open → put it behind the parent PIN.
+- FAQ faq6–faq12 + new step 1 added (help/faq-setup-payment); faq8/10/11 describe the launch flow and depend on the P0 fixes + Firebase.
+- PR #32 AppSec re-review (B → A after fixes): `parentDevices` added to serverOnlyFamilyKeys (done). Open P2: remove/revoke a linked phone (parent-only action); parent link code → 8–10 chars + confirmation on the issuing phone; server-side PIN check for code creation. Legacy child phones without `childDevices` would count as parents — no production families exist yet (Firebase not live), so no backfill needed; re-check before launch.

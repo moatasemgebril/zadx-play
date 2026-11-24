@@ -1,32 +1,93 @@
-/// Single place for brand and business constants.
-///
-/// Store listing name approved: "Zad X Play". Parent keywords go in the
-/// subtitle (see [storeSubtitleAr]), not in the name.
-class AppConfig {
-  const AppConfig._();
+import 'app_variant.dart';
 
-  /// Brand name shown inside the app (logo, titles).
-  static const brandName = 'Zad X';
-
-  /// Name used for the store listing / launcher label.
-  /// Keep in sync with android:label and CFBundleDisplayName.
+/// Brand + store constants of the Islamic app, "Zad X Play".
+abstract final class IslamicBrand {
   static const storeName = 'Zad X Play';
 
-  /// App Store subtitle / Google Play short description.
-  static const storeSubtitleAr = 'ألعاب بعد الصلاة والمهام';
-  static const storeSubtitleEn = 'Games after prayer & tasks';
+  /// Who Zad X Play is for (owner request 2026-11-22): shown on the launch splash and in Help,
+  /// in both languages. Short and dignified; never used in Zad X Kids.
+  static const identityAr = 'للأطفال المسلمين';
+  static const identityEn = 'For Muslim Kids';
 
+  /// The identity line in [lang] (Arabic unless English).
+  static String identityFor(String lang) => lang == 'en' ? identityEn : identityAr;
+
+  /// App Store subtitle (≤ 30 characters, checked by test/launch_splash_test.dart).
+  /// Owner decision 2026-11-22: Arabic store text must NOT contain «المسلمين», so the Arabic subtitle
+  /// is «صلِّ وتعلَّم» ("Play" is already in the app name). English stays "Muslim kids: pray, learn,
+  /// play". The in-app identity line ([identityAr], splash and Help) is unchanged.
+  /// See docs/marketing/STORE-LISTING.md.
+  static const storeSubtitleAr = 'صلِّ وتعلَّم';
+  static const storeSubtitleEn = 'Muslim kids: pray, learn, play';
+
+  /// Google Play short description (≤ 80 characters): what the app does. The Arabic has no
+  /// «للأطفال المسلمين:» prefix (owner decision 2026-11-22); the English keeps "For Muslim kids".
+  static const storeShortDescriptionAr = 'ألعاب بعد الصلاة والمهام، ومواقيت وأذان وقرآن وقفل';
+  static const storeShortDescriptionEn = 'For Muslim kids: games unlock after prayer & tasks. Prayer times, adhan, Quran';
   static const androidPackage = 'com.zadx.app';
   static const iosBundleId = 'com.zadx.app';
-
-  /// Shared container used by the iOS app + extensions (App Group).
   static const iosAppGroup = 'group.com.zadx.app';
-
-  // Subscription product ids (must match App Store Connect / Play Console).
   static const productBasicMonthly = 'zadx_basic_monthly';
   static const productBasicYearly = 'zadx_basic_yearly';
   static const productPlusMonthly = 'zadx_plus_monthly';
   static const productPlusYearly = 'zadx_plus_yearly';
+}
+
+/// Brand + store constants of the non-religious app, "Zad X Kids" (docs/decisions/ZADX-KIDS-VARIANT.md).
+/// Separate store listing, app id and subscription products; same Zad X brand.
+/// Scanned for religious words by test/kids_variant_test.dart.
+abstract final class KidsBrand {
+  static const storeName = 'Zad X Kids';
+  static const storeSubtitleAr = 'وقت الشاشة بعد المهام والواجب'; // ≤ 30 (App Store)
+  static const storeSubtitleEn = 'Tasks first, then screen time'; // ≤ 30 (App Store)
+  static const storeShortDescriptionAr = 'وقت الشاشة بعد المهام والمذاكرة، مع مواعيد للمذاكرة والقراءة والنوم';
+  static const storeShortDescriptionEn = 'Screen time after tasks & homework, with study, reading and bedtime schedules';
+  static const androidPackage = 'com.zadx.kids';
+  static const iosBundleId = 'com.zadx.kids';
+  static const iosAppGroup = 'group.com.zadx.kids';
+  static const productBasicMonthly = 'zadx_kids_basic_monthly';
+  static const productBasicYearly = 'zadx_kids_basic_yearly';
+  static const productPlusMonthly = 'zadx_kids_plus_monthly';
+  static const productPlusYearly = 'zadx_kids_plus_yearly';
+}
+
+/// Single place for brand and business constants.
+///
+/// Store listing name approved: "Zad X Play". Parent keywords go in the
+/// subtitle (see [storeSubtitleAr]), not in the name. The Zad X Kids build
+/// (`--dart-define=ZADX_VARIANT=kids`) gets the [KidsBrand] values instead.
+class AppConfig {
+  const AppConfig._();
+
+  /// Brand name shown inside the app (logo, titles). The same in both apps.
+  static const brandName = 'Zad X';
+
+  /// Name used for the store listing / launcher label.
+  /// Keep in sync with android:label and CFBundleDisplayName (android/scripts/integrate_native.py).
+  static const storeName = kIsKids ? KidsBrand.storeName : IslamicBrand.storeName;
+
+  /// App Store subtitle (≤ 30 characters). Zad X Play says it is for Muslim kids.
+  static const storeSubtitleAr = kIsKids ? KidsBrand.storeSubtitleAr : IslamicBrand.storeSubtitleAr;
+  static const storeSubtitleEn = kIsKids ? KidsBrand.storeSubtitleEn : IslamicBrand.storeSubtitleEn;
+
+  /// Google Play short description (≤ 80 characters).
+  static const storeShortDescriptionAr =
+      kIsKids ? KidsBrand.storeShortDescriptionAr : IslamicBrand.storeShortDescriptionAr;
+  static const storeShortDescriptionEn =
+      kIsKids ? KidsBrand.storeShortDescriptionEn : IslamicBrand.storeShortDescriptionEn;
+
+  static const androidPackage = kIsKids ? KidsBrand.androidPackage : IslamicBrand.androidPackage;
+  static const iosBundleId = kIsKids ? KidsBrand.iosBundleId : IslamicBrand.iosBundleId;
+
+  /// Shared container used by the iOS app + extensions (App Group).
+  static const iosAppGroup = kIsKids ? KidsBrand.iosAppGroup : IslamicBrand.iosAppGroup;
+
+  // Subscription product ids (must match App Store Connect / Play Console). Each app has its own
+  // products; backend/functions/src/security.ts (`PRODUCTS`) maps both sets to the same tiers.
+  static const productBasicMonthly = kIsKids ? KidsBrand.productBasicMonthly : IslamicBrand.productBasicMonthly;
+  static const productBasicYearly = kIsKids ? KidsBrand.productBasicYearly : IslamicBrand.productBasicYearly;
+  static const productPlusMonthly = kIsKids ? KidsBrand.productPlusMonthly : IslamicBrand.productPlusMonthly;
+  static const productPlusYearly = kIsKids ? KidsBrand.productPlusYearly : IslamicBrand.productPlusYearly;
 
   static const Set<String> allProductIds = {
     productBasicMonthly,

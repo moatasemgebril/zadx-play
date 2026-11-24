@@ -2,7 +2,8 @@ Zad X Play - sound effects
 ==========================
 
 All audio files in this folder (tap.wav, correct.wav, wrong.wav, star.wav,
-level_up.wav, task_complete.wav, unlock.wav, transition.wav)
+level_up.wav, task_complete.wav, unlock.wav, transition.wav, coin.wav,
+coin_lo.wav, coin_up.wav, coin_hi.wav, win_combo.wav)
 are ORIGINAL works, synthesised from scratch by tools/gen_sfx.py using only
 the Python standard library (sine tones, envelopes and filtered noise).
 No third-party samples, recordings or loops were used or downloaded.
@@ -15,3 +16,10 @@ To regenerate (output is deterministic):
 
 Change record: 2026-11-20 - music_calm.wav (background music) removed from the
 app and from tools/gen_sfx.py by owner decision. Zad X Play ships no music.
+
+Change record: 2026-11-23 - added coin.wav, coin_lo.wav, coin_up.wav,
+coin_hi.wav (point pickup, four pitch variants) and win_combo.wav (game win),
+and replaced transition.wav (soft whoosh + tiny chime). All are original works
+by Zad X (the owner's own work), synthesised by tools/gen_sfx.py. They were
+written to have a general "arcade game" feel only; no sound, melody or sample
+from any other game or product was copied, sampled or recreated.

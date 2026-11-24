@@ -11,6 +11,10 @@
 - **No secrets in the app:** AI and store verification run in Cloud Functions.
 - **No hand-typed Quran:** surah metadata only; text comes from Quran.com and is cached.
 - **Offline-first:** the child side works without internet; Firebase syncs, it is never required (see "Offline-first" below).
+- **Two apps, one codebase:** `--dart-define=ZADX_VARIANT=kids` builds **Zad X Kids** (`com.zadx.kids`), a
+  version with nothing religious; the default build is **Zad X Play**. The switch is the compile-time
+  constant `kIsKids` (lib/core/app_variant.dart), so Kids-excluded code is removed, not hidden. See
+  "Variants" below and docs/decisions/ZADX-KIDS-VARIANT.md.
 
 ## Flow of a day
 ```
@@ -18,8 +22,8 @@ Parent sets tasks ─┐
                    ▼
 Child taps "Done" / counts reps / finishes adhkar ──► status = pending ──► parent notified
                                                                         │
-Parent approves (PIN) ◄─────────────────────────────────────────────────┘
-        │
+Parent approves (PIN, parent phone) ◄───────────────────────────────────┘
+        │  synced family: approveTask callable (server checks the PARENT role, credits once, daily cap)
         ▼
 earnedMinutes ↑ ─► gamesUnlocked = requiredDone && !prayerLock && remaining > 0
         │
@@ -55,8 +59,62 @@ Pairing (`lib/services/family/pairing_service.dart`, Cloud Functions `createPair
    (its uid is added to `members`; the wallet re-subscribes to the shared day document).
 3. Windows PC → `install.ps1 -PairingCode …` → the guard receives a device id + secret.
 
-All devices share `families/{id}/children/{childId}/days/{yyyy-MM-dd}`; the phone also writes the
-derived `earnedMinutes` / `requiredDone` so other devices apply identical rules.
+All devices share `families/{id}/children/{childId}/days/{yyyy-MM-dd}`.
+
+### Task approval (server-side, R-32)
+Approval is decided by the server, not by the PIN on a phone:
+
+| Who | May write on `days/{day}` | Never |
+|---|---|---|
+| Child device (bound in `childDevices`, server-written) | `progress` (submissions: status `pending`, rep counts), `usedMinutes` **up only** (sent as `FieldValue.increment`), start a prayer lock (`prayerLock: true` + `prayerLockAt` = server time), end it only after the Free window (19 min after `prayerLockAt`) | `approved`, `earnedMinutes`, `requiredDone`; delete the day; another child's docs |
+| Parent device (member, not bound) | `progress`, `usedMinutes`, `prayerLock` | `approved`, `earnedMinutes`, `requiredDone` (only via `approveTask`) |
+| `approveTask` Cloud Function | `approved.{taskId}` (minutes, once per task per day, ≤ 120 per task, ≤ 600 per day), `earnedMinutes`, `requiredDone`, `progress.{taskId} = done`, ends the prayer lock for "I prayed" | — |
+
+1. Child taps *Done* / counts reps / *I prayed* → `progress.{taskId}.status = pending` (works offline:
+   Firestore queues the write) → `notifyParent`.
+2. Parent opens the parent dashboard (PIN) on a **parent phone** → *Approve* → `approveTask`
+   (`rejectTask` for *Reject*). The server reads the family doc and refuses any device listed in
+   `childDevices` (role from server data, never from client claims) and runs the credit in a transaction.
+3. Offline parent: the decision shows at once on that phone and waits in `ApprovalQueue`
+   (`lib/services/family/approval_queue.dart`, shared_preferences); it is sent when the wallet
+   rebuilds / the next decision is made online. Permanent refusals are dropped, never retried forever.
+4. Every device applies the result from the day doc: in a synced family a task counts only with an
+   `approved` entry (`WalletState.isApproved`), so a "done" status written by a tampered child client
+   earns nothing. Local-only families (no Firebase) keep approving on the device behind the PIN.
+5. A paired child device cannot approve even with the PIN: the dashboard shows
+   "Approve tasks from the parent phone".
+
+Family `settings` (adhan lock, controlled games, lock mode, time zone, parent pushes) are
+**parent-only** (R-33): only parent devices write the family doc; `_syncSettings` in `lib/app.dart`
+is skipped on a bound child device, and the parent phone writes the defaults on its first start.
+
+### Family plan & restore on a new phone (fix/family-entitlement-restore)
+- **Plan on every family device.** `verifyPurchase` writes `plan`, `planExpiresAt` (ISO string),
+  `inTrial`, `store` on `families/{id}` (server-only fields, readable by every member, child
+  devices included). `FamilyRepository.watchEntitlement()` streams them (server-confirmed
+  snapshots only, never the offline cache; local mode emits nothing). `planEntitlementProvider`
+  takes the highest active tier of this device's own verified purchase and the family doc, then
+  the `EntitlementCache` grace (7 days offline, clock-rollback safe), then the device trial, then
+  Free. Every new server answer (including "expired") is recorded in the cache once, by
+  `entitlementRecorderProvider`.
+- **The raw store token is server-only.** Ownership lives in `purchases/{sha256(token)}` →
+  `familyId` (first attach uses a transaction with `create()`, so two racing first purchases
+  cannot both win); the raw token (for referral deferrals) in `families/{id}/private/billing`.
+  Both are closed to clients in firestore.rules. Existing family docs are migrated once with
+  `backend/functions/scripts/migrate-purchase-tokens.js` (run at deploy, see backend/README.md).
+- **Restore on a new phone = link it from an existing parent phone.** The store token is a
+  bearer secret (`restorePurchases()` gives it to any device on that store account, a child's
+  tablet included), so it never grants membership or the plan: a token held by another family
+  makes `verifyPurchase` fail with `purchase_in_other_family`, and the subscription screen
+  (behind the parent PIN) explains: on the other parent phone open Parent → Link devices →
+  "Add a parent phone", then enter the code here. `createPairingCode` target `parent` is
+  accepted only from a parent member (not `childDevices`), same 6 digits / 10 min / single use,
+  plus 5 parent codes per family per day. Redeeming it adds the phone to `members` and the
+  server-only `parentDevices` map; the phone's own family must be an untouched fresh install and
+  is deleted (otherwise `parent_link_family_in_use`, so no data is abandoned); a child-bound
+  device is refused (`child_device`). Existing parent phones get a push. The app saves
+  `family.id`, switches `familyIdProvider` and re-runs the store restore, which now attaches.
+  Removing a linked device is still open (BACKLOG P1-3).
 
 ## Platforms
 | Platform | Game locking | Everything else |
@@ -93,6 +151,22 @@ fails if the two differ. Free = no store purchase (`Entitlement.effectiveTier ==
 Free features never need login, network or purchase. Paid screens show a kid-safe
 "ask a parent" card; the upgrade sheet and the plans screen sit behind the parent PIN.
 
+## Variants: Zad X Play / Zad X Kids (owner decision 2026-11-22)
+Decision record: docs/decisions/ZADX-KIDS-VARIANT.md.
+
+| | Zad X Play (default) | Zad X Kids (`ZADX_VARIANT=kids`) |
+|---|---|---|
+| App id / store name | `com.zadx.app`, Zad X Play | `com.zadx.kids`, Zad X Kids |
+| Islamic features (Quran, prayer times, adhan, adhkar, mosque + prophets games, Islamic praise) | ✓ | none: no route, tab, plan feature, notification or string |
+| Time locks | prayer lock at each adhan | study / bedtime / reading schedules (`lib/features/schedule/`, enforced natively on Android) |
+| Products | `zadx_*` | `zadx_kids_*` (same tiers, same server verification) |
+
+Where the switch lives: `AppConfig` (brand/products), `featuresOf`/`hasFeature` (plans),
+`appRoutes`/`shellTabsFor` (routing), `KidsLocalizationsDelegate` (strings), `starterTasks`,
+`activePraisePhrases`, `activeZadGames`, `BrandLogo`. Guard rail: `test/kids_variant_test.dart`
+with the single word list `tools/kids_forbidden_words.json`. CI builds both APKs
+(`zadx-android-apk`, `zadx-kids-android-apk`).
+
 ## Multiple children
 Free = 1 child, Basic = up to 2, Plus = up to 5 (`PlanPricing.maxChildren`).
 
@@ -126,6 +200,41 @@ minutes and never touch `WalletController`, so the game-time lock can't be bypas
 Sound/haptic hooks: override `eduGameHooksProvider` (`onCorrect`, `onWrong`, `onRoundComplete`,
 `onPartBuilt`; no-ops by default).
 
+## Launch splash (owner request 2026-11-22)
+`lib/features/splash/launch_splash.dart`. `main()` calls `LaunchSplash.show()` first, runs the existing
+start-up work while it plays, then hands the app to `splash.complete(...)`; the app is built under the
+splash, which fades out once both the reveal (1.3 s + 0.3 s exit) and the app are ready. Reduced motion
+(`MediaQuery.disableAnimations`) → no animation, 0.5 s hold, no fade. Wordmark "Zad X" is always Latin/LTR,
+default platform font (no font download). Native splash colour `#0A225E` (Android `zadx_splash_bg`,
+`values*/styles.xml`; iOS `LaunchScreen.storyboard`) = `AppColors.navy`, so there is no white flash.
+Variant-aware (docs/decisions/ZADX-KIDS-VARIANT.md): the logo always comes from `BrandLogo`.
+**Zad X Play** shows the logo, "Zad X" and the identity line `IslamicBrand.identityAr/En`
+("للأطفال المسلمين" / "For Muslim Kids", also in Help → About); screen-reader label "Zad X — <line>".
+**Zad X Kids** shows only the Latin "ZAD X KIDS" wordmark on a white badge over a navy → teal sky with
+sun-yellow and coral light: no Arabic, no religious line, no artwork logo; label "Zad X Kids". Both start
+from the native navy. The splash source holds no Arabic text (checked by test/kids_artwork_test.dart).
+Never stuck (review fix 2026-11-22): `main()` wraps start-up (`startUpApp()`) in try/catch and calls
+`splash.fail(...)` on an error; network steps (Firebase, family setup, notifications) time out after 5 s
+and fall back to local mode. If start-up failed or is not done after `LaunchSplash.maxHold` (6 s), the
+splash hands over to `StartupFallback` (lib/features/startup/: friendly message + a 56 dp "Try again"
+that re-runs `startUpApp`; English only in Zad X Kids); a late app still replaces it.
+
+## Reading homework (owner request 2026-11-22)
+Task kind `reading` (`TaskDefinition.readingMode` story | paperBook, `readingLevel`, `readingMinutes`).
+Parent → *Reading homework* card switches the tasks `reading_story` / `reading_book` on per child and
+picks the level (5–7, 8–10, 11–12) or minutes (10/15/20). The child opens `/reading/:taskId`:
+- **Story:** original offline stories in `lib/data/catalog/reading_stories.dart` (general/ethical themes
+  only: no Quran, hadith or rulings, so no scholar review; a test enforces it), then 2–3 multiple-choice
+  questions; a wrong answer just asks to try again.
+- **Paper book:** calm countdown with pause; "Send to my parent" appears only when time is up. The time
+  read is saved per child, task and day (`ReadingTimerStore`, local prefs only), counted tick by tick
+  (never from the wall clock); leaving the screen or Zad X going to the background pauses it, and it
+  continues from there. Cleared after hand-in.
+- **Zad X Kids:** the stories' English is shown in US English (`kidsUsEnglish` via `Localized.of`).
+Both end with `WalletController.submit` → `pending`; the reward is earned only when the parent approves
+(same PIN-protected approvals as every task). Gated by `AppFeature.tasksRewards` (Basic/Plus), like the
+rest of tasks. No network, microphone, camera or new permissions.
+
 ## Localization
 ARB files in `lib/l10n` (Arabic is the template). Add `fr`, `tr`, `ur`, `id` by creating
 `app_<code>.arb` and moving the code from `upcomingLanguages` to `supportedLanguages`.
@@ -158,7 +267,8 @@ settings. Lock state stays mirrored to the native stores so it is enforced when 
 - **Firestore offline persistence** on (default on Android/iOS; must be enabled explicitly on web
   — to verify for the current `cloud_firestore` version). Child writes are queued while offline.
 - **Queued parent commands** (`families/{id}/children/{childId}/commands/{id}`: lock, unlock, add
-  minutes, change limits, approve task) carry `issuedAt` (server timestamp) and a parent device id.
+  minutes, change limits) carry `issuedAt` (server timestamp) and a parent device id. Task approval
+  already goes through the `approveTask` callable (see "Task approval" above).
   The child device applies them in order when it sees them and records `appliedAt` locally.
 - **Child progress** (task status, used minutes) is written locally first, then synced.
 - **Conflict rule:** for locks and limits, **the parent's latest command wins** (ordered by server

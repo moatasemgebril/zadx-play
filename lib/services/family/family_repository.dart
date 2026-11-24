@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_variant.dart';
 import '../../data/models/child_profile.dart';
 import 'child_pause.dart';
 import 'firestore_family_repository.dart';
+import '../../data/models/plan.dart';
 
 /// Snapshot of a child's day that both the child and parent devices share.
 class FamilyDay {
@@ -16,6 +18,8 @@ class FamilyDay {
     this.earnedMinutes = 0,
     this.requiredDone = false,
     this.prayerLockSinceMs,
+    this.approved,
+    this.prayerLockAtMs,
   });
 
   final String day; // yyyy-MM-dd in the family's city
@@ -31,6 +35,15 @@ class FamilyDay {
   /// after the prayer window, measured from this time.
   final int? prayerLockSinceMs;
 
+  /// Server-only credits {taskId: minutes}, written by the `approveTask` Cloud Function after it
+  /// checked that the caller is a parent device (R-32). Null for a local-only family, where the
+  /// approval stays on this device. Never written by the app to Firestore.
+  final Map<String, int>? approved;
+
+  /// Server time (UTC ms) the current prayer lock reached Firestore (`prayerLockAt`). The rules
+  /// let a child device end a lock only after the prayer window counted from this time.
+  final int? prayerLockAtMs;
+
   Map<String, dynamic> toJson() => {
         'earnedMinutes': earnedMinutes,
         'requiredDone': requiredDone,
@@ -39,6 +52,8 @@ class FamilyDay {
         'usedMinutes': usedMinutes,
         'prayerLock': prayerLock,
         if (prayerLockSinceMs != null) 'prayerLockSinceMs': prayerLockSinceMs,
+        if (approved != null) 'approved': approved,
+        if (prayerLockAtMs != null) 'prayerLockAtMs': prayerLockAtMs,
       };
 
   factory FamilyDay.fromJson(Map<String, dynamic> j) => FamilyDay(
@@ -50,7 +65,67 @@ class FamilyDay {
         earnedMinutes: j['earnedMinutes'] as int? ?? 0,
         requiredDone: j['requiredDone'] as bool? ?? false,
         prayerLockSinceMs: j['prayerLockSinceMs'] as int?,
+        approved: parseCredits(j['approved']),
+        prayerLockAtMs: j['prayerLockAtMs'] as int?,
       );
+
+  /// {taskId: minutes} from server data; malformed entries are dropped. Null when absent.
+  static Map<String, int>? parseCredits(Object? raw) {
+    if (raw is! Map) return null;
+    final out = <String, int>{};
+    raw.forEach((k, v) {
+      if (k is String && v is num && v >= 0) out[k] = v.toInt();
+    });
+    return out;
+  }
+}
+
+/// The server refused an approval for good (not a parent device, bad input, ...): do not retry.
+class ApprovalRejected implements Exception {
+  const ApprovalRejected(this.code);
+  final String code;
+  @override
+  String toString() => 'ApprovalRejected($code)';
+}
+
+/// The store app of this build ('play' | 'kids'); each app only uses its own family plan.
+const String currentStoreApp = kIsKids ? 'kids' : 'play';
+
+/// The plan fields of [app] on a family doc (mirror of `familyPlanFor` in backend security.ts):
+/// `plans.<app>`, else the legacy top-level plan when `planApp` says it is [app] (no `planApp` =
+/// a Zad X Play plan bought before Zad X Kids existed). Anything else: no plan (Free).
+Map<String, Object?> familyPlanFieldsFor(Map<String, dynamic> data, String app) {
+  final plans = data['plans'];
+  if (plans is Map && plans[app] is Map) {
+    final e = plans[app] as Map;
+    return {'plan': e['plan'], 'planExpiresAt': e['planExpiresAt'], 'inTrial': e['inTrial']};
+  }
+  final owner = data['planApp'] == 'kids' ? 'kids' : 'play';
+  if (owner != app) return const {};
+  return {'plan': data['plan'], 'planExpiresAt': data['planExpiresAt'], 'inTrial': data['inTrial']};
+}
+
+/// The plan `verifyPurchase` (backend/functions/src/index.ts) stores on families/{id}:
+/// `plans.<app>` = {`plan` ('basic' | 'plus'), `planExpiresAt` (ISO-8601 string), `inTrial` (bool)}
+/// plus the legacy top-level fields for Zad X Play. These fields are server-only (firestore.rules)
+/// and readable by every family member, so a child device gets the plan the parent paid for on
+/// another phone.
+///
+/// Separate entitlements per app: a Zad X Kids purchase never unlocks Zad X Play and vice versa
+/// ([app], default: this build).
+///
+/// Fails closed: an unknown plan, or a plan without a readable expiry, is Free.
+Entitlement parseFamilyEntitlement(Map<String, dynamic> data, {DateTime Function()? now, String app = currentStoreApp}) {
+  final fields = familyPlanFieldsFor(data, app);
+  final tier = parsePlanTier(fields['plan']);
+  final raw = fields['planExpiresAt'];
+  final expiresAt = switch (raw) {
+    String s => DateTime.tryParse(s)?.toUtc(),
+    DateTime d => d.toUtc(),
+    _ => null,
+  };
+  if (tier == null || expiresAt == null) return Entitlement(now: now);
+  return Entitlement(tier: tier, expiresAt: expiresAt, inTrial: fields['inTrial'] == true, now: now);
 }
 
 /// Syncs a child's day between the child device and the parent device(s).
@@ -62,7 +137,34 @@ abstract class FamilyRepository {
   /// [day] is the date in the family's city (yyyy-MM-dd).
   Stream<FamilyDay> watchDay(String childId, String day);
 
-  Future<void> saveDay(String childId, FamilyDay day);
+  /// The family's server-written plan ([parseFamilyEntitlement]), emitted only for snapshots
+  /// confirmed by the server (never from the offline cache: offline, the app relies on the
+  /// EntitlementCache grace instead). Emits nothing for local-only.
+  Stream<Entitlement> watchEntitlement();
+
+  /// Saves this device's part of the day: submissions (`progress`), used minutes and, when
+  /// [lockChanged], the prayer lock state. Never the server-only credits (`approved`,
+  /// `earnedMinutes`, `requiredDone`): those come from [approveTask].
+  Future<void> saveDay(String childId, FamilyDay day, {bool lockChanged = false});
+
+  /// True when approvals and minute credits are decided by the server ([approveTask]), i.e. the
+  /// family is synced. False for a local-only family: the approval stays on this device.
+  bool get serverApprovals;
+
+  /// Parent device only (the server checks the role): approves [taskId] for [childId] on [day]
+  /// and credits [minutes] once, within the daily cap. Throws [ApprovalRejected] when the server
+  /// refuses for good; any other error is transient (offline): the caller queues and retries.
+  Future<void> approveTask({
+    required String childId,
+    required String day,
+    required String taskId,
+    required int minutes,
+    required List<String> requiredTaskIds,
+    required bool isPrayer,
+  });
+
+  /// Parent device only: sends a submission back to "todo". Same errors as [approveTask].
+  Future<void> rejectTask({required String childId, required String day, required String taskId});
 
   /// Settings other devices need (city, method, controlled games for Windows Guard).
   Future<void> saveSettings(Map<String, Object?> settings);
@@ -96,7 +198,26 @@ class LocalFamilyRepository implements FamilyRepository {
   Stream<FamilyDay> watchDay(String childId, String day) => _controller.stream;
 
   @override
-  Future<void> saveDay(String childId, FamilyDay day) async {}
+  Stream<Entitlement> watchEntitlement() => const Stream<Entitlement>.empty();
+
+  @override
+  Future<void> saveDay(String childId, FamilyDay day, {bool lockChanged = false}) async {}
+
+  @override
+  bool get serverApprovals => false;
+
+  @override
+  Future<void> approveTask({
+    required String childId,
+    required String day,
+    required String taskId,
+    required int minutes,
+    required List<String> requiredTaskIds,
+    required bool isPrayer,
+  }) async {}
+
+  @override
+  Future<void> rejectTask({required String childId, required String day, required String taskId}) async {}
 
   @override
   Future<void> saveSettings(Map<String, Object?> settings) async {}

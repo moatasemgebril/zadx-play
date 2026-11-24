@@ -93,13 +93,26 @@ class TrialClock {
 final trialClockProvider = Provider<TrialClock>((ref) => TrialClock(ref.watch(sharedPrefsProvider)));
 
 /// What the family has right now (pure, unit-tested). In order:
-/// 1. a paid plan the store/server just verified,
+/// 1. the highest active paid plan the server confirmed: this device's own store purchase
+///    (`verifyPurchase`) or the family doc's plan (bought on another family phone),
 /// 2. the last verified paid tier still inside its offline grace ([EntitlementCache]),
 /// 3. the on-device Plus trial,
 /// 4. Free.
-Entitlement resolveEntitlement({Entitlement? store, PlanTier? cachedTier, required TrialStatus trial}) {
-  if (store != null && !store.isFree) return store;
+Entitlement resolveEntitlement({Entitlement? store, Entitlement? family, PlanTier? cachedTier, required TrialStatus trial}) {
+  final paid = bestVerifiedEntitlement(store, family);
+  if (paid != null && !paid.isFree) return paid;
   if (cachedTier != null) return Entitlement(tier: cachedTier);
   if (trial.active) return Entitlement(tier: PlanTier.plus, inTrial: true, trialDaysLeft: trial.daysLeft, deviceTrial: true);
   return const Entitlement();
+}
+
+int _rank(PlanTier? tier) => switch (tier) { PlanTier.plus => 2, PlanTier.basic => 1, null => 0 };
+
+/// The better of two server-confirmed answers (highest tier still active now). `null` only when
+/// neither source has answered yet; an answer of Free (e.g. expired) is kept, so it can clear
+/// the offline cache.
+Entitlement? bestVerifiedEntitlement(Entitlement? a, Entitlement? b) {
+  if (a == null) return b;
+  if (b == null) return a;
+  return _rank(b.effectiveTier) > _rank(a.effectiveTier) ? b : a;
 }

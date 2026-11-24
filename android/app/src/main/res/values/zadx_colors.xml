@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Launch background: same navy as LaunchSplash.background (lib/features/splash/launch_splash.dart)
+         and ios/Runner/Base.lproj/LaunchScreen.storyboard, so there is no white flash before the first frame. -->
+    <color name="zadx_splash_bg">#0A225E</color>
+</resources>

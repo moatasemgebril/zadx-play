@@ -11,7 +11,11 @@ Usage:
 Format: mono, 22050 Hz, 16-bit PCM WAV.
 Design goals (children's app):
   * soft attacks, no harsh square/saw waves, nothing loud or scary;
-  * short effects (< 60 KB each) so they load instantly.
+  * short effects (< 120 KB each) so they load instantly.
+
+Game-feel effects (owner request 2026-11-23): page transition, "combo win" and
+coin/point pickup. These are ORIGINAL compositions with a generic arcade feel;
+they do not copy, sample or imitate any other game's sounds or melodies.
 """
 
 import math
@@ -163,8 +167,50 @@ def sfx_unlock():
 
 
 def sfx_transition():
-    # very soft airy whoosh
-    return soft_noise(0.22, 500, 1600, seed=7)
+    # page turn: very soft airy whoosh, then a tiny high chime as the new page lands
+    buf = []
+    mix_into(buf, soft_noise(0.22, 450, 1500, seed=7), 0.0)
+    mix_into(buf, bell(note("E6"), 0.22, attack=0.004, decay=16, partials=((1, 1.0), (2.0, 0.12))), 0.13, gain=0.09)
+    mix_into(buf, bell(note("B6"), 0.18, attack=0.004, decay=20, partials=((1, 1.0),)), 0.17, gain=0.05)
+    return buf
+
+
+# Coin pitch variants: playback-speed ratios 0.95-1.08 rendered into separate
+# files, because just_audio's setSpeed keeps the pitch on Android/iOS/web and
+# setPitch is Android-only. Keep in sync with coinVariantAssets in sfx_service.dart.
+COIN_VARIANTS = (("coin_lo.wav", 0.95), ("coin.wav", 1.0), ("coin_up.wav", 1.04), ("coin_hi.wav", 1.08))
+
+
+def sfx_coin(ratio=1.0):
+    # bright, short pickup ping: two quick rising partials (B5 then E6), ~150 ms
+    soft = ((1, 1.0), (2.0, 0.10), (3.0, 0.04))  # sine + a hint of triangle-like overtones
+    buf = []
+    mix_into(buf, bell(note("B5") * ratio, 0.07, attack=0.003, decay=30, partials=soft), 0.0, gain=0.7)
+    mix_into(buf, bell(note("E6") * ratio, 0.11, attack=0.003, decay=22, partials=soft), 0.045)
+    return buf
+
+
+def marimba(freq, dur, decay=9.0):
+    # rounded mallet tone: fundamental + the marimba-like ~3.9x overtone that dies fast
+    return bell(freq, dur, attack=0.004, decay=decay, partials=((1, 1.0), (3.93, 0.16)))
+
+
+def sfx_win_combo():
+    # cascading rising pentatonic run (C major pentatonic, original pattern),
+    # landing on a soft C-major chord with a gentle sparkle/shimmer tail (~1.2 s)
+    buf = []
+    run = ["C5", "D5", "E5", "G5", "A5", "C6", "D6", "E6", "G6"]
+    for i, n in enumerate(run):
+        mix_into(buf, marimba(note(n), 0.28), i * 0.062, gain=0.55 + 0.05 * i)
+    land = len(run) * 0.062
+    for n in ["C6", "E6", "G6"]:
+        mix_into(buf, bell(note(n), 0.7, attack=0.008, decay=4.2, partials=((1, 1.0), (2.0, 0.18))), land, gain=0.5)
+    mix_into(buf, bell(note("C5"), 0.7, attack=0.01, decay=4.0, partials=((1, 1.0),)), land, gain=0.35)
+    # shimmer: quiet, short high pings (deterministic order), nothing above ~3.2 kHz fundamental
+    sparkle = [("E7", 0.04), ("C7", 0.11), ("G6", 0.17), ("D7", 0.24), ("A6", 0.31), ("C7", 0.38)]
+    for n, t in sparkle:
+        mix_into(buf, bell(note(n), 0.2, attack=0.003, decay=18, partials=((1, 1.0),)), land + t, gain=0.12)
+    return buf
 
 
 def main():
@@ -176,7 +222,12 @@ def main():
     write("level_up.wav", sfx_level_up())
     write("task_complete.wav", sfx_task_complete())
     write("unlock.wav", sfx_unlock())
-    write("transition.wav", sfx_transition(), peak=0.22)
+    # quiet on purpose: it plays on every page change (about -10 dBFS)
+    write("transition.wav", sfx_transition(), peak=0.32)
+    # new game-feel effects peak around -3 dBFS (0.7); the parent's volume still applies
+    for name, ratio in COIN_VARIANTS:
+        write(name, sfx_coin(ratio), peak=0.7)
+    write("win_combo.wav", sfx_win_combo(), peak=0.7)
 
 
 if __name__ == "__main__":

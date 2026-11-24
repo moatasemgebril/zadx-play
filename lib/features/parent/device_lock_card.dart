@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
@@ -66,16 +67,19 @@ class DeviceLockCard extends ConsumerWidget {
         // Plans without tasks (Free): a daily screen-time limit instead of earned minutes, and a
         // prayer lock that opens again by itself after the prayer window.
         if (!tasksEnabled) ...[
-          const SizedBox(height: 6),
-          Text(l10n.deviceLockFreePrayerNote(Fmt.digits(freePrayerLockWindow.inMinutes, lang)),
-              style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+          // Zad X Kids has no prayer lock (its schedules are in the Schedules card).
+          if (!kIsKids) ...[
+            const SizedBox(height: 6),
+            Text(l10n.deviceLockFreePrayerNote(Fmt.digits(freePrayerLockWindow.inMinutes, lang)),
+                style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+          ],
           const SizedBox(height: 8),
           Text(l10n.deviceLockDailyLimit, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final m in const [30, 60, 90, 120, 180])
               ChoiceChip(
-                label: Text(l10n.deviceLockMinutes(Fmt.digits(m, lang)), style: const TextStyle(fontSize: 15)),
+                label: Text(l10n.deviceLockMinutes(m, Fmt.digits(m, lang)), style: const TextStyle(fontSize: 15)),
                 selected: s.dailyLimitMinutes == m,
                 onSelected: (_) => ctrl.setDailyLimitMinutes(m),
               ),

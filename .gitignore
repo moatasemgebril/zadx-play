@@ -12,3 +12,4 @@ backend/functions/lib/
 .DS_Store
 *.iml
 .idea/
+.claude/worktrees/

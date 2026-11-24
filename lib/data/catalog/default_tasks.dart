@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/localized.dart';
 import '../models/family_task.dart';
 
@@ -18,3 +19,15 @@ const defaultTasks = <TaskDefinition>[
   TaskDefinition(id: 'squat', title: Localized('سكوات', 'Squats'), subtitle: Localized('تمرين', 'Exercise'), kind: TaskKind.exercise, rewardMinutes: 5, color: Color(0xFF2DBE7E), reps: 10),
   TaskDefinition(id: 'toes', title: Localized('لمس أصابع القدم', 'Toe touches'), subtitle: Localized('تمرين', 'Exercise'), kind: TaskKind.exercise, rewardMinutes: 5, color: Color(0xFFC4B5FD), reps: 10),
 ];
+
+/// Task kinds that exist only in Zad X Play (prayer, Quran memorisation, adhkar).
+const islamicTaskKinds = {TaskKind.prayer, TaskKind.quran, TaskKind.adhkar};
+
+/// Starter tasks of [variant]: Zad X Kids gets the same list without the Islamic tasks
+/// (homework stays the must-do task). New shared tasks added to [defaultTasks] appear in both apps.
+List<TaskDefinition> starterTasksFor(AppVariant variant) => variant == AppVariant.kids
+    ? [for (final t in defaultTasks) if (!islamicTaskKinds.contains(t.kind)) t]
+    : defaultTasks;
+
+/// Starter tasks of this build.
+final List<TaskDefinition> starterTasks = starterTasksFor(appVariant);

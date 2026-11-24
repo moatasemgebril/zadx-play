@@ -2,8 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../core/app_variant.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_theme.dart';
+import 'brand_logo.dart';
 
 /// White rounded card with the soft purple shadow used across Zad X.
 class ZadCard extends StatelessWidget {
@@ -186,24 +188,27 @@ class PatternBackground extends StatelessWidget {
   Widget build(BuildContext context) => Stack(children: [
         Positioned.fill(child: ColoredBox(color: tint)),
         Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _PatternPainter(seed)))),
-        Positioned.fill(
-          child: IgnorePointer(
-            child: Center(
-              child: Opacity(
-                opacity: 0.12,
-                child: ShaderMask(
-                  shaderCallback: (r) => const RadialGradient(colors: [Colors.black, Colors.transparent], stops: [0.45, 0.75])
-                      .createShader(r),
-                  blendMode: BlendMode.dstIn,
-                  child: Transform.rotate(
-                    angle: -0.1,
-                    child: Image.asset('assets/images/zadx_logo.jpg', width: 340, excludeFromSemantics: true),
+        // Logo watermark. Zad X Kids has no artwork logo yet (the Zad X Play logo shows a crescent
+        // and mosques), so it gets no watermark: docs/decisions/ZADX-KIDS-VARIANT.md.
+        if (!kIsKids)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: Opacity(
+                  opacity: 0.12,
+                  child: ShaderMask(
+                    shaderCallback: (r) => const RadialGradient(colors: [Colors.black, Colors.transparent], stops: [0.45, 0.75])
+                        .createShader(r),
+                    blendMode: BlendMode.dstIn,
+                    child: Transform.rotate(
+                      angle: -0.1,
+                      child: Image.asset(BrandLogo.islamicAsset, width: 340, excludeFromSemantics: true),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
         child,
       ]);
 }

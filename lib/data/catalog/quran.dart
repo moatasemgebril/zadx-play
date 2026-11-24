@@ -71,3 +71,18 @@ Voice? resolveReciter(String? id, List<Voice> visible) {
   if (visible.isEmpty) return null;
   return visible.where((v) => v.id == id).firstOrNull ?? visible.first;
 }
+
+/// The reciter of Quranic adhkar (owner decision 2026-11-23): Mishary Rashid Alafasy only,
+/// whatever reciter is chosen on the Quran screen.
+const adhkarReciterId = 'afasy';
+
+/// The adhkar reciter if a screen may offer it, else null (no play button at all).
+///
+/// Same licence rule as [visibleReciters]: in release builds Alafasy is offered only while
+/// `licenceConfirmed` is true (Quran Foundation written approval, 2026-11-21). Never falls
+/// back to another reciter.
+Voice? adhkarReciter({bool releaseBuild = kReleaseMode, List<Voice> all = reciters}) =>
+    visibleReciters(releaseBuild: releaseBuild, all: all).where((v) => v.id == adhkarReciterId).firstOrNull;
+
+/// Credit shown next to every adhkar play button, e.g. «مشاري العفاسي · Mishary Alafasy».
+String reciterCredit(Voice v) => '${v.name.ar} · ${v.name.en}';

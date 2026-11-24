@@ -76,7 +76,9 @@ class _ProphetsGameScreenState extends ConsumerState<ProphetsGameScreen> {
     }
     final stars = starsForRound(firstTryCorrect: _firstTry, total: _questions.length);
     ref.read(starsProvider.notifier).earn(stars);
-    ref.read(eduGameHooksProvider).onRoundComplete(stars);
+    final hooks = ref.read(eduGameHooksProvider);
+    hooks.onRoundComplete(stars); // win combo
+    hooks.onStarsEarned(stars); // then one coin ping per star
     setState(() {
       _earned = stars;
       _phase = _Phase.done;
@@ -97,7 +99,7 @@ class _ProphetsGameScreenState extends ConsumerState<ProphetsGameScreen> {
             firstTry: _firstTry,
             total: _questions.length,
             onPlayAgain: _start,
-            onBack: () => context.pop(),
+            onBack: () => exitEduGame(context),
             onBuild: () => context.pushReplacement(Routes.eduMasjid),
           ),
       },

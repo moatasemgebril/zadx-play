@@ -8,8 +8,8 @@ service cloud.firestore {
     }
     // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
     function serverOnlyFamilyKeys() {
-      return ['plan', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
-              'referralPaid', 'referralCode', 'members', 'childDevices', 'createdAt', 'freeChildId'];
+      return ['plan', 'plans', 'planApp', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
+              'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt', 'freeChildId'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
     function validDay(day) {
@@ -21,6 +21,7 @@ service cloud.firestore {
         && (!('requiredDone' in d) || d.requiredDone is bool)
         && (!('prayerLock' in d) || d.prayerLock is bool)
         && (!('prayerLockSinceMs' in d) || (d.prayerLockSinceMs is int && d.prayerLockSinceMs >= 0))
+        && (!('prayerLockAt' in d) || d.prayerLockAt is timestamp)
         && (!('progress' in d) || (d.progress is map && d.progress.size() <= 100));
     }
 
@@ -48,9 +49,60 @@ service cloud.firestore {
         && d.avatar is string && d.avatar.matches('^[a-z]{1,16}$')
         && (!('updatedAt' in d) || d.updatedAt == request.time);
     }
+
+    // ---- Task approval + prayer lock (R-32) --------------------------------
+    // Minutes are credited ONLY by the approveTask Cloud Function after it checks server-side that
+    // the caller is a parent device. No client (parent or child) writes these day fields.
+    // `prayerLockSinceMs` (device clock of the lock start) is no longer synced: a child could set it
+    // to the past to shorten its own lock. The lock window counts only from the server-stamped
+    // `prayerLockAt`. Only approveTask (admin SDK) touches it, to delete legacy values.
+    function serverOnlyDayKeys() {
+      return ['approved', 'earnedMinutes', 'requiredDone', 'prayerLockSinceMs'];
+    }
+    // Fields of removed features: no client (parent or child) may set, change or add them.
+    // `prayerPaused` (the "excused" prayer pause) was removed by owner decision 2026-11-22.
+    function removedDayKeys() {
+      return ['prayerPaused'];
+    }
+    // What a paired child device may write on its own day doc: its submissions (`progress`,
+    // status "pending"; "done" counts for nothing without a server `approved` entry), more used
+    // minutes, and a prayer lock that it may START but end only after the Free prayer window.
+    function childDayKeys() {
+      return ['day', 'progress', 'usedMinutes', 'prayerLock', 'prayerLockAt', 'updatedAt', 'updatedBy'];
+    }
+    // AppConfig.playWindowAfterPrayerMinutes (20) minus one minute of clock skew, measured from the
+    // server time the lock reached Firestore (prayerLockAt = serverTimestamp()).
+    function prayerWindowOver(old) {
+      return old.get('prayerLockAt', null) is timestamp
+        && request.time >= old.prayerLockAt + duration.value(19, 'm');
+    }
+    function childDayCreateOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(childDayKeys())
+        && (!('prayerLockAt' in d) || d.prayerLockAt == request.time)
+        && (d.get('prayerLock', false) == false || d.get('prayerLockAt', null) == request.time)
+        && (!('updatedBy' in d) || d.updatedBy == request.auth.uid);
+    }
+    function childDayUpdateOk() {
+      let d = request.resource.data;
+      let old = resource.data;
+      let changed = d.diff(old).affectedKeys();
+      return changed.hasOnly(childDayKeys())
+        // Used minutes only go up (the app sends increments; the Windows guard adds its own).
+        && (!changed.hasAny(['usedMinutes']) || d.get('usedMinutes', 0) >= old.get('usedMinutes', 0))
+        && (!changed.hasAny(['prayerLockAt']) || d.prayerLockAt == request.time)
+        // Lock on: stamped with the server time. Lock off: only after the window (else a parent approves).
+        && (!changed.hasAny(['prayerLock'])
+            || (d.prayerLock == true && d.get('prayerLockAt', null) == request.time)
+            || (d.prayerLock == false && prayerWindowOver(old)))
+        && (!changed.hasAny(['updatedBy']) || d.updatedBy == request.auth.uid);
+    }
     // -----------------------------------------------------------------------
 
     match /families/{familyId} {
+      // Every member reads the family doc, child devices included: that is how a child device
+      // gets the plan the parent paid for (plan, planExpiresAt, inTrial, store). Those fields stay
+      // server-only (serverOnlyFamilyKeys). The raw store token is NOT on this doc (private/billing).
       allow read: if signedIn() && request.auth.uid in resource.data.members;
       // A new family has exactly one member (the creator) and no entitlement / referral fields.
       allow create: if signedIn()
@@ -62,9 +114,12 @@ service cloud.firestore {
       // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
+        // parentDevices {uid: linkedAt}: written only by redeemPairingCode (parent code).
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['parentDevices'])
         && (!('settings' in request.resource.data) || request.resource.data.settings is map)
-        // Multi-child: child devices may only sync `settings`.
-        && (isParent(familyId) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settings']));
+        // R-33: family settings (adhan lock, games, lock mode, ...) are parent-only. A paired child
+        // device reads the family doc but never writes it.
+        && isParent(familyId);
 
       // Multi-child: parents manage every child; a paired child device sees only its own child.
       match /children/{childId} {
@@ -73,8 +128,16 @@ service cloud.firestore {
         allow delete: if isParent(familyId);
 
         match /days/{day} {
-          allow read, delete: if isParent(familyId) || isChildDevice(familyId, childId);
-          allow create, update: if (isParent(familyId) || isChildDevice(familyId, childId)) && validDay(day);
+          allow read: if isParent(familyId) || isChildDevice(familyId, childId);
+          // A child device deleting its day would reset its used minutes and prayer lock.
+          allow delete: if isParent(familyId);
+          allow create: if validDay(day) && (
+            (isParent(familyId) && !request.resource.data.keys().hasAny(serverOnlyDayKeys().concat(removedDayKeys())))
+            || (isChildDevice(familyId, childId) && childDayCreateOk()));
+          allow update: if validDay(day) && (
+            (isParent(familyId)
+              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyDayKeys().concat(removedDayKeys())))
+            || (isChildDevice(familyId, childId) && childDayUpdateOk()));
         }
       }
 
@@ -87,6 +150,16 @@ service cloud.firestore {
         allow read: if isMember(familyId);
         allow write: if false;
       }
+
+      // private/billing = { purchaseToken } (raw store token): Cloud Functions only.
+      match /private/{docId} {
+        allow read, write: if false;
+      }
+    }
+
+    // purchases/{sha256(store token)} = { familyId, store } (verifyPurchase ownership): Cloud Functions only.
+    match /purchases/{tokenHash} {
+      allow read, write: if false;
     }
 
     match /pairingCodes/{code} {

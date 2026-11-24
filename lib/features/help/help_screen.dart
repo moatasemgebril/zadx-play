@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/app_config.dart';
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
@@ -8,7 +10,9 @@ import '../../data/models/plan.dart';
 import '../../services/assistant/assistant_service.dart';
 import '../../services/billing/subscription_service.dart';
 import '../subscription/paid_feature_gate.dart';
+import 'assistant_parent_lock.dart';
 import '../../shared/art/zad_art.dart';
+import '../../shared/widgets/brand_logo.dart';
 import '../../shared/widgets/zad_widgets.dart';
 
 class HelpScreen extends StatelessWidget {
@@ -30,6 +34,13 @@ class HelpScreen extends StatelessWidget {
       (l10n.faq3Q, l10n.faq3A),
       (l10n.faq4Q, l10n.faq4A),
       (l10n.faq5Q, l10n.faq5A),
+      (l10n.faq6Q, l10n.faq6A),
+      (l10n.faq7Q, l10n.faq7A),
+      (l10n.faq8Q, l10n.faq8A),
+      (l10n.faq9Q, l10n.faq9A),
+      (l10n.faq10Q, l10n.faq10A),
+      (l10n.faq11Q, l10n.faq11A),
+      (l10n.faq12Q, l10n.faq12A),
     ];
     const stepColors = [AppColors.yellow, AppColors.sky, AppColors.coral, Color(0xFF7ED9B8), Color(0xFFC4B5FD)];
 
@@ -38,7 +49,11 @@ class HelpScreen extends StatelessWidget {
       body: ZadSceneBackground(
         scene: ZadScene.parent,
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          const _AssistantGate(),
+          // About Zad X Play: who it is for (owner request 2026-11-22). Not in Zad X Kids.
+          if (!kIsKids) ...[const _AboutCard(), const SizedBox(height: 14)],
+          // Parent PIN first (child safety), then the plan check (_AssistantGate: server-verified
+          // plan only, since the server refuses the assistant during the on-device trial).
+          const AssistantParentLock(child: _AssistantGate()),
           const SizedBox(height: 14),
           ZadCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -222,5 +237,27 @@ class _Bubble extends StatelessWidget {
           ),
           child: Text(text, style: TextStyle(fontSize: 16, height: 1.5, color: fromUser ? Colors.white : AppColors.ink)),
         ),
+      );
+}
+
+/// Zad X Play intro: logo, name and the identity line ("For Muslim Kids") in the app language.
+class _AboutCard extends StatelessWidget {
+  const _AboutCard();
+
+  @override
+  Widget build(BuildContext context) => ZadCard(
+        child: Row(children: [
+          const BrandLogo(width: 84, height: 56),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(IslamicBrand.storeName, style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                IslamicBrand.identityFor(context.lang),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.purpleDark),
+              ),
+            ]),
+          ),
+        ]),
       );
 }

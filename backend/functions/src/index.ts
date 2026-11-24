@@ -6,6 +6,8 @@
  *  verifyPurchase   – validates store receipts, stores the entitlement, records referrals
  *  referralStatus   – the caller's invite code + number of friends who paid
  *  playNotifications– Google Play RTDN webhook: credits referrers on a friend's first payment
+ *  appStoreNotifications – App Store Server Notifications v2: keeps iOS entitlements current
+ *  approveTask / rejectTask – parent devices approve a child's task; minutes are credited only here (R-32)
  *  createPairingCode / redeemPairingCode – link child phones and Windows PCs to a family
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
@@ -23,16 +25,31 @@ import { google } from "googleapis";
 import { randomBytes, randomInt } from "crypto";
 import {
   DEFAULT_CHILD_ID, HEARTBEAT_RETENTION_MS, HEARTBEAT_STALE_MS, NOTIFY_TYPES, WindowState, childPaused, heartbeatAction,
-  hexDigestEquals, pairingRedeemRefusal,
-  isPairingCode, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, protectionAlertText, rateLimitDecision,
+  hexDigestEquals, pairingRedeemRefusal, pausePlanOf,
+  familyPlanFor, isPairingCode, parentNotificationBody, isSafeId, normaliseReferralCode, parseProtectionReport, planAllows, planForRequest, protectionAlertText, rateLimitDecision,
   rateLimitKey, sanitiseHistory, sanitiseNotifyData, sha256Hex, tamperReasonsToAlert,
 } from "./security";
+// Purchase ownership (verifyPurchase) + parent codes (redeemPairingCode).
+import { oldFamilyAction, purchaseOwnerDecision } from "./security";
+// Store products of Zad X Play and Zad X Kids (docs/decisions/ZADX-KIDS-VARIANT.md).
+import {
+  ANDROID_PACKAGES, KIDS_ASSISTANT_PROMPT, appForAndroidPackage, assistantVariant, productIdFor, productInfo, verifiedLine,
+} from "./security";
+// Server-side task approval (R-32).
+import { applyApproval, isApprovalDay, parseApprovalRequest } from "./security";
+// Per-app tier lookup for verified App Store data (a Play product never verifies a Kids purchase).
+import { type StoreApp, tierForApp } from "./security";
+// App Store receipt verification (signed JWS, verified against Apple's root CA chain).
+import {
+  AppleEntitlement, AppleNotification, AppleTransaction, appleNotificationAction, appleOwnershipKey, isFirstPaidRenewal,
+  latestAppleEntitlement, verifyAppleSubscription,
+} from "./apple-logic";
+import { APPLE_PRIVATE_KEY, appleDeps } from "./apple";
 
 initializeApp();
 const db = getFirestore();
 
 const ANTHROPIC_API_KEY = defineSecret("ANTHROPIC_API_KEY");
-const ANDROID_PACKAGE = "com.zadx.app";
 const ASSISTANT_MODEL = "claude-haiku-5-5";
 const BASIC_DAILY_QUESTIONS = 10;
 /** Hard per-family cap for Plus too, so one account cannot run up the Anthropic bill. */
@@ -125,6 +142,8 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
   const question = typeof req.data?.question === "string" ? req.data.question.slice(0, 1000).trim() : "";
   const language = req.data?.language === "en" ? "en" : "ar";
   const history = sanitiseHistory(req.data?.history);
+  // Zad X Kids: a prompt with no religious content. Anything else gets the Zad X Play prompt.
+  const systemPrompt = assistantVariant(req.data?.variant) === "kids" ? KIDS_ASSISTANT_PROMPT : SYSTEM_PROMPT;
   if (!question) throw new HttpsError("invalid-argument", "Empty question.");
   await enforceRateLimit("ai", uid, 6, 60_000); // burst protection per user
 
@@ -132,11 +151,12 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
   const family = await familyOf(uid);
   // The assistant is for parents: paired child devices may not use it (child-safety).
   if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
-  const plan = family.get("plan");
-  if (!planAllows(plan, family.get("planExpiresAt"), Date.now(), "assistant")) {
+  // Only the plan of the calling app counts (a Kids plan never unlocks Zad X Play and vice versa).
+  const { plan, planExpiresAt } = planForRequest(family.data(), req.data?.variant);
+  if (!planAllows(plan, planExpiresAt, Date.now(), "assistant")) {
     throw new HttpsError("permission-denied", "subscription_required");
   }
-  const dailyLimit = planAllows(plan, family.get("planExpiresAt"), Date.now(), "unlimitedAssistant")
+  const dailyLimit = planAllows(plan, planExpiresAt, Date.now(), "unlimitedAssistant")
     ? PLUS_DAILY_QUESTIONS
     : BASIC_DAILY_QUESTIONS;
   const day = new Date().toISOString().slice(0, 10);
@@ -159,7 +179,7 @@ export const askAssistant = onCall({ secrets: [ANTHROPIC_API_KEY], region: "euro
     body: JSON.stringify({
       model: ASSISTANT_MODEL,
       max_tokens: 500,
-      system: `${SYSTEM_PROMPT}\nReply language: ${language === "ar" ? "Arabic" : "English"}.`,
+      system: `${systemPrompt}\nReply language: ${language === "ar" ? "Arabic" : "English"}.`,
       messages,
     }),
     signal: AbortSignal.timeout(25_000),
@@ -195,12 +215,9 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
 
   const ar = (family.get("language") ?? "ar") === "ar";
   const title = "Zad X";
-  const body =
-    type === "adhan"
-      ? ar
-        ? "وقت الصلاة — لو ابنك بيلعب على البلايستيشن أو الإكس بوكس، اقفله من التطبيق الرسمي"
-        : "Prayer time — pause PlayStation or Xbox from the official app if your child is playing"
-      : ar ? "فيه مهمة مستنية موافقتك" : "A task is waiting for your approval";
+  // Zad X Kids families never get the adhan push (no religious content).
+  const body = parentNotificationBody(type, ar, settings.variant);
+  if (!body) return { sent: 0 };
 
   const res = await getMessaging().sendEachForMulticast({
     tokens,
@@ -214,74 +231,147 @@ export const notifyParent = onCall({ region: "europe-west1" }, async (req) => {
 // Purchases + referrals
 // ---------------------------------------------------------------------------
 
-const PRODUCTS: Record<string, { tier: "basic" | "plus" }> = {
-  zadx_basic_monthly: { tier: "basic" },
-  zadx_basic_yearly: { tier: "basic" },
-  zadx_plus_monthly: { tier: "plus" },
-  zadx_plus_yearly: { tier: "plus" },
-};
-
-function isKnownProduct(id: string): boolean {
-  return Object.prototype.hasOwnProperty.call(PRODUCTS, id);
-}
+// Product ids of both apps: PRODUCTS / productInfo in security.ts.
 
 async function androidPublisher() {
   const auth = new google.auth.GoogleAuth({ scopes: ["https://www.googleapis.com/auth/androidpublisher"] });
   return google.androidpublisher({ version: "v3", auth });
 }
 
-export const verifyPurchase = onCall({ region: "europe-west1" }, async (req) => {
+export const verifyPurchase = onCall({ region: "europe-west1", secrets: [APPLE_PRIVATE_KEY] }, async (req) => {
   const uid = requireUid(req.auth);
   const { platform, productId, verificationData, referralCode } = req.data ?? {};
-  if (typeof productId !== "string" || !isKnownProduct(productId)) throw new HttpsError("invalid-argument", "Unknown product.");
-  if (typeof verificationData !== "string" || verificationData.length < 10 || verificationData.length > 4096) {
+  const product = productInfo(productId);
+  if (!product) throw new HttpsError("invalid-argument", "Unknown product.");
+  if (platform !== "android" && platform !== "ios") throw new HttpsError("invalid-argument", "Unknown platform.");
+  // iOS app receipts and signed transactions (with their x5c chain) are larger than Play tokens.
+  const maxReceipt = platform === "ios" ? 65536 : 4096;
+  if (typeof verificationData !== "string" || verificationData.length < 10 || verificationData.length > maxReceipt) {
     throw new HttpsError("invalid-argument", "Bad receipt.");
   }
   await enforceRateLimit("purchase", uid, 20, 60 * 60_000);
-  let tier = PRODUCTS[productId].tier;
+  // The app that sold it decides the Play package it is verified against (com.zadx.app / com.zadx.kids).
+  const app = product.app;
+  let tier = product.tier;
 
   let expiresAt: string | null = null;
   let inTrial = false;
+  let verifiedProductId: string | null = null;
+  // What proves ownership of this subscription across renewals (purchases/{sha256(key)}).
+  // Android: the Play purchase token. iOS: apple:<originalTransactionId> (never the raw receipt).
+  let ownershipKey: string = verificationData;
 
   if (platform === "android") {
     const publisher = await androidPublisher();
-    const sub = await publisher.purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGE, token: verificationData });
-    // The tier comes from what Google says was bought, never from the client's productId.
-    const line = sub.data.lineItems?.find((l) => typeof l.productId === "string" && isKnownProduct(l.productId));
-    if (!line?.productId) throw new HttpsError("failed-precondition", "Unknown product.");
-    tier = PRODUCTS[line.productId].tier;
+    const sub = await publisher.purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGES[app], token: verificationData });
+    // The tier comes from what Google says was bought, never from the client's productId, and the
+    // product must belong to the same app as the package the token was checked against.
+    const line = verifiedLine(app, sub.data.lineItems);
+    const lineInfo = productInfo(line?.productId);
+    if (!line || !lineInfo) throw new HttpsError("failed-precondition", "Unknown product.");
+    tier = lineInfo.tier;
+    verifiedProductId = line.productId ?? null;
     expiresAt = line?.expiryTime ?? null;
     inTrial = Boolean(line?.offerDetails?.offerTags?.includes("trial") || sub.data.subscriptionState === "SUBSCRIPTION_STATE_IN_GRACE_PERIOD");
     if (sub.data.subscriptionState !== "SUBSCRIPTION_STATE_ACTIVE" && sub.data.subscriptionState !== "SUBSCRIPTION_STATE_IN_GRACE_PERIOD") {
       throw new HttpsError("failed-precondition", "Subscription not active.");
     }
   } else {
-    // TODO(ios): verify `verificationData` (JWS transaction) with Apple's App Store Server API
-    // using @apple/app-store-server-library, then read expiresDate / offerType.
-    throw new HttpsError("unimplemented", "iOS verification not configured yet.");
+    // iOS: only Apple-signed data decides (apple-logic.ts), checked against THIS app's bundle
+    // (com.zadx.app / com.zadx.kids) and only this app's products. Not configured → fail closed.
+    const deps = appleDeps(app);
+    if (!deps) throw new HttpsError("unavailable", "iOS verification not configured.");
+    let result: AppleEntitlement;
+    try {
+      result = await verifyAppleSubscription(deps, verificationData, Date.now(), tierForApp(app));
+    } catch (e) {
+      // Bad signature / chain / bundle / environment, or Apple unreachable. Never log the receipt.
+      console.error("verifyPurchase ios: verification failed", e instanceof Error ? e.name : typeof e);
+      throw new HttpsError("failed-precondition", "Receipt not verified.");
+    }
+    if (!result.ok) throw new HttpsError("failed-precondition", result.reason === "expired" ? "Subscription expired." : "Receipt not verified.");
+    tier = result.tier; // from the verified productId, never from the client
+    verifiedProductId = result.productId;
+    expiresAt = result.expiresAt;
+    inTrial = result.inTrial;
+    ownershipKey = appleOwnershipKey(result.originalTransactionId);
   }
 
   if (!expiresAt || !(Date.parse(expiresAt) > Date.now())) throw new HttpsError("failed-precondition", "Subscription expired.");
 
   const family = await familyOf(uid);
   // One store subscription unlocks one family only (stops sharing a receipt between accounts).
-  const holders = await db.collection("families").where("purchaseToken", "==", verificationData).limit(2).get();
-  if (holders.docs.some((d) => d.id !== family.id)) throw new HttpsError("permission-denied", "purchase_in_use");
-  await family.ref.set(
-    { plan: tier, planExpiresAt: expiresAt, inTrial, store: platform, purchaseToken: verificationData },
-    { merge: true },
-  );
+  // A token held by another family is refused, never auto-joined: the token is a bearer secret
+  // (restorePurchases() hands it to any device signed in to that store account, e.g. a child's
+  // tablet), so it must not grant membership. A new parent phone is linked with a parent code
+  // from an existing parent phone instead (createPairingCode target "parent").
+  // The raw token is never stored on the family doc (every member, child devices included, can
+  // read that doc): ownership lives in purchases/{sha256(token)}, the raw token (needed for the
+  // referral deferral) in families/{id}/private/billing. Both are server-only (firestore.rules).
+  const purchaseRef = db.doc(`purchases/${sha256Hex(ownershipKey)}`);
+  const legacy = await db.collection("families").where("purchaseToken", "==", ownershipKey).limit(2).get();
+  await db.runTransaction(async (tx) => {
+    const owner = await tx.get(purchaseRef);
+    const decision = purchaseOwnerDecision({
+      callerFamilyId: family.id,
+      holderFamilyIds: [...legacy.docs.map((d) => d.id), ...(owner.exists ? [String(owner.get("familyId"))] : [])],
+    });
+    if (decision.action === "reject") throw new HttpsError("failed-precondition", decision.reason);
+    const ownership = { familyId: family.id, store: platform, app, updatedAt: FieldValue.serverTimestamp() };
+    // First attach: create() fails if a racing call created the doc first; the transaction then
+    // retries and sees the other family as the owner.
+    if (owner.exists) tx.set(purchaseRef, ownership);
+    else tx.create(purchaseRef, ownership);
+    // Separate entitlements per app: each app's plan lives under plans.<app>. Only a Zad X Play
+    // purchase also writes the legacy top-level plan fields (read by clients older than Zad X Kids),
+    // so a Kids purchase can never unlock an older Zad X Play build. planApp marks whose plan that is.
+    const appPlan = { plan: tier, planExpiresAt: expiresAt, inTrial };
+    tx.set(family.ref, {
+      plans: { [app]: appPlan },
+      ...(app === "play" ? { ...appPlan, planApp: "play" } : {}),
+      store: platform,
+      purchaseToken: FieldValue.delete(),
+    }, { merge: true });
+    // Server-only billing doc: the ownership key (Play token / apple:<otid>, never a raw iOS receipt),
+    // the app (play | kids) and the product id the store verified. Referral deferrals need the app's
+    // package + exact product id.
+    tx.set(family.ref.collection("private").doc("billing"), {
+      purchaseToken: ownershipKey, storeApp: app, productId: verifiedProductId,
+    }, { merge: true });
+  });
 
   // Record the referral now; the referrer is credited only after the friend's first PAID period.
   const code = normaliseReferralCode(referralCode);
   if (code && !(await family.ref.get()).get("referredBy")) {
-    const owner = await db.collection("referralCodes").doc(code).get();
-    if (owner.exists && owner.get("familyId") !== family.id) {
-      await family.ref.set({ referredBy: owner.get("familyId"), referralPaid: false }, { merge: true });
+    const referrer = await db.collection("referralCodes").doc(code).get();
+    if (referrer.exists && referrer.get("familyId") !== family.id) {
+      await family.ref.set({ referredBy: referrer.get("familyId"), referralPaid: false }, { merge: true });
     }
   }
   return { tier, inTrial, expiresAt };
 });
+
+/** Best effort: tells the existing parent devices that a new parent phone was linked. */
+async function notifyNewParentDevice(familyId: string): Promise<void> {
+  try {
+    const family = await db.doc(`families/${familyId}`).get();
+    const tokens: string[] = family.get("parentTokens") ?? [];
+    if (tokens.length === 0) return;
+    const ar = (family.get("language") ?? "ar") === "ar";
+    await getMessaging().sendEachForMulticast({
+      tokens,
+      notification: {
+        title: "Zad X",
+        body: ar
+          ? "تم ربط موبايل ولي أمر جديد بالعائلة. لو مش إنت اللي ربطته، كلّم دعم Zad X."
+          : "A new parent phone was linked to your family. If you did not link it, contact Zad X support.",
+      },
+      data: { type: "parent_joined" },
+    });
+  } catch (e) {
+    console.error("notifyNewParentDevice failed", e instanceof Error ? e.name : typeof e);
+  }
+}
 
 export const referralStatus = onCall({ region: "europe-west1" }, async (req) => {
   const uid = requireUid(req.auth);
@@ -337,6 +427,14 @@ async function isGenuinePubSubPush(authorization: string | undefined): Promise<b
   }
 }
 
+/** The family a store purchase token belongs to (purchases/{sha256}, or the legacy family field). */
+async function familyIdForToken(token: string): Promise<string | null> {
+  const owner = await db.doc(`purchases/${sha256Hex(token)}`).get();
+  if (isSafeId(owner.get("familyId"))) return owner.get("familyId");
+  const legacy = await db.collection("families").where("purchaseToken", "==", token).limit(1).get();
+  return legacy.empty ? null : legacy.docs[0].id;
+}
+
 export const playNotifications = onRequest({ region: "europe-west1" }, async (req, res) => {
   try {
     if (req.method !== "POST" || !(await isGenuinePubSubPush(req.get("authorization")))) {
@@ -350,19 +448,26 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
       res.status(204).send();
       return;
     }
-    const friend = await db.collection("families").where("purchaseToken", "==", n.purchaseToken).limit(1).get();
-    if (friend.empty || friend.docs[0].get("referralPaid") !== false) {
+    const friendId = await familyIdForToken(n.purchaseToken);
+    const friendSnap = friendId ? await db.doc(`families/${friendId}`).get() : null;
+    if (!friendSnap?.exists || friendSnap.get("referralPaid") !== false) {
+      res.status(204).send();
+      return;
+    }
+    // Only our two apps; the check below uses that app's own package.
+    const friendApp = appForAndroidPackage(msg.packageName);
+    if (!friendApp) {
       res.status(204).send();
       return;
     }
     // Do not trust the message alone: confirm with Google that the subscription is really active.
-    const check = await (await androidPublisher()).purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGE, token: n.purchaseToken });
+    const check = await (await androidPublisher()).purchases.subscriptionsv2.get({ packageName: ANDROID_PACKAGES[friendApp], token: n.purchaseToken });
     if (check.data.subscriptionState !== "SUBSCRIPTION_STATE_ACTIVE") {
       res.status(204).send();
       return;
     }
-    const friendRef = friend.docs[0].ref;
-    const referrerId: string = friend.docs[0].get("referredBy");
+    const friendRef = friendSnap.ref;
+    const referrerId: string = friendSnap.get("referredBy");
     if (!isSafeId(referrerId)) {
       res.status(204).send();
       return;
@@ -383,14 +488,23 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
     const referrer = await referrerRef.get();
     if (addMonths > 0 && referrer.get("store") === "android") {
       const publisher = await androidPublisher();
-      const productId = Object.keys(PRODUCTS).find((p) => PRODUCTS[p].tier === referrer.get("plan"));
-      const current = new Date(referrer.get("planExpiresAt"));
+      const billing = await referrerRef.collection("private").doc("billing").get();
+      // The referrer's own app (families that subscribed before Zad X Kids existed are Zad X Play).
+      const referrerApp = billing.get("storeApp") === "kids" ? "kids" : "play";
+      const referrerPlan = familyPlanFor(referrer.data(), referrerApp);
+      // The exact product Google verified (monthly or yearly); older billing docs fall back to monthly.
+      const productId = productIdFor(referrerPlan.plan, referrerApp, billing.get("productId"));
+      const current = new Date(String(referrerPlan.planExpiresAt));
+      if (!productId || !Number.isFinite(current.getTime())) {
+        res.status(200).send();
+        return;
+      }
       const desired = new Date(current);
       desired.setMonth(desired.getMonth() + addMonths);
       await publisher.purchases.subscriptions.defer({
-        packageName: ANDROID_PACKAGE,
-        subscriptionId: productId!,
-        token: referrer.get("purchaseToken"),
+        packageName: ANDROID_PACKAGES[referrerApp],
+        subscriptionId: productId,
+        token: billing.get("purchaseToken") ?? referrer.get("purchaseToken"),
         requestBody: {
           deferralInfo: {
             expectedExpiryTimeMillis: String(current.getTime()),
@@ -398,7 +512,11 @@ export const playNotifications = onRequest({ region: "europe-west1" }, async (re
           },
         },
       });
-      await referrerRef.set({ planExpiresAt: desired.toISOString() }, { merge: true });
+      const extended = { plan: referrerPlan.plan, planExpiresAt: desired.toISOString(), inTrial: referrerPlan.inTrial === true };
+      await referrerRef.set({
+        plans: { [referrerApp]: extended },
+        ...(referrerApp === "play" ? { planExpiresAt: extended.planExpiresAt } : {}),
+      }, { merge: true });
     }
     // TODO(ios): for App Store subscribers, send a one-time offer code for `addMonths` free months.
     res.status(200).send();
@@ -431,13 +549,16 @@ function parseChildId(raw: unknown): string {
 /** Free plan = one child: true when [childId] is paused for this family right now. */
 function isChildPaused(family: FirebaseFirestore.DocumentSnapshot, childId: string): boolean {
   const created = family.get("createdAt");
+  const now = Date.now();
+  // Per-app plans (plans.play / plans.kids, main 2026-11-22): see pausePlanOf.
+  const plan = pausePlanOf(family.data(), now);
   return childPaused({
-    plan: family.get("plan"),
-    planExpiresAt: family.get("planExpiresAt"),
+    plan: plan.plan,
+    planExpiresAt: plan.planExpiresAt,
     createdAtMs: created && typeof created.toMillis === "function" ? created.toMillis() : undefined,
     freeChildId: family.get("freeChildId"),
     childId,
-    now: Date.now(),
+    now,
   });
 }
 
@@ -471,14 +592,75 @@ export const setFreeChild = onCall({ region: "europe-west1" }, async (req) => {
 
 const PAIRING_TTL_MS = 10 * 60 * 1000;
 
+/** Same 6 digits / 10 minutes / single use as child codes, with target "parent" and no child. */
+async function issueParentCode(familyId: string, uid: string): Promise<{ code: string }> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+    const ref = db.collection("pairingCodes").doc(code);
+    const ok = await db.runTransaction(async (tx) => {
+      const existing = await tx.get(ref);
+      if (existing.exists && existing.get("expiresAt") > Date.now()) return false;
+      tx.set(ref, { familyId, target: "parent", createdBy: uid, expiresAt: Date.now() + PAIRING_TTL_MS });
+      return true;
+    });
+    if (ok) return { code };
+  }
+  throw new HttpsError("resource-exhausted", "Try again.");
+}
+
+/**
+ * Redeemed parent code: the phone joins [familyId] as a PARENT member (recorded in the
+ * server-only `parentDevices` map; never in `childDevices`). Its own family must be an untouched
+ * fresh install, which is deleted, so no data is left in a family nobody can open.
+ */
+async function linkParentPhone(uid: string, familyId: string): Promise<{ familyId: string; role: "parent" }> {
+  if (!isSafeId(familyId)) throw new HttpsError("not-found", "invalid_code");
+  const targetRef = db.doc(`families/${familyId}`);
+  const current = await db.collection("families").where("members", "array-contains", uid).limit(5).get();
+  await db.runTransaction(async (tx) => {
+    const target = await tx.get(targetRef);
+    if (!target.exists) throw new HttpsError("not-found", "invalid_code");
+    // A device bound to a child never becomes a parent this way (unlink it first).
+    if (boundChildOf(target, uid) !== null) throw new HttpsError("permission-denied", "child_device");
+    const leave: FirebaseFirestore.DocumentReference[] = [];
+    for (const doc of current.docs.filter((d) => d.id !== familyId)) {
+      const old = await tx.get(doc.ref);
+      if (!old.exists) continue;
+      const action = oldFamilyAction({
+        uid,
+        members: old.get("members"),
+        childDevices: old.get("childDevices"),
+        keys: Object.keys(old.data() ?? {}),
+        hasChildren: !(await tx.get(doc.ref.collection("children").limit(1))).empty,
+        hasDevices: !(await tx.get(doc.ref.collection("devices").limit(1))).empty,
+      });
+      if (action !== "delete") throw new HttpsError("failed-precondition", "parent_link_family_in_use");
+      leave.push(doc.ref);
+    }
+    tx.update(
+      targetRef,
+      new FieldPath("members"), FieldValue.arrayUnion(uid),
+      new FieldPath("parentDevices", uid), FieldValue.serverTimestamp(),
+    );
+    for (const ref of leave) tx.delete(ref);
+  });
+  await notifyNewParentDevice(familyId);
+  return { familyId, role: "parent" };
+}
+
 export const createPairingCode = onCall({ region: "europe-west1" }, async (req) => {
   const uid = requireUid(req.auth);
   const familyId = String(req.data?.familyId ?? "");
-  const target = req.data?.target === "windows" ? "windows" : "phone";
+  const target = req.data?.target === "windows" ? "windows" : req.data?.target === "parent" ? "parent" : "phone";
   const family = await requireFamilyMember(familyId, uid);
   // Only parent devices link devices, and only to an existing child profile.
   if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
   await enforceRateLimit("pairCreate", uid, 10, 60 * 60_000);
+  // "Add a parent phone": no child; also limited per family (anonymous uids are free to create).
+  if (target === "parent") {
+    await enforceRateLimit("pairParentFamily", familyId, 5, 24 * 60 * 60_000);
+    return issueParentCode(familyId, uid);
+  }
   const childId = parseChildId(req.data?.childId);
   if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
     throw new HttpsError("not-found", "Unknown child.");
@@ -536,7 +718,13 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
     const codeFamilyId = snap.get("familyId");
     if (!isSafeId(codeFamilyId)) throw new HttpsError("not-found", "invalid_code");
     const family = await tx.get(db.doc(`families/${codeFamilyId}`));
-    if (pairingRedeemRefusal(family.exists, isChildPaused(family, codeChildId)) !== null) {
+    // A parent code has no child (codeChildId falls back to child-1): never refuse it as paused.
+    const refusal = pairingRedeemRefusal({
+      target: t,
+      familyExists: family.exists,
+      paused: t !== "parent" && family.exists && isChildPaused(family, codeChildId),
+    });
+    if (refusal !== null) {
       throw new HttpsError("failed-precondition", "child_paused");
     }
     tx.delete(ref); // single use
@@ -554,6 +742,8 @@ export const redeemPairingCode = onCall({ region: "europe-west1" }, async (req) 
     });
     return { familyId, deviceId: device.id, deviceSecret };
   }
+  // "Add a parent phone" code, created on an existing parent phone (behind the parent PIN).
+  if (target === "parent") return linkParentPhone(requireUid(req.auth), familyId);
 
   const uid = requireUid(req.auth);
   const familyRef = db.doc(`families/${familyId}`);
@@ -618,9 +808,10 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
     const requiredDone = dayDoc.get("requiredDone") ?? false;
     const prayerLock = dayDoc.get("prayerLock") ?? false;
     const remaining = Math.max(0, earned - used);
-    const plan = family.get("plan");
     // Free plan = one child. The guard is unlocked on Free anyway (planActive false); `paused` is informational.
     const paused = isChildPaused(family, String(device.get("childId") ?? DEFAULT_CHILD_ID));
+    // Zad X Guard (Windows) is part of Zad X Play: only the Play plan counts.
+    const playPlan = familyPlanFor(family.data(), "play");
     res.json({
       day,
       paused,
@@ -632,12 +823,14 @@ export const devicePolicy = onRequest({ region: "europe-west1" }, async (req, re
       // social apps (+ browsers unless allowed); it never blocks every process.
       mode: settings.lockMode === "selectedGames" ? "selectedGames" : "allApps",
       allowBrowsers: settings.pcAllowBrowsers === true,
-      planActive: plan === "plus" || family.get("inTrial") === true,
+      planActive: playPlan.plan === "plus" || playPlan.inTrial === true,
       language: settings.language ?? "ar",
       prayer: {
         lat: settings.lat, lng: settings.lng, timeZone,
         fajrAngle: settings.fajrAngle, ishaAngle: settings.ishaAngle ?? null, ishaMinutes: settings.ishaMinutes ?? null,
         asrFactor: settings.asrFactor ?? 1, lockAtAdhan: settings.lockAtAdhan !== false,
+        // High-latitude rule for Fajr/Isha (absent from older apps: the guard then uses its default).
+        highLatRule: typeof settings.highLatRule === "string" ? settings.highLatRule : null,
       },
     });
   } catch (e) {
@@ -781,4 +974,197 @@ export const checkHeartbeats = onSchedule({ schedule: "every 6 hours", region: "
       await doc.ref.set({ staleAlerted: true }, { merge: true });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// App Store Server Notifications v2 (App Store Connect → App Information → Production/Sandbox
+// Server URL = the appStoreNotifications URL). Same job as playNotifications for Google Play.
+// ---------------------------------------------------------------------------
+
+const APPLE_TX_ID_RE = /^[0-9]{1,30}$/;
+
+export const appStoreNotifications = onRequest({ region: "europe-west1", secrets: [APPLE_PRIVATE_KEY] }, async (req, res) => {
+  try {
+    if (req.method !== "POST") {
+      res.status(405).send();
+      return;
+    }
+    const signedPayload = req.body?.signedPayload;
+    if (typeof signedPayload !== "string" || signedPayload.length > 100_000) {
+      res.status(400).send();
+      return;
+    }
+    // Both apps send to this URL. Each verifier checks the signature, the x5c chain to Apple's root
+    // CA, the environment and ITS OWN bundle id (com.zadx.app / com.zadx.kids): the one that accepts
+    // the payload tells which app it is for. Nothing in the payload is read before that.
+    let app: StoreApp | null = null;
+    let deps: ReturnType<typeof appleDeps> = null;
+    let n: AppleNotification | null = null;
+    let configured = false;
+    for (const candidate of ["play", "kids"] as const) {
+      const d = appleDeps(candidate);
+      if (!d) continue;
+      configured = true;
+      try {
+        n = await d.verifyNotification(signedPayload);
+        app = candidate;
+        deps = d;
+        break;
+      } catch {
+        // Not this app's bundle (or not genuine): try the other app, else 403 below.
+      }
+    }
+    if (!configured) {
+      res.status(503).send(); // not configured (logged in appleDeps): Apple retries later
+      return;
+    }
+    if (!app || !deps || !n) {
+      console.error("appStoreNotifications: not verified");
+      res.status(403).send();
+      return;
+    }
+    const verifiedApp: StoreApp = app;
+    let tx: AppleTransaction;
+    try {
+      const signedTx = n.data?.signedTransactionInfo;
+      if (appleNotificationAction(n) === "ignore" || typeof signedTx !== "string") {
+        res.status(200).send();
+        return;
+      }
+      tx = await deps.verifyTransaction(signedTx);
+    } catch (e) {
+      console.error("appStoreNotifications: not verified", e instanceof Error ? e.name : typeof e);
+      res.status(403).send();
+      return;
+    }
+    const otid = tx.originalTransactionId;
+    if (typeof otid !== "string" || !APPLE_TX_ID_RE.test(otid)) {
+      res.status(200).send();
+      return;
+    }
+    // Only subscriptions verifyPurchase already tied to a family (purchases/{sha256(apple:otid)}).
+    const familyId = await familyIdForToken(appleOwnershipKey(otid));
+    const familyRef = familyId ? db.doc(`families/${familyId}`) : null;
+    const family = familyRef ? await familyRef.get() : null;
+    if (!familyRef || !family?.exists) {
+      res.status(200).send();
+      return;
+    }
+    // Separate entitlements per app: always plans.<app>; the legacy top-level plan fields (read by
+    // clients older than Zad X Kids) only for Zad X Play, so a Kids purchase never unlocks Play.
+    const writePlan = (plan: { plan?: unknown; planExpiresAt: string; inTrial: boolean }) => familyRef.set({
+      plans: { [verifiedApp]: plan },
+      ...(verifiedApp === "play" ? { ...plan, planApp: "play" } : {}),
+    }, { merge: true });
+    const ended = () => ({ planExpiresAt: new Date().toISOString(), inTrial: false });
+
+    if (appleNotificationAction(n) === "revoke") {
+      // Refund / Family Sharing revoked: the plan ends now.
+      await writePlan(ended());
+    } else {
+      // Never trust the notification alone: read the latest state from Apple (this app's products only).
+      const latest = await latestAppleEntitlement(deps, otid, Date.now(), tierForApp(verifiedApp));
+      if (latest.ok) {
+        await writePlan({ plan: latest.tier, planExpiresAt: latest.expiresAt, inTrial: latest.inTrial });
+      } else if (latest.reason === "revoked" || latest.reason === "expired") {
+        const current = Date.parse(String(familyPlanFor(family.data(), verifiedApp).planExpiresAt ?? ""));
+        if (!Number.isFinite(current) || current > Date.now()) {
+          await writePlan(ended());
+        }
+      }
+    }
+
+    // Referral: the friend's first paid renewal counts once (iOS free months: TODO in playNotifications).
+    const referrerId = family.get("referredBy");
+    if (isFirstPaidRenewal(n, tx) && family.get("referralPaid") === false && isSafeId(referrerId)) {
+      const year = new Date().getUTCFullYear();
+      const referrerRef = db.doc(`families/${referrerId}`);
+      await db.runTransaction(async (t) => {
+        const friend = await t.get(familyRef);
+        const referrer = await t.get(referrerRef);
+        if (friend.get("referralPaid") !== false || !referrer.exists) return;
+        const count = Math.min((referrer.get(`referrals.${year}`) ?? 0) + 1, MAX_REFERRALS_PER_YEAR);
+        t.set(referrerRef, { referrals: { [year]: count } }, { merge: true });
+        t.set(familyRef, { referralPaid: true }, { merge: true });
+      });
+    }
+    res.status(200).send();
+  } catch (e) {
+    console.error("appStoreNotifications failed", e instanceof Error ? e.name : typeof e);
+    res.status(500).send();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Task approval (R-32). A child device can only submit (progress "pending" on its own day doc);
+// the server-only fields `approved` {taskId: minutes}, `earnedMinutes` and `requiredDone` are
+// written here, after checking server-side that the caller is a PARENT device of the family
+// (a member that is not bound to a child in the server-written `childDevices` map).
+// ---------------------------------------------------------------------------
+
+function requireParentDevice(family: FirebaseFirestore.DocumentSnapshot, uid: string): void {
+  if (boundChildOf(family, uid) !== null) throw new HttpsError("permission-denied", "Parent device required.");
+}
+
+async function approvalTarget(auth: { uid: string } | undefined, data: Record<string, unknown>) {
+  const uid = requireUid(auth);
+  const day = data.day;
+  if (!isApprovalDay(day, Date.now())) throw new HttpsError("invalid-argument", "Bad day.");
+  const family = await requireFamilyMember(data.familyId, uid);
+  requireParentDevice(family, uid);
+  const childId = parseChildId(data.childId);
+  await enforceRateLimit("approve", uid, 300, 60 * 60_000);
+  if (childId !== DEFAULT_CHILD_ID && !(await family.ref.collection("children").doc(childId).get()).exists) {
+    throw new HttpsError("not-found", "Unknown child.");
+  }
+  return { uid, day, dayRef: family.ref.collection("children").doc(childId).collection("days").doc(day) };
+}
+
+function progressCount(snap: FirebaseFirestore.DocumentSnapshot, taskId: string): number {
+  const p = snap.get("progress");
+  const count = p && typeof p === "object" ? (p as Record<string, { count?: unknown } | undefined>)[taskId]?.count : undefined;
+  return typeof count === "number" && Number.isInteger(count) && count >= 0 && count <= 10_000 ? count : 0;
+}
+
+/** Parent approves a task: marks it done and credits its minutes once, within the daily cap. */
+export const approveTask = onCall({ region: "europe-west1" }, async (req) => {
+  const request = parseApprovalRequest(req.data);
+  if (!request) throw new HttpsError("invalid-argument", "Bad approval.");
+  const { uid, day, dayRef } = await approvalTarget(req.auth, req.data as Record<string, unknown>);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(dayRef);
+    const out = applyApproval(snap.get("approved"), request);
+    const update: Record<string, unknown> = {
+      day,
+      approved: out.approved,
+      earnedMinutes: out.earnedMinutes,
+      requiredDone: out.requiredDone,
+      progress: { [request.taskId]: { status: "done", count: progressCount(snap, request.taskId) } },
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: uid,
+    };
+    // Approving "I prayed" ends the prayer lock (before the window, only a parent can end it).
+    if (request.isPrayer) {
+      update.prayerLock = false;
+      update.prayerLockSinceMs = FieldValue.delete();
+      update.prayerLockAt = FieldValue.delete();
+    }
+    tx.set(dayRef, update, { merge: true });
+    return { credited: out.credited, earnedMinutes: out.earnedMinutes, requiredDone: out.requiredDone };
+  });
+});
+
+/** Parent rejects a submission: the task goes back to "todo" (credits already given stay). */
+export const rejectTask = onCall({ region: "europe-west1" }, async (req) => {
+  const data = (req.data ?? {}) as Record<string, unknown>;
+  const taskId = data.taskId;
+  if (!isSafeId(taskId) || taskId.length > 64) throw new HttpsError("invalid-argument", "Bad task.");
+  const { uid, day, dayRef } = await approvalTarget(req.auth, data);
+  await dayRef.set({
+    day,
+    progress: { [taskId]: { status: "todo", count: 0 } },
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedBy: uid,
+  }, { merge: true });
+  return { ok: true };
 });

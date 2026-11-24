@@ -222,4 +222,146 @@ class PlaySheetExemptTest {
             LockRules.isControlled("com.roblox.client", own, LockRules.MODE_SELECTED_GAMES, setOf("com.roblox.client"), emptySet(), emptySet()),
         )
     }
+
+    // ---- Zad X Kids schedules (mirror of test/schedule_test.dart) ----
+
+    private val bedtime = LockRules.ScheduleWindow("bedtime", 21 * 60, 7 * 60, (1..7).toSet())
+    private val study = LockRules.ScheduleWindow("study", 16 * 60, 18 * 60, setOf(7, 1, 2, 3, 4)) // Sun-Thu
+    private val reading = LockRules.ScheduleWindow("reading", 17 * 60 + 30, 18 * 60 + 30, (1..7).toSet())
+
+    @Test
+    fun isoWeekdayFromCalendar() {
+        assertEquals(7, LockRules.isoWeekday(1)) // Calendar.SUNDAY
+        assertEquals(1, LockRules.isoWeekday(2)) // Calendar.MONDAY
+        assertEquals(6, LockRules.isoWeekday(7)) // Calendar.SATURDAY
+    }
+
+    @Test
+    fun bedtimeLocksAtNightAndOpensInTheMorning() {
+        assertFalse(LockRules.scheduleActive(bedtime, 20 * 60 + 59, 1))
+        assertTrue(LockRules.scheduleActive(bedtime, 21 * 60, 1))
+        assertTrue(LockRules.scheduleActive(bedtime, 0, 2))
+        assertTrue(LockRules.scheduleActive(bedtime, 6 * 60 + 59, 2))
+        assertFalse(LockRules.scheduleActive(bedtime, 7 * 60, 2))
+        val fridayOnly = bedtime.copy(days = setOf(5))
+        assertTrue(LockRules.scheduleActive(fridayOnly, 6 * 60, 6)) // Saturday morning = Friday's night
+        assertFalse(LockRules.scheduleActive(fridayOnly, 22 * 60, 6))
+        assertFalse(LockRules.scheduleActive(fridayOnly, 6 * 60, 5))
+    }
+
+    @Test
+    fun studyOnSchoolDaysOnlyAndPriority() {
+        assertTrue(LockRules.scheduleActive(study, 16 * 60, 1))
+        assertFalse(LockRules.scheduleActive(study, 18 * 60, 1))
+        assertFalse(LockRules.scheduleActive(study, 16 * 60 + 30, 5)) // Friday
+        assertEquals("study", LockRules.activeSchedule(listOf(reading, study, bedtime), 17 * 60 + 45, 1))
+        assertEquals("reading", LockRules.activeSchedule(listOf(reading, study), 17 * 60 + 45, 5))
+        assertEquals(null, LockRules.activeSchedule(listOf(reading, study, bedtime), 12 * 60, 1))
+        assertFalse(LockRules.scheduleActive(study.copy(end = study.start), 16 * 60, 1))
+        assertFalse(LockRules.scheduleActive(bedtime.copy(kind = "prayer"), 22 * 60, 1))
+    }
+
+    @Test
+    fun schedulesSurviveStorage() {
+        val all = listOf(bedtime, study, reading)
+        assertEquals(all, LockRules.decodeSchedules(LockRules.encodeSchedules(all)))
+        assertEquals(emptyList<LockRules.ScheduleWindow>(), LockRules.decodeSchedules(null))
+        assertEquals(emptyList<LockRules.ScheduleWindow>(), LockRules.decodeSchedules("prayer,1,2,1;bedtime,x,2,1;study,1,9999,1"))
+    }
+}
+
+/** Zad X Kids: moving the phone's clock or time zone cannot end bedtime. */
+class ClockTamperTest {
+    private val min = 60_000L
+    private val bedtime = LockRules.ScheduleWindow("bedtime", 21 * 60, 7 * 60, (1..7).toSet())
+    private val cairo = java.util.TimeZone.getTimeZone("Africa/Cairo")
+    private val tokyo = java.util.TimeZone.getTimeZone("Asia/Tokyo")
+    private val losAngeles = java.util.TimeZone.getTimeZone("America/Los_Angeles")
+
+    /** 2026-11-23 (Monday) 22:00 in Cairo (UTC+2) = 20:00 UTC. */
+    private val night = 1_795_464_000_000L
+
+    private fun clock(
+        nowWall: Long,
+        nowElapsed: Long,
+        anchorTrusted: Long? = night,
+        anchorElapsed: Long = 1_000_000L,
+        boot: Int = 3,
+        anchorBoot: Int = 3,
+        lastOffset: Long = 0,
+        autoTime: Boolean = false,
+    ) = LockRules.trustedClock(nowWall, nowElapsed, boot, anchorTrusted, anchorElapsed, anchorBoot, lastOffset, autoTime)
+
+    @Test
+    fun scheduleIsReadInTheParentsTimeZone() {
+        assertEquals("bedtime", LockRules.activeScheduleAt(listOf(bedtime), night, cairo))
+        assertEquals(null, LockRules.activeScheduleAt(listOf(bedtime), night + 14 * 60 * min, cairo)) // noon
+        // The same instant is 12:00 in Los Angeles: switching the phone there does not open bedtime.
+        val trusted = LockRules.ClockState(night, tampered = false)
+        assertEquals("bedtime", LockRules.activeScheduleChecked(listOf(bedtime), trusted, cairo, night, losAngeles))
+        assertEquals(null, LockRules.activeScheduleAt(listOf(bedtime), night, losAngeles))
+        assertEquals("bedtime", LockRules.activeScheduleAt(listOf(bedtime), night, tokyo)) // 05:00 there
+    }
+
+    @Test
+    fun honestClockIsTrusted() {
+        val c = clock(night + 5 * min, 1_000_000L + 5 * min)
+        assertFalse(c.tampered)
+        assertEquals(night + 5 * min, c.trustedWallMs)
+        assertFalse(clock(night + 5 * min + 30_000, 1_000_000L + 5 * min).tampered) // drift
+        assertFalse(clock(night, 0L, anchorTrusted = null).tampered) // first check ever
+    }
+
+    @Test
+    fun clockMovedForwardByHandKeepsBedtime() {
+        // 5 minutes after 22:00 the child sets the clock to 09:00 the next morning.
+        val wall = night + 11 * 60 * min
+        val c = clock(wall, 1_000_000L + 5 * min)
+        assertTrue(c.tampered)
+        assertEquals(night + 5 * min, c.trustedWallMs)
+        assertEquals("bedtime", LockRules.activeScheduleChecked(listOf(bedtime), c, cairo, wall, cairo))
+        // The offset survives a reboot (elapsed time restarts at boot).
+        val after = clock(wall + 2 * min, 5_000L, anchorTrusted = c.trustedWallMs, boot = 4, lastOffset = c.offsetFrom(wall))
+        assertTrue(after.tampered)
+        assertEquals(night + 7 * min, after.trustedWallMs)
+    }
+
+    @Test
+    fun smallStepsAddUp() {
+        // Two steps of 90 s: each alone is under the tolerance, together they are not.
+        val first = clock(night + 90_000, 1_000_000L)
+        assertFalse(first.tampered)
+        val second = clock(night + 180_000, 1_000_000L, anchorTrusted = first.trustedWallMs)
+        assertTrue(second.tampered)
+        assertEquals(night, second.trustedWallMs)
+    }
+
+    @Test
+    fun networkTimeIsTrusted() {
+        val c = clock(night + 11 * 60 * min, 1_000_000L + 5 * min, autoTime = true)
+        assertFalse(c.tampered)
+        assertEquals(night + 11 * 60 * min, c.trustedWallMs)
+    }
+
+    @Test
+    fun movingTheClockIntoBedtimeOnlyLocks() {
+        val noon = night + 14 * 60 * min
+        // Trusted time says noon (open), the phone shows 22:00: tampered, so the lock stays on.
+        val c = LockRules.ClockState(noon, tampered = true)
+        assertEquals("bedtime", LockRules.activeScheduleChecked(listOf(bedtime), c, cairo, night, cairo))
+        assertEquals(null, LockRules.activeScheduleChecked(listOf(bedtime), c.copy(tampered = false), cairo, night, cairo))
+    }
+
+    @Test
+    fun zoneIdsAreValidated() {
+        assertEquals("Africa/Cairo", LockRules.zoneOrNull("Africa/Cairo")?.id)
+        assertEquals(null, LockRules.zoneOrNull("Mars/Olympus"))
+        assertEquals(null, LockRules.zoneOrNull(null))
+    }
+
+    @Test
+    fun clockChangeIsATamperReason() {
+        assertEquals(listOf("clock_changed"), LockRules.tamperReasons(false, false, false, false, false, clockChanged = true))
+        assertEquals(emptyList<String>(), LockRules.tamperReasons(false, false, false, false, false))
+    }
 }

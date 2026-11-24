@@ -1,3 +1,5 @@
+import '../../core/app_variant.dart';
+
 /// Paid tiers sold in the stores. The free plan has no tier: a `null` tier
 /// (see [Entitlement.effectiveTier]) means "Free".
 enum PlanTier { basic, plus }
@@ -10,7 +12,7 @@ enum BillingPeriod { monthly, yearly }
 /// Names are mirrored in `backend/functions/src/security.ts` (`PLAN_FEATURES`)
 /// and a test keeps both lists identical.
 enum AppFeature {
-  // ---- Free forever (owner decision 2026-11-21) ----
+  // ---- Free plan, no subscription (owner decision 2026-11-21) ----
   /// Device lock: lock at prayer times + a simple daily time limit (1 child).
   appLock,
 
@@ -88,17 +90,35 @@ const plusFeatures = <AppFeature>{
   AppFeature.weeklyReport,
 };
 
-/// The feature set of a tier (`null` = Free).
-Set<AppFeature> featuresOf(PlanTier? tier) => switch (tier) {
-      null => freeFeatures,
-      PlanTier.basic => basicFeatures,
-      PlanTier.plus => plusFeatures,
-    };
+/// Features that exist only in the Islamic app. The Zad X Kids build has none of them: they are
+/// removed from every plan there (docs/decisions/ZADX-KIDS-VARIANT.md), so no screen, route or
+/// plan card can offer them.
+const islamicOnlyFeatures = <AppFeature>{
+  AppFeature.prayerTimes,
+  AppFeature.adhan,
+  AppFeature.quran,
+  AppFeature.adhkar,
+};
+
+/// The feature set of a tier (`null` = Free) in [variant] (default: this build).
+///
+/// Zad X Kids keeps the same tiers and the same paid features; its Free plan is the device lock
+/// with the study / bedtime / reading schedules and a daily limit for one child ([AppFeature.appLock]).
+Set<AppFeature> featuresOf(PlanTier? tier, {AppVariant variant = appVariant}) {
+  final all = switch (tier) {
+    null => freeFeatures,
+    PlanTier.basic => basicFeatures,
+    PlanTier.plus => plusFeatures,
+  };
+  return variant == AppVariant.kids ? all.difference(islamicOnlyFeatures) : all;
+}
 
 /// True when the family's current plan includes [feature].
 /// Free features are always true, with or without login or purchase.
-bool hasFeature(Entitlement entitlement, AppFeature feature) =>
-    freeFeatures.contains(feature) || featuresOf(entitlement.effectiveTier).contains(feature);
+/// Islamic-only features are always false in Zad X Kids.
+bool hasFeature(Entitlement entitlement, AppFeature feature, {AppVariant variant = appVariant}) =>
+    featuresOf(null, variant: variant).contains(feature) ||
+    featuresOf(entitlement.effectiveTier, variant: variant).contains(feature);
 
 /// The parent help assistant needs a plan the server verified (owner decision 2026-11-21).
 ///

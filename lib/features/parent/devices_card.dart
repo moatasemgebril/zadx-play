@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/app_config.dart';
+import '../../core/app_variant.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
@@ -68,10 +69,15 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
         Text(l10n.pairNote, style: const TextStyle(fontSize: 15, color: AppColors.muted, height: 1.5)),
         const SizedBox(height: 10),
         ChoiceGrid<PairingTarget>(
-          items: PairingTarget.values,
+          // Zad X Guard for Windows computes prayer locks: not offered in Zad X Kids yet.
+          items: [for (final t in PairingTarget.values) if (!kIsKids || t != PairingTarget.windows) t],
           selected: _target,
           columns: 2,
-          label: (t) => t == PairingTarget.phone ? l10n.pairPhone : l10n.computerTitle,
+          label: (t) => switch (t) {
+            PairingTarget.phone => l10n.pairPhone,
+            PairingTarget.windows => l10n.computerTitle,
+            PairingTarget.parent => l10n.pairParentPhone,
+          },
           onSelected: (t) => setState(() {
             _target = t;
             _code = null;
