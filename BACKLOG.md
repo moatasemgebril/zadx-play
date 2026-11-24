@@ -4,6 +4,13 @@ The orchestrator reads this file at the start of every cycle (see CLAUDE.md).
 Owner requests come first within the priority order. Close an item by moving it
 to "Done" with the PR link; record decisions in the ZADX LOG.
 
+## Owner requests — 2026-11-24
+
+- [x] **PlayStation lock steps in the app** (owner: people should see them): `PsLockSteps` (lib/features/parent/ps_lock_steps.dart) in the parent Consoles card, shown on every plan, 7 steps AR/EN, neutral words (same in Kids). Test: `test/ps_lock_steps_test.dart`.
+- [ ] **Google Play submission** — full guide in `docs/store/GOOGLE-PLAY-SUBMISSION.md`; the owner opens the account and pays the $25 himself. Team follow-ups: (1) signed release AAB in CI with an upload key from GitHub Secrets (off until the secret exists); (2) privacy policy + terms on a stable URL; (3) screenshots, 1024×500 feature graphic, 512 icon; (4) Accessibility review video; (5) friends/testers via Play internal testing (replaces sending the APK by hand).
+- [ ] **Regional pricing abuse** (owner question): price follows the store account country (Play: country change once a year + local payment method; Apple: local payment method), not IP/VPN. Rules: never sell on the web with IP-based prices; keep the cheapest market within a sensible gap; log the store country per purchase on the server.
+- [ ] **Client/server pause rule mismatch** (P2): the server treats a Play OR Kids plan as paid for pausing children; the app checks only its own plan. Align the app with the server (team recommendation, owner did not object 2026-11-24).
+
 ## Owner requests — 2026-11-23
 
 - [x] **Game-feel sounds** (owner: page sound like in games, a "row cleared" style win sound, a coin/point sound). → **Done in branch `feat/game-sfx`, pending CI + Quality Gate** (2026-11-23): original sounds from `tools/gen_sfx.py` (`transition.wav` whoosh + chime, `win_combo.wav`, `coin*.wav` with 4 pitch variants; nothing copied from other games, see `assets/sfx/LICENSE.txt`). Page sound on child route changes, debounced 350 ms, silent into the parent area/settings/subscription/Quran tab; win combo on game round won (replaces levelUp there); coin pings per earned star and when a parent approval adds minutes (replaces star there). All effects still silent during adhan/Quran and follow mute + volume. Tests: `test/sfx_rules_test.dart`, `test/edu_game_hooks_test.dart`. Needs an ear check on a real phone (volume balance).
