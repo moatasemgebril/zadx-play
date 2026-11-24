@@ -9,7 +9,7 @@ service cloud.firestore {
     // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
     function serverOnlyFamilyKeys() {
       return ['plan', 'plans', 'planApp', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
-              'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt'];
+              'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt', 'freeChildId'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
     function validDay(day) {
@@ -108,6 +108,8 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.members == [request.auth.uid]
         && !request.resource.data.keys().hasAny(serverOnlyFamilyKeys().removeAll(['members', 'createdAt']))
+        // The server's 7-day family trial counts from createdAt, so it must be the real time.
+        && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time)
         && (!('settings' in request.resource.data) || request.resource.data.settings is map);
       // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
       allow update: if isMember(familyId)

@@ -6,7 +6,9 @@ import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../router.dart';
+import '../../services/family/children_controller.dart';
 import '../../shared/art/zad_art.dart';
+import '../parent/paused_child_screen.dart';
 import '../../shared/widgets/brand_logo.dart';
 import '../tasks/wallet_controller.dart';
 
@@ -17,6 +19,9 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Free plan = one child: a paired device whose child is paused shows only a friendly
+    // "ask a parent" screen (docs/decisions/FREE-ONE-CHILD.md).
+    if (ref.watch(thisDevicePausedProvider)) return const PausedChildScreen();
     final l10n = context.l10n;
     final wallet = ref.watch(walletProvider);
     final pending = wallet.pending.length;

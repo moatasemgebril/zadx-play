@@ -8,6 +8,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
 import '../../data/models/plan.dart';
 import '../../services/assistant/assistant_service.dart';
+import '../../services/billing/subscription_service.dart';
 import '../subscription/paid_feature_gate.dart';
 import 'assistant_parent_lock.dart';
 import '../../shared/art/zad_art.dart';
@@ -50,10 +51,9 @@ class HelpScreen extends StatelessWidget {
         child: ListView(padding: const EdgeInsets.all(16), children: [
           // About Zad X Play: who it is for (owner request 2026-11-22). Not in Zad X Kids.
           if (!kIsKids) ...[const _AboutCard(), const SizedBox(height: 14)],
-          // Parent PIN first (child safety), then the plan check.
-          const AssistantParentLock(
-            child: PaidFeatureGate(feature: AppFeature.assistant, child: _AssistantCard()),
-          ),
+          // Parent PIN first (child safety), then the plan check (_AssistantGate: server-verified
+          // plan only, since the server refuses the assistant during the on-device trial).
+          const AssistantParentLock(child: _AssistantGate()),
           const SizedBox(height: 14),
           ZadCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -100,6 +100,35 @@ class HelpScreen extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+/// The assistant needs a plan the server verified ([assistantAvailable]): the server answers
+/// `subscription_required` during the on-device 7-day trial, so the app does not offer it then
+/// and says it is available after subscribing (no price on this screen).
+class _AssistantGate extends ConsumerWidget {
+  const _AssistantGate();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ent = ref.watch(entitlementProvider).valueOrNull ?? const Entitlement();
+    if (assistantAvailable(ent)) return const _AssistantCard();
+    if (!ent.deviceTrial) return const LockedFeatureCard(feature: AppFeature.assistant);
+    final l10n = context.l10n;
+    return ZadCard(
+      key: const Key('assistantAfterSubscribing'),
+      color: AppColors.purpleSoft,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
+        const ExcludeSemantics(child: Icon(Icons.support_agent_rounded, size: 44, color: AppColors.purple)),
+        const SizedBox(height: 8),
+        Text(l10n.assistantTitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.purpleDark)),
+        const SizedBox(height: 4),
+        Text(l10n.assistantAfterSubscribing,
+            textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: AppColors.ink, height: 1.5)),
+      ]),
     );
   }
 }

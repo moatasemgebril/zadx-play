@@ -56,6 +56,8 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'pairNote': "Open Zad X on your child's phone or tablet and enter this code.",
     'psScheduleNote': "Set your child's play time limits once in the PlayStation Family app.",
     'msScheduleNote': "Set your child's screen time limits once in Microsoft Family Safety.",
+    // Free plan = one child (paused child's device). US English.
+    'pausedKidBody': 'Ask a parent or grown-up to set it up again. Everything you did is saved and waiting for you.',
   },
   'ar': {
     'greet': 'أهلاً يا بطل!',
@@ -91,6 +93,7 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'pairNote': 'افتح Zad X على تليفون أو تابلت طفلك واكتب الكود ده.',
     'psScheduleNote': 'حدد وقت اللعب لطفلك مرة واحدة في تطبيق PlayStation Family.',
     'msScheduleNote': 'حدد حدود وقت الشاشة لطفلك مرة واحدة في Microsoft Family Safety.',
+    'pausedKidBody': 'اطلب من بابا أو ماما يرجّعوه تاني. كل اللي عملته محفوظ ومستنيك.',
   },
 };
 

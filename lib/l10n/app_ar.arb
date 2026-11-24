@@ -932,5 +932,35 @@
   "hijriAdjustHelp": "في رمضان يكون العشاء بعد المغرب بساعتين حسب تقويم أم القرى. إذا بدأ رمضان عندكم قبل التقويم أو بعده بيوم، اختر ذلك هنا.",
   "hijriAdjustEarlier": "بدأ قبل التقويم بيوم",
   "hijriAdjustNone": "حسب التقويم",
-  "hijriAdjustLater": "بدأ بعد التقويم بيوم"
+  "hijriAdjustLater": "بدأ بعد التقويم بيوم",
+  "pausedKidTitle": "ملفك واخد استراحة دلوقتي",
+  "pausedKidBody": "اطلب من بابا أو ماما يرجّعوه تاني. كل اللي عملته محفوظ ومستنيك.",
+  "forParentsBadge": "لأولياء الأمور",
+  "onboardingPinTitle": "أهلاً بيك في Zad X: اعمل الرقم السري لولي الأمر",
+  "onboardingPinBody": "قبل ما طفلك يستخدم Zad X، اختار رقم سري من ٤ لـ ٦ أرقام. هتحتاجه علشان تفتح منطقة ولي الأمر وتوافق على المهام وتغيّر القفل. خلّيه سر بعيد عن طفلك.",
+  "onboardingPinNew": "الرقم السري الجديد",
+  "onboardingPinAgain": "اكتب الرقم السري تاني",
+  "onboardingIamParent": "أنا ولي الأمر",
+  "onboardingPinSave": "احفظ الرقم السري",
+  "onboardingPinNote": "الرقم السري بيفضل على الجهاز ده بس.",
+  "onboardingPinTooShort": "الرقم السري لازم يكون من ٤ لـ ٦ أرقام.",
+  "onboardingPinMismatch": "الرقمين مش زي بعض. جرّب تاني.",
+  "onboardingConfirmParentRequired": "من فضلك أكّد إنك ولي الأمر.",
+  "parentSetupNeededTitle": "محتاجين ولي الأمر يجهّز Zad X",
+  "parentSetupNeededBody": "لسه مفيش رقم سري لولي الأمر على الجهاز ده. اطلب من بابا أو ماما يعملوه.",
+  "parentSetupNeededButton": "أنا ولي الأمر: اعمل الرقم السري",
+  "childPausedLabel": "متوقف مؤقتاً: اشترك علشان يرجع",
+  "pausedChildrenNote": "الباقة المجانية لطفل واحد. باقي الملفات متوقفة مؤقتاً ومش متمسوحة: تقدّمهم محفوظ وهيرجعوا لوحدهم أول ما تشترك. جهاز الطفل المتوقف مش بيتقفل ومش متابَع.",
+  "chooseFreeChild": "اختار الطفل اللي يفضل شغّال",
+  "chooseFreeChildTitle": "مين يفضل شغّال على الباقة المجانية؟",
+  "chooseFreeChildBody": "باقي الأطفال هيتوقفوا مؤقتاً وتقدّمهم كله محفوظ.",
+  "freeChildChosen": "{name} بقى الطفل الشغّال",
+  "@freeChildChosen": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "assistantAfterSubscribing": "مساعد Zad X متاح بعد الاشتراك في باقة أساسي أو بلس."
 }

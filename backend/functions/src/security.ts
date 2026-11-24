@@ -112,6 +112,67 @@ export function hasActivePlan(plan: unknown, planExpiresAt: unknown, now: number
 }
 
 // ---------------------------------------------------------------------------
+// Free plan = one child (owner decision 2026-11-21, docs/decisions/FREE-ONE-CHILD.md)
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_CHILD_ID = "child-1";
+export const FAMILY_TRIAL_MS = 7 * 24 * 60 * 60_000;
+const CHILD_ID_PATTERN = /^[A-Za-z0-9_-]{1,40}$/;
+
+/** The child that stays active on Free: the parent's choice (`setFreeChild`) or `child-1`. */
+export function freeChildIdOf(freeChildId: unknown): string {
+  return typeof freeChildId === "string" && CHILD_ID_PATTERN.test(freeChildId) ? freeChildId : DEFAULT_CHILD_ID;
+}
+
+/** True during the first 7 days after the family was created (server time, like the app's trial). */
+export function familyTrialActive(createdAtMs: unknown, now: number): boolean {
+  return typeof createdAtMs === "number" && Number.isFinite(createdAtMs) && now < createdAtMs + FAMILY_TRIAL_MS;
+}
+
+/**
+ * True when [childId] is paused: the family has no active paid plan, is past its first 7 days,
+ * and the child is not the one kept active on Free. Paused children keep all their data; they
+ * are only not locked, monitored or paired as separate children. Same rule as
+ * `FamilyPlanStatus.childPaused` in lib/services/family/child_pause.dart.
+ */
+export function childPaused(input: {
+  plan: unknown; planExpiresAt: unknown; createdAtMs: unknown; freeChildId: unknown; childId: string; now: number;
+}): boolean {
+  if (hasActivePlan(input.plan, input.planExpiresAt, input.now)) return false;
+  if (familyTrialActive(input.createdAtMs, input.now)) return false;
+  return input.childId !== freeChildIdOf(input.freeChildId);
+}
+
+/**
+ * `redeemPairingCode`: why a valid code must be refused before it is burned, or null.
+ * A child paused on the Free plan gets no new device (same as `createPairingCode`).
+ * A missing family keeps the old behaviour (null): the redeem then fails on its own.
+ * A "parent" code ("Add a parent phone") has no child, so it is never refused as paused
+ * (its stored childId falls back to child-1, which may itself be paused when the parent
+ * chose another free child).
+ */
+export function pairingRedeemRefusal(input: {
+  target: unknown; familyExists: boolean; paused: boolean;
+}): "child_paused" | null {
+  if (input.target === "parent") return null;
+  return input.familyExists && input.paused ? "child_paused" : null;
+}
+
+/**
+ * The plan used for the Free-plan child pause. Plans are stored per app (`plans.play`,
+ * `plans.kids`, see familyPlanFor); a child is not paused while the family has an active plan
+ * of either app, so a paying family is never paused by the server. The Play plan wins when both
+ * are active. Returns the Play plan (possibly Free) when neither is active.
+ */
+export function pausePlanOf(family: Record<string, unknown> | undefined, now: number): AppPlan {
+  const play = familyPlanFor(family, "play");
+  if (hasActivePlan(play.plan, play.planExpiresAt, now)) return play;
+  const kids = familyPlanFor(family, "kids");
+  if (hasActivePlan(kids.plan, kids.planExpiresAt, now)) return kids;
+  return play;
+}
+
+// ---------------------------------------------------------------------------
 // Store products of both apps (docs/decisions/ZADX-KIDS-VARIANT.md)
 // ---------------------------------------------------------------------------
 

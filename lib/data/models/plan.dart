@@ -120,6 +120,15 @@ bool hasFeature(Entitlement entitlement, AppFeature feature, {AppVariant variant
     featuresOf(null, variant: variant).contains(feature) ||
     featuresOf(entitlement.effectiveTier, variant: variant).contains(feature);
 
+/// The parent help assistant needs a plan the server verified (owner decision 2026-11-21).
+///
+/// The server (`askAssistant`) only knows store-verified plans, so during the on-device
+/// 7-day trial it answers `subscription_required`. The app hides the assistant during that
+/// trial too and shows "available after subscribing" instead, so both sides agree.
+/// docs/decisions/FREE-ONE-CHILD.md
+bool assistantAvailable(Entitlement entitlement) =>
+    !entitlement.deviceTrial && hasFeature(entitlement, AppFeature.assistant);
+
 /// Reads the tier string the server returns (`verifyPurchase`, family doc).
 /// Anything unknown is Free, never silently Basic.
 PlanTier? parsePlanTier(Object? value) => switch (value) {
@@ -208,7 +217,14 @@ PlanPricing planFor(PlanTier? tier) => switch (tier) {
 
 /// What the family currently has access to.
 class Entitlement {
-  const Entitlement({this.tier, this.inTrial = false, this.expiresAt, this.now, this.trialDaysLeft});
+  const Entitlement({
+    this.tier,
+    this.inTrial = false,
+    this.expiresAt,
+    this.now,
+    this.trialDaysLeft,
+    this.deviceTrial = false,
+  });
 
   /// The tier the store/server reported (`null` = Free). A trial is a Plus
   /// tier with [inTrial] set.
@@ -222,6 +238,12 @@ class Entitlement {
 
   /// Clock override for tests.
   final DateTime Function()? now;
+
+  /// True for the 7-day trial that runs on this device only ([resolveEntitlement] in
+  /// trial_clock.dart). The server does not know about it, so server-checked features that
+  /// cost money per use (the assistant) stay closed during it. A store trial verified by
+  /// `verifyPurchase` is not a device trial.
+  final bool deviceTrial;
 
   bool get isActive => tier != null && (expiresAt == null || expiresAt!.isAfter((now ?? DateTime.now)()));
 

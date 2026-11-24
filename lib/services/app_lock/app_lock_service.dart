@@ -18,6 +18,7 @@ import '../../features/schedule/schedule_controller.dart';
 import '../../features/settings/settings_controller.dart';
 import '../../features/tasks/wallet_controller.dart';
 import '../billing/subscription_service.dart';
+import '../family/children_controller.dart';
 import 'lock_rules.dart';
 
 export 'lock_rules.dart';
@@ -323,6 +324,10 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
   final wallet = ref.watch(walletProvider);
   final settings = ref.watch(settingsProvider);
   final tasksEnabled = ref.watch(lockTasksEnabledProvider);
+  // Free plan = one child: a paired device whose child is paused is not locked as a separate
+  // child (owner decision 2026-11-21, docs/decisions/FREE-ONE-CHILD.md). Its data is kept and
+  // the lock comes back by itself when the family subscribes.
+  if (ref.watch(thisDevicePausedProvider)) return pausedLockPolicy(settings);
   LockState stateWith(ScheduledLock? schedule) => lockStateFor(
         tasksEnabled: tasksEnabled,
         wallet: wallet,
@@ -346,6 +351,17 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
     scheduleTimeZone: kIsKids ? ref.watch(scheduleTimeZoneProvider) : null,
   );
 });
+
+/// The policy of a paired device whose child is paused on the Free plan: nothing locked.
+LockPolicy pausedLockPolicy(AppSettings settings) => LockPolicy(
+      locked: false,
+      reason: 'paused',
+      androidPackages: const [],
+      remainingMinutes: 0,
+      mode: settings.lockMode,
+      allowedPackages: settings.allowedApps.toList()..sort(),
+      allowMessaging: settings.allowMessaging,
+    );
 
 /// Pure derivation (unit-tested): settings → the policy pushed to native code.
 LockPolicy lockPolicyFrom({
@@ -447,7 +463,14 @@ final lockCoordinatorProvider = Provider<void>((ref) {
   if (kIsKids) return;
 
   // Native alarms re-lock games at every adhan even when Zad X is closed.
-  ref.listen<PrayerTimes>(prayerTimesProvider, (_, times) {
+  void scheduleAdhanLocks() {
+    if (ref.read(thisDevicePausedProvider)) {
+      // Paused child (Free plan): no adhan locks on this device; clears earlier alarms.
+      service.schedulePrayerLocks(const []).catchError((Object e) => debugPrint('schedule failed: $e'));
+      return;
+    }
+    if (!ref.read(settingsProvider).lockAtAdhan) return;
+    final times = ref.read(prayerTimesProvider);
     final now = ref.read(cityNowProvider);
     final day = DateTime.utc(now.local.year, now.local.month, now.local.day);
     final instants = [
@@ -455,8 +478,10 @@ final lockCoordinatorProvider = Provider<void>((ref) {
         if (times.of(p).isFinite)
           day.add(Duration(minutes: ((times.of(p) - now.utcOffsetHours) * 60).round())),
     ].where((t) => t.isAfter(DateTime.now().toUtc())).toList();
-    if (ref.read(settingsProvider).lockAtAdhan) {
-      service.schedulePrayerLocks(instants).catchError((Object e) => debugPrint('schedule failed: $e'));
-    }
-  }, fireImmediately: true);
+    service.schedulePrayerLocks(instants).catchError((Object e) => debugPrint('schedule failed: $e'));
+  }
+
+  ref.listen<PrayerTimes>(prayerTimesProvider, (_, __) => scheduleAdhanLocks(), fireImmediately: true);
+  // Pausing (Free plan) clears the alarms; subscribing again brings them back.
+  ref.listen<bool>(thisDevicePausedProvider, (_, __) => scheduleAdhanLocks());
 });
