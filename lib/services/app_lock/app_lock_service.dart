@@ -370,7 +370,7 @@ LockPolicy pausedLockPolicy(AppSettings settings, {WalletState? wallet, DateTime
     remainingMinutes: 24 * 60,
     settings: settings,
     prayerAutoEndMinutes: kIsKids ? 0 : freePrayerLockWindow.inMinutes,
-    prayerLockSinceMs: prayerOn ? wallet?.prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
+    prayerLockSinceMs: prayerOn ? wallet.prayerLockSince?.toUtc().millisecondsSinceEpoch : null,
   );
 }
 
