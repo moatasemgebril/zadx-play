@@ -58,6 +58,9 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'msScheduleNote': "Set your child's screen time limits once in Microsoft Family Safety.",
     // Free plan = one child (paused child's device). US English.
     'pausedKidBody': 'Ask a parent or grown-up to set it up again. Everything you did is saved and waiting for you.',
+    // Kids has no prayer lock: no adhan line in the paused note.
+    'pausedChildrenNote':
+        "The free plan covers one child. The other profiles are paused, not deleted: their progress is kept and they come back by themselves when you subscribe. A paused child's device has no limits and isn't monitored.",
   },
   'ar': {
     'greet': 'أهلاً يا بطل!',
@@ -94,6 +97,8 @@ const Map<String, Map<String, String>> kidsRewrites = {
     'psScheduleNote': 'حدد وقت اللعب لطفلك مرة واحدة في تطبيق PlayStation Family.',
     'msScheduleNote': 'حدد حدود وقت الشاشة لطفلك مرة واحدة في Microsoft Family Safety.',
     'pausedKidBody': 'اطلب من بابا أو ماما يرجّعوه تاني. كل اللي عملته محفوظ ومستنيك.',
+    'pausedChildrenNote':
+        'الباقة المجانية لطفل واحد. باقي الملفات متوقفة مؤقتاً ومش متمسوحة: تقدّمهم محفوظ وهيرجعوا لوحدهم أول ما تشترك. جهاز الطفل المتوقف مالوش حدود ومش متابَع.',
   },
 };
 

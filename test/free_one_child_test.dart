@@ -229,7 +229,7 @@ void main() {
 
     final monthOld = FamilyPlanStatus(createdAt: DateTime.utc(2026, 10, 1));
 
-    test('a paused child device is not locked and is not monitored', () async {
+    test('a paused child device has no time limit outside prayer', () async {
       final c = await boundTo('cyusuf', monthOld);
       expect(c.read(thisDevicePausedProvider), isTrue);
       expect(c.read(activeChildIdProvider), 'cyusuf'); // its data stays its own
@@ -237,6 +237,52 @@ void main() {
       final policy = pausedLockPolicy(c.read(settingsProvider));
       expect(policy.locked, isFalse);
       expect(policy.reason, 'paused');
+      expect(policy.remainingMinutes, greaterThan(0)); // never "out of minutes"
+    });
+
+    group('adhan lock on a paused device (owner decision 2026-11-24)', () {
+      final since = DateTime.utc(2026, 11, 21, 8);
+      final prayerWallet = WalletState(
+        day: '2026-11-21',
+        tasks: const [],
+        progress: const {},
+        prayerLock: true,
+        lockedPrayer: Prayer.dhuhr,
+        prayerLockSince: since,
+      );
+
+      test('locks games during the Free prayer window', () async {
+        final c = await boundTo('cyusuf', monthOld);
+        final policy = pausedLockPolicy(c.read(settingsProvider),
+            wallet: prayerWallet, now: since.add(const Duration(minutes: 5)));
+        expect(policy.locked, isTrue);
+        expect(policy.reason, 'prayer');
+        expect(policy.prayerAutoEndMinutes, freePrayerLockWindow.inMinutes);
+        expect(policy.prayerLockSinceMs, since.millisecondsSinceEpoch);
+      });
+
+      test('unlocks by itself after the prayer window', () async {
+        final c = await boundTo('cyusuf', monthOld);
+        final policy = pausedLockPolicy(c.read(settingsProvider),
+            wallet: prayerWallet, now: since.add(freePrayerLockWindow + const Duration(minutes: 1)));
+        expect(policy.locked, isFalse);
+        expect(policy.reason, 'paused');
+      });
+
+      test('follows the parent "lock at adhan" setting', () async {
+        final c = await boundTo('cyusuf', monthOld);
+        final off = c.read(settingsProvider).copyWith(lockAtAdhan: false);
+        final policy = pausedLockPolicy(off, wallet: prayerWallet, now: since.add(const Duration(minutes: 5)));
+        expect(policy.locked, isFalse);
+      });
+
+      test('the live policy of a paused device uses the prayer lock', () async {
+        final c = await boundTo('cyusuf', monthOld);
+        expect(c.read(thisDevicePausedProvider), isTrue);
+        final policy = c.read(lockPolicyProvider);
+        expect(policy.reason, anyOf('paused', 'prayer'));
+        expect(policy.prayerAutoEndMinutes, freePrayerLockWindow.inMinutes);
+      });
     });
 
     test('the free child device stays locked as usual', () async {

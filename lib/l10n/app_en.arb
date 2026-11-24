@@ -492,7 +492,7 @@
   "parentSetupNeededBody": "There's no parent PIN on this device yet. Please ask a parent to create one.",
   "parentSetupNeededButton": "I'm a parent: set up the PIN",
   "childPausedLabel": "Paused: subscribe to resume",
-  "pausedChildrenNote": "The free plan covers one child. The other profiles are paused, not deleted: their progress is kept and they come back by themselves when you subscribe. A paused child's device isn't locked or monitored.",
+  "pausedChildrenNote": "The free plan covers one child. The other profiles are paused, not deleted: their progress is kept and they come back by themselves when you subscribe. A paused child's device has no time limit and isn't monitored, but games still lock at the adhan.",
   "chooseFreeChild": "Choose which child stays active",
   "chooseFreeChildTitle": "Who stays active on the free plan?",
   "chooseFreeChildBody": "The other children are paused and keep all their progress.",
