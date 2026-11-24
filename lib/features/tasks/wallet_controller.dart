@@ -146,7 +146,9 @@ class WalletController extends Notifier<WalletState> {
     final repo = ref.watch(familyRepositoryProvider);
     final restored = restoreFrom(ref.read(sharedPrefsProvider), _childId, today, serverApprovals: repo.serverApprovals);
     _remoteSub?.cancel();
-    _remoteSub = repo.watchDay(_childId, today).listen(_applyRemote);
+    // onError: a device removed from the family (removeLinkedDevice, P1-3) gets permission-denied;
+    // it keeps its local state (and its lock) instead of raising an uncaught stream error.
+    _remoteSub = repo.watchDay(_childId, today).listen(_applyRemote, onError: (Object _) {});
     ref.onDispose(() => _remoteSub?.cancel());
     // Parent device: approvals taken offline reach the server now (no-op when nothing is queued).
     if (repo.serverApprovals) {

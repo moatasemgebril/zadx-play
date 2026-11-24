@@ -962,5 +962,23 @@
       }
     }
   },
-  "assistantAfterSubscribing": "مساعد Zad X متاح بعد الاشتراك في باقة أساسي أو بلس."
+  "assistantAfterSubscribing": "مساعد Zad X متاح بعد الاشتراك في باقة أساسي أو بلس.",
+  "linkedDevicesTitle": "الأجهزة المربوطة",
+  "linkedDeviceParent": "موبايل ولي أمر",
+  "linkedDeviceThis": "الموبايل ده (إنت)",
+  "linkedDeviceChild": "جهاز {name}",
+  "@linkedDeviceChild": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceRemove": "إزالة الجهاز",
+  "deviceRemoveTitle": "إزالة الجهاز ده؟",
+  "deviceRemoveBody": "الجهاز ده هيتفصل عن العيلة فورًا ومش هيقدر يشوف أو يغيّر أي حاجة. تقدر تربطه تاني بعدين بكود ربط جديد.",
+  "deviceRemoveConfirm": "إزالة",
+  "deviceRemoved": "تمت إزالة الجهاز",
+  "deviceRemoveLastParent": "مينفعش تشيل آخر موبايل ولي أمر في العيلة.",
+  "deviceRemoveError": "مقدرناش نشيل الجهاز دلوقتي. جرّب تاني بعد شوية."
 }

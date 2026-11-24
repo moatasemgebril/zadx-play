@@ -114,7 +114,19 @@ is skipped on a bound child device, and the parent phone writes the defaults on 
   is deleted (otherwise `parent_link_family_in_use`, so no data is abandoned); a child-bound
   device is refused (`child_device`). Existing parent phones get a push. The app saves
   `family.id`, switches `familyIdProvider` and re-runs the store restore, which now attaches.
-  Removing a linked device is still open (BACKLOG P1-3).
+- **Removing a linked device** (BACKLOG P1-3, e.g. a lost phone): Parent → Link devices →
+  *Linked devices* lists the family's phones (from `members` / `childDevices`; this phone is not
+  removable there) with "Remove device / إزالة الجهاز" + a confirmation dialog. It calls the
+  `removeLinkedDevice({familyId, deviceUid})` Cloud Function (`FamilyRepository.removeLinkedDevice`):
+  the caller must be a PARENT member (a child device is refused, `parent_required`), the target a
+  member of the same family (`device_not_found`), and the last parent device is never removed
+  (`last_parent`). In one transaction the target leaves `members`, `childDevices` and
+  `parentDevices`, so the rules (`isMember`) deny it every family read and write, and an audit
+  entry `families/{id}/audit/{autoId}` = {action, byUid, targetUid, targetRole, atMs, expiresAt}
+  (server-only, no child data, 1-year TTL on `expiresAt`) is written. Then its refresh tokens are
+  revoked (`auth().revokeRefreshTokens`), its tamper heartbeat and its unused link codes are
+  deleted. Rate limits: 10/hour per caller, 20/day per family. Pure logic: `devices-logic.ts`.
+  Windows guards (device secret, not members) are not covered yet.
 
 ## Platforms
 | Platform | Game locking | Everything else |

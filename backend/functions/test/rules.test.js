@@ -9,6 +9,7 @@ const { join } = require("path");
 const { initializeTestEnvironment, assertFails, assertSucceeds } = require("@firebase/rules-unit-testing");
 const {
   doc, collection, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, Timestamp, increment, arrayUnion,
+  arrayRemove, deleteField, FieldPath,
 } = require("firebase/firestore");
 
 const DAY = "2026-11-22";
@@ -396,6 +397,65 @@ test("a device bound in childDevices but no longer a member gets nothing", async
   await assertFails(setDoc(day(db), { progress: { homework: { status: "pending", count: 0 } } }, { merge: true }));
 });
 
+/** The family doc exactly as removeLinkedDevice (admin SDK) leaves it after removing [uid]. */
+async function removeAsFunctionWould(uid) {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await updateDoc(
+      doc(ctx.firestore(), "families/f1"),
+      new FieldPath("members"), arrayRemove(uid),
+      new FieldPath("childDevices", uid), deleteField(),
+      new FieldPath("parentDevices", uid), deleteField(),
+    );
+  });
+}
+
+test("P1-3: a removed child device is denied every family read and write", async () => {
+  await seed();
+  await assertSucceeds(getDoc(day(as(KID1)))); // before removal
+  await removeAsFunctionWould(KID1);
+  const db = as(KID1);
+  await assertFails(getDoc(doc(db, "families/f1")));
+  await assertFails(getDoc(doc(db, "families/f1/children/c1")));
+  await assertFails(getDoc(day(db)));
+  await assertFails(getDocs(collection(db, "families/f1/children/c1/days")));
+  await assertFails(getDoc(doc(db, "families/f1/assistantUsage/" + DAY)));
+  await assertFails(setDoc(day(db), { progress: { homework: { status: "pending", count: 0 } } }, { merge: true }));
+  await assertFails(setDoc(day(db), { usedMinutes: increment(1) }, { merge: true }));
+  // It cannot put itself back.
+  await assertFails(setDoc(doc(db, "families/f1"), { members: arrayUnion(KID1) }, { merge: true }));
+  await assertFails(updateDoc(doc(db, "families/f1"), { [`childDevices.${KID1}`]: "c1" }));
+  // The other devices keep working.
+  await assertSucceeds(getDoc(day(as(KID2), "c2")));
+  await assertSucceeds(getDoc(doc(as(PARENT), "families/f1")));
+});
+
+test("P1-3: a removed parent phone loses parent access too", async () => {
+  await seed();
+  await removeAsFunctionWould(PARENT2);
+  const db = as(PARENT2);
+  await assertFails(getDoc(doc(db, "families/f1")));
+  await assertFails(getDocs(collection(db, "families/f1/children")));
+  await assertFails(setDoc(doc(db, "families/f1"), { settings: { lockAtAdhan: false } }, { merge: true }));
+  await assertFails(setDoc(doc(db, "families/f1/children/c9"), { nickname: "x", avatar: "moon" }));
+  await assertFails(deleteDoc(day(db)));
+  await assertFails(updateDoc(doc(db, "families/f1"), { members: arrayUnion(PARENT2), [`parentDevices.${PARENT2}`]: 1 }));
+});
+
+test("P1-3: no client removes a member directly (only removeLinkedDevice does)", async () => {
+  await seed();
+  for (const uid of [PARENT, PARENT2, KID1]) {
+    const db = as(uid);
+    const fam = doc(db, "families/f1");
+    await assertFails(updateDoc(fam, { members: arrayRemove(KID2) }), `${uid} arrayRemove`);
+    await assertFails(updateDoc(fam, { members: [PARENT, PARENT2, KID1] }), `${uid} overwrite`);
+    await assertFails(updateDoc(fam, { [`childDevices.${KID2}`]: deleteField() }), `${uid} unbind`);
+    await assertFails(updateDoc(fam, { [`parentDevices.${PARENT2}`]: deleteField() }), `${uid} parentDevices`);
+    // The audit trail is server-only.
+    await assertFails(getDoc(doc(db, "families/f1/audit/a1")), `${uid} read audit`);
+    await assertFails(setDoc(doc(db, "families/f1/audit/a1"), { action: "device_removed" }), `${uid} write audit`);
+  }
+});
+
 test("signed out: denied everywhere", async () => {
   await seed();
   const db = env.unauthenticatedContext().firestore();
@@ -412,7 +472,7 @@ test("signed out: denied everywhere", async () => {
 test("server-only collections are closed to every client (parent included)", async () => {
   await seed();
   const paths = [
-    "families/f1/devices/d1", "families/f1/private/billing", "families/f1/assistantUsage/" + DAY,
+    "families/f1/devices/d1", "families/f1/private/billing", "families/f1/assistantUsage/" + DAY, "families/f1/audit/a1",
     "purchases/h1", "pairingCodes/123456", "referralCodes/ABC", "deviceHeartbeats/h1", "rateLimits/k1",
     "families/f1/children/c1/secret/x", "somethingElse/x",
   ];

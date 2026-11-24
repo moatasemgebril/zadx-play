@@ -497,5 +497,16 @@
   "chooseFreeChildTitle": "Who stays active on the free plan?",
   "chooseFreeChildBody": "The other children are paused and keep all their progress.",
   "freeChildChosen": "{name} is now the active child",
-  "assistantAfterSubscribing": "The Zad X assistant is available after subscribing to Basic or Plus."
+  "assistantAfterSubscribing": "The Zad X assistant is available after subscribing to Basic or Plus.",
+  "linkedDevicesTitle": "Linked devices",
+  "linkedDeviceParent": "Parent phone",
+  "linkedDeviceThis": "This phone (you)",
+  "linkedDeviceChild": "{name}'s device",
+  "deviceRemove": "Remove device",
+  "deviceRemoveTitle": "Remove this device?",
+  "deviceRemoveBody": "This device is unlinked from your family right away and can no longer see or change anything. You can link it again later with a new link code.",
+  "deviceRemoveConfirm": "Remove",
+  "deviceRemoved": "Device removed",
+  "deviceRemoveLastParent": "You can't remove the family's last parent phone.",
+  "deviceRemoveError": "Couldn't remove the device right now. Please try again soon."
 }
