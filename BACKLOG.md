@@ -138,6 +138,16 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 ## Owner request 2026-11-21: adhkar read aloud by a sheikh (P1, Approvals & Licensing)
 - No freely-licensed adhkar audio found yet. Contact the official Hisn al-Muslim site (binwahaf.com, the late Sheikh Saeed bin Wahf al-Qahtani) for permission to use its audio in a paid kids app; find the official contact on the site itself. Alternatives: a recognised Islamic institution with recordings, or a local imam/sheikh recording the adhkar for us with written permission (owner then owns the recordings).
 - When licensed: per-dhikr audio in adhkar_view with a play button, attribution, offline bundling.
+- [ ] Owner decision 2026-11-23 (branch `feat/adhkar-quran-audio`, pending CI + Quality Gate): **Quranic
+  adhkar → Mishary Alafasy via the QF-approved Quran pipeline** (voice `afasy`, `licenceConfirmed`,
+  same per-ayah player as the Quran screen, `PlayerKind.quran` so effects stay silent and the adhan is
+  never mixed; credit «مشاري العفاسي · Mishary Alafasy»; hidden in release if the licence flag is off;
+  offline → gentle inline hint). Today this covers the three Quls of the reminder card (112, 113, 114,
+  whole). No catalogue dhikr is exactly Quran ayat: hasbi is only part of At-Tawbah 9:129 (text-only);
+  Ayat al-Kursi and Al-Baqarah 2:285–286 are not in the catalogue (Islamic Content Reviewer decides
+  whether to add them; text would come from the Quran API, Al-Baqarah needs a SurahInfo entry).
+  **Non-Quranic adhkar stay text-only until a licence for adhkar recordings exists.** Still blocked by
+  the P1 above: the recitation source is everyayah.com, not a QF host, until the QF API migration.
 
 ## Findings from the 2026-11-21 PM cycle (Approvals + Marketing + Skills & Add-ons)
 Details: docs/ADDONS-REGISTRY.md, docs/marketing/STORE-LISTING.md, docs/approvals/OUTREACH-2026-11-21-PM.md.

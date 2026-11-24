@@ -29,5 +29,6 @@ Status values: Approved · Awaiting reply · Not sent · Blocked.
 
 
 ## Notes 2026-11-23 PM
+- Adhkar audio, owner decision 2026-11-23: Quranic adhkar (today the three Quls) use the Alafasy recitation already covered by the Quran Foundation row (credit reciter + "Quran data provided by Quran Foundation"); no new approval needed. Non-Quranic adhkar remain text-only until the Dorar.net / local-recording route yields a written licence. Branch `feat/adhkar-quran-audio`.
 - Privacy lawyers, second quote: no general email found on official sites of FKKS (form only: https://fkks.com/contact/), Hintze (form, business domains only), Venable (media/pro bono emails only), Kelley Drye (privacy@ is for its own policy). Forms are not used by the team → **OWNER** may submit the FKKS form if a second quote is wanted. ZwillGen remains the open request.
 - Adhkar audio (Hisn al-Muslim): binwahaf.com has no contact page or email and states "جميع الحقوق محفوظة" → no permission route; IslamHouse publishes no reuse licence and only a complaints email (abusemail@islamhouse.com, not appropriate) + contact form https://islamhouse.com/en/tawasal. Recommended path: a local imam/sheikh records the adhkar for us under a written permission/assignment (**OWNER** decision), after Dar al-Ifta text review.
