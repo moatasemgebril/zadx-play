@@ -267,7 +267,7 @@ jobs:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ hashFiles('backend/functions/package.json', 'backend/functions/package-lock.json') }}
           restore-keys: npm-${{ runner.os }}-
-      - run: npm install
+      - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: npm test
       - run: npm audit --audit-level=high
