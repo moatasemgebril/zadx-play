@@ -253,6 +253,9 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get licencePending => _text('licencePending');
 
   @override
+  String get quranListenOffline => _text('quranListenOffline');
+
+  @override
   String get psNotifyAdhan => _text('psNotifyAdhan');
 
   @override
