@@ -118,6 +118,7 @@ class ChildrenController extends Notifier<ChildrenState> {
   /// plan cannot be selected (returns false).
   bool select(String childId) {
     if (state.isBound || state.byId(childId) == null) return false;
+    if (state.children.length <= 1) return true; // one child: never paused, nothing to switch
     // Same rule as [childPauseProvider], computed here: a notifier may not read a provider
     // that depends on itself (Riverpod CircularDependencyError).
     final multiple = hasFeature(ref.read(planEntitlementProvider), AppFeature.multipleChildren);
@@ -214,6 +215,10 @@ final childPauseProvider = Provider<ChildPause>((ref) {
       freeChildId: status?.freeChildId ?? ChildProfile.defaultId,
       pausedIds: paused ? {bound} : const {},
     );
+  }
+  // One child is never paused (it is the free child), so the plan is not needed.
+  if (children.children.length <= 1) {
+    return ChildPause(freeChildId: freeChildIdOf(children.children, children.freeChildId));
   }
   final multiple = ref.watch(planEntitlementProvider.select((e) => hasFeature(e, AppFeature.multipleChildren)));
   return childPauseFor(

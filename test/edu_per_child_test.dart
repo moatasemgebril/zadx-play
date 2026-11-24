@@ -2,10 +2,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zadx/data/models/child_profile.dart';
+import 'package:zadx/data/models/plan.dart';
 import 'package:zadx/features/edu_games/letters/letters_progress.dart';
 import 'package:zadx/features/edu_games/mosque/mosque_controller.dart';
 import 'package:zadx/features/edu_games/stars_controller.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
+import 'package:zadx/services/billing/subscription_service.dart';
 import 'package:zadx/services/family/child_storage.dart';
 import 'package:zadx/services/family/children_controller.dart';
 
@@ -15,7 +17,12 @@ import 'package:zadx/services/family/children_controller.dart';
 Future<(ProviderContainer, SharedPreferences)> makeContainer([Map<String, Object> initial = const {}]) async {
   SharedPreferences.setMockInitialValues({'settings.language': 'en', ...initial});
   final prefs = await SharedPreferences.getInstance();
-  final c = ProviderContainer(overrides: [sharedPrefsProvider.overrideWithValue(prefs)]);
+  final c = ProviderContainer(overrides: [
+    sharedPrefsProvider.overrideWithValue(prefs),
+    // A paid plan: these tests are about several children (Free pauses all but one, see
+    // test/free_one_child_test.dart); also keeps the store plugin out of a unit test.
+    planEntitlementProvider.overrideWithValue(const Entitlement(tier: PlanTier.plus)),
+  ]);
   addTearDown(c.dispose);
   return (c, prefs);
 }
