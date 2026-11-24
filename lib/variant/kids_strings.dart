@@ -107,7 +107,7 @@ const Set<String> islamicOnlyL10nKeys = {
   // Quran + adhkar screens.
   'quran', 'chooseReciter', 'quranRiwaya', 'ayatCount', 'playSurah', 'readSurah', 'hideSurahText', 'juz30', 'juz29',
   'adhkar', 'morningAdhkar', 'eveningAdhkar', 'salawat', 'sectionDone', 'loadingText', 'textError',
-  'recitationComingSoon', 'licencePending',
+  'recitationComingSoon', 'licencePending', 'quranListenOffline',
   // Consoles: adhan alerts and play windows between prayers.
   'psNotifyAdhan', 'psSchedule', 'psAlertAdhan', 'msAlertAdhan', 'afterDhuhr', 'afterAsr', 'afterMaghrib',
   // Windows Zad X Guard (computes prayer locks; not offered in Kids v1).
