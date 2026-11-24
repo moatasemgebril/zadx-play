@@ -68,10 +68,10 @@ CI does run `npm audit --audit-level=high`.
 
 **Action (R-36):** run `npm install` once, commit `backend/functions/package-lock.json`, switch CI to `npm ci`.
 
-## 3. GitHub Actions (`.github/workflows/zadx-ci.yml`, `fetch-adhan.yml`)
+## 3. GitHub Actions (`.github/workflows/zadx-ci.yml`)
 
 All actions are pinned to a **major-version tag** (none to a SHA, none unpinned/`@main`). Workflow-level
-`permissions: contents: read` in zadx-ci.yml (good); `publish-test-apk` and `fetch-adhan` get `contents: write`.
+`permissions: contents: read` in zadx-ci.yml (good); `publish-test-apk` gets `contents: write`.
 
 | Action | Version | Publisher | Licence | Secrets / write access | Risk | Action |
 |---|---|---|---|---|---|---|
@@ -91,7 +91,7 @@ All actions are pinned to a **major-version tag** (none to a SHA, none unpinned/
 | softprops/action-gh-release | @v2 | third-party | MIT (listing) | **`contents: write`**, publishes the test APK | **High** (could swap the APK owners/testers install) | **Pin to SHA first.** |
 
 Other workflow notes:
-- `fetch-adhan.yml` (manual) still downloads **5** Commons recordings incl. two **CC BY-SA 4.0** files, **overwrites** the hand-curated `assets/audio/ADHAN-CREDITS.txt`, and `git push -f` to `assets/adhans`. Only `madinah_rec` is used. **Med** — remove the workflow (registry rule: remove unused) or cut the list to `madinah_rec` and stop it overwriting the credits file. Its User-Agent embeds the owner's personal email; use a project address.
+- `fetch-adhan.yml` **removed 2026-11-23** (it downloaded 5 Commons recordings incl. two CC BY-SA 4.0 files, overwrote `assets/audio/ADHAN-CREDITS.txt` and force-pushed). **Rule: adhan recordings are added only by hand, after a licence review by the tooling lead and a wording check by the Islamic Content Reviewer; `ADHAN-CREDITS.txt` and the in-app Credits card are updated in the same PR.**
 - `macos-latest` / `windows-latest` / `ubuntu-latest` runners float; acceptable for CI, not for release builds.
 
 ## 4. Native dependencies
@@ -126,7 +126,7 @@ Other workflow notes:
 | **GitHub Actions** | CI, Pages web preview, test-APK pre-release | No (but publishes what testers install) | GitHub ToS | Med | SHA-pin third-party actions (§3). Public Pages preview + public APK: label "not for children yet" is present. |
 | **Firebase Test Lab** | Real-device Robo tests | No | GCP ToS | Low (inactive) | Pending `GCP_SA_KEY` secret; prefer Workload Identity Federation; key scoped to Test Lab only. |
 | Google Play Developer API (`googleapis`) | Server-side purchase verification | No | Google ToS | Low | Service account least-privilege. |
-| Wikimedia Commons | One-off adhan download (`fetch-adhan.yml`) | No | Per-file licence | Low | Remove workflow once audio is final (§3). |
+| Wikimedia Commons | Source of the bundled adhan (downloaded by hand; no workflow since 2026-11-23) | No | Per-file licence (CC BY 3.0 for the bundled file) | Low | New adhans by hand only, after licence review (§3). |
 | Google Fonts CDN | Runtime font download | **No** (google_fonts package removed 2026-11-23; fonts bundled) | Google APIs ToS | Low | Keep it out; test/bundled_fonts_test.dart guards it. |
 
 ---
