@@ -30,6 +30,7 @@ import 'device_lock_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
 import 'protection_card.dart';
+import 'ps_lock_steps.dart';
 
 class ParentScreen extends ConsumerWidget {
   const ParentScreen({super.key});
@@ -237,6 +238,9 @@ class _ConsolesCard extends ConsumerWidget {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text(l10n.consolesTitle, style: Theme.of(context).textTheme.titleMedium),
         Text(l10n.consolesNote, style: const TextStyle(fontSize: 15, color: AppColors.muted, height: 1.5)),
+        const SizedBox(height: 12),
+        // How to limit PlayStation play time: shown to every parent, on every plan.
+        const PsLockSteps(),
         const SizedBox(height: 12),
         if (!hasFeature(ent, AppFeature.consoleLinks))
           FilledButton(onPressed: () => context.push(Routes.subscription), child: Text(l10n.plusName))

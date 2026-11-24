@@ -508,5 +508,14 @@
   "deviceRemoveConfirm": "Remove",
   "deviceRemoved": "Device removed",
   "deviceRemoveLastParent": "You can't remove the family's last parent phone.",
-  "deviceRemoveError": "Couldn't remove the device right now. Please try again soon."
+  "deviceRemoveError": "Couldn't remove the device right now. Please try again soon.",
+  "psStepsTitle": "How to limit PlayStation play time",
+  "psStepsSub": "7 steps in Sony's free PlayStation Family app",
+  "psStep1": "Install the PlayStation Family app on your phone and sign in with your own (adult) PlayStation account.",
+  "psStep2": "Add your child to your family: Family management → Add family member → Create a child account. Your child plays only with this account.",
+  "psStep3": "In the app, pick your child → Playtime → set Daily playtime (for example 1 hour).",
+  "psStep4": "Set the Playable hours: the times of day when playing is allowed.",
+  "psStep5": "Under \"When playtime ends\", choose \"Log out\" so the console stops the game, not just a reminder.",
+  "psStep6": "On the console: Settings → Family and Parental Controls → Console Restrictions. Turn off guest login and creating new users, so the limit can't be skipped.",
+  "psStep7": "Test it: give 15 minutes, play from your child's account, and check that the console logs out when the time is up."
 }
