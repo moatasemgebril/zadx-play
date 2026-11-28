@@ -139,7 +139,9 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - Authentication: **Anonymous** enabled (auto clean-up OFF, so parents' anonymous accounts are not deleted after 30 days).
 - Apps registered: Android `com.zadx.app`, iOS `com.zadx.app`, Web "Zad X Play Web" (no Hosting).
 - iOS bundle identifier set to `com.zadx.app` in ios/scripts/add_native_files.rb (2026-11-28).
-- TODO (team): run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart; deploy backend/firestore.rules (free via `firebase deploy --only firestore:rules`).
+- TODO (team): run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart.
+- backend/firestore.rules (main @ 44b0782) published to the live project from the console, 2026-11-28 08:40 PT (replaces deny-all). Redeploy after every rules change. The `deviceHeartbeats` index is only for the Functions path, not deployed.
+- Waiting on owner: google-services.json + GoogleService-Info.plist from the console (gitignored) to wire Android/iOS.
 - Cloud Functions need the Blaze plan (card required). Owner wants zero cost: keep the app working without Functions where possible (Firestore rules + client logic), and list Blaze as an owner decision.
 
 ## Quran Foundation approval (2026-11-21, written reply from basit@quran.com)
