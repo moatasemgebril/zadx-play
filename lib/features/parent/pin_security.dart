@@ -18,6 +18,11 @@ class PinSecurity {
   /// Failed attempts allowed before the gate starts locking.
   static const freeAttempts = 5;
 
+  /// Shared-preferences keys of the wrong-PIN counter and lock-out end (shared by every PIN
+  /// prompt; cleared after a successful recovery-code reset).
+  static const failuresKey = 'parent.pinFailures';
+  static const lockedUntilKey = 'parent.pinLockedUntil';
+
   /// Salted, slow hash of [pin] for storage.
   static String hashPin(String pin, {List<int>? salt, int rounds = iterations}) {
     final s = salt ?? _randomBytes(16);

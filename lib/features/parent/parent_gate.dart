@@ -18,8 +18,8 @@ export 'parent_session.dart' show parentUnlockedProvider;
 String hashPin(String pin) => PinSecurity.hashPin(pin);
 
 // Wrong-PIN counter and lock-out end, persisted so restarting the app does not reset them.
-const _failuresKey = 'parent.pinFailures';
-const _lockedUntilKey = 'parent.pinLockedUntil';
+const _failuresKey = PinSecurity.failuresKey;
+const _lockedUntilKey = PinSecurity.lockedUntilKey;
 
 /// Shows [child] only after the parent PIN is entered.
 ///
