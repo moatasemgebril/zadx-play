@@ -146,7 +146,10 @@ bool eventWanted(FamilyEvent e, {required bool notifyOnTasks, required bool noti
 /// Events to show as a local notification: stamped after [notifiedUntil] (the newest event the
 /// parent phone already notified), oldest first. Events without a server time wait.
 List<FamilyEvent> eventsToNotify(Iterable<FamilyEvent> events, DateTime notifiedUntil) {
-  final out = [for (final e in events) if (e.at != null && e.at!.isAfter(notifiedUntil)) e];
+  // Compare whole milliseconds: the stored mark is in ms, while event times (Firestore) can carry
+  // microseconds, which would otherwise notify the newest event again on every snapshot.
+  final until = notifiedUntil.millisecondsSinceEpoch;
+  final out = [for (final e in events) if (e.at != null && e.at!.millisecondsSinceEpoch > until) e];
   out.sort((a, b) => a.at!.compareTo(b.at!));
   return out;
 }

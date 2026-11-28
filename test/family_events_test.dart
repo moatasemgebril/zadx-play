@@ -108,6 +108,13 @@ void main() {
       expect(out.map((e) => e.id), ['a', 'b']);
     });
 
+    test('notify: an event with microseconds is not notified again after its ms mark', () {
+      final at = DateTime.utc(2026, 11, 28, 12, 0, 0, 123, 456);
+      final e = FamilyEvent(id: 'u', type: 'task_submitted', childId: 'c', at: at);
+      final mark = DateTime.fromMillisecondsSinceEpoch(at.millisecondsSinceEpoch, isUtc: true);
+      expect(eventsToNotify([e], mark), isEmpty);
+    });
+
     test('notification settings filter task and adhan alerts; protection always passes', () {
       final task = _event('t', 'task_submitted', now);
       final adhan = _event('a', 'adhan', now);
@@ -172,6 +179,7 @@ void main() {
         _event('old', 'task_submitted', now.subtract(const Duration(days: 9))),
       ]);
       await tester.pump();
+      await tester.pump();
       expect(find.byKey(const Key('familyAlertsCard')), findsOneWidget);
       expect(find.text('Family alerts'), findsOneWidget);
       expect(find.textContaining('Last seen: '), findsOneWidget);
@@ -190,6 +198,7 @@ void main() {
       });
       repo.events.add(const []);
       await tester.pump();
+      await tester.pump();
       expect(find.byKey(const ValueKey('stale-${ChildProfile.defaultId}')), findsOneWidget);
       expect(find.text('No alerts in the last 7 days.'), findsOneWidget);
     });
@@ -197,6 +206,7 @@ void main() {
     testWidgets('Arabic card', (tester) async {
       final (repo, _, _) = await setUpParent(tester, lang: 'ar');
       repo.events.add([_event('e1', 'task_submitted', now.subtract(const Duration(minutes: 1)))]);
+      await tester.pump();
       await tester.pump();
       expect(find.text('تنبيهات العائلة'), findsOneWidget);
       expect(find.text('فيه مهمة مستنية موافقتك'), findsOneWidget);
@@ -275,6 +285,7 @@ void main() {
       expect(repo.touched, hasLength(1));
       expect(prefs.getInt(presenceLastWriteKey), isNotNull);
       second.dispose(); // stops the 15-minute timer before the test ends
+      await tester.pump(); // lets Riverpod's zero-delay refresh timer run
     });
 
     testWidgets('parent phone: never writes presence', (tester) async {
