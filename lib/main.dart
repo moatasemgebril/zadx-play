@@ -11,6 +11,7 @@ import 'core/platform.dart';
 import 'features/settings/settings_controller.dart';
 import 'features/splash/launch_splash.dart';
 import 'services/billing/subscription_service.dart';
+import 'services/family/device_removal.dart';
 import 'services/family/family_bootstrap.dart';
 import 'services/family/family_repository.dart';
 import 'services/family/firestore_family_repository.dart';
@@ -50,8 +51,14 @@ Future<Widget> startUpApp() async {
     debugPrint('Firebase not configured, running locally: $e');
   }
 
-  String? familyId = prefs.getString(FamilyBootstrap.idKey);
-  if (firebaseReady) {
+  // Removed from the family (P1-3a): the old family's Firestore cache goes first (only possible
+  // before Firestore is used), and no new family is made until a parent sets the device up again.
+  final removed = prefs.getBool(DeviceRemoval.removedKey) ?? false;
+  if (removed) await DeviceRemoval.clearFamilyData(prefs); // idempotent: finishes an interrupted reset
+  if (firebaseReady) await DeviceRemoval.clearFirestoreCacheIfPending(prefs, timeout: _networkStepTimeout);
+
+  String? familyId = removed ? null : prefs.getString(FamilyBootstrap.idKey);
+  if (firebaseReady && !removed) {
     // The id is saved locally before the family doc is written (no orphan family on a timeout).
     familyId = await FamilyBootstrap.run(
       prefs,
