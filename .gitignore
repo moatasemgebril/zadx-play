@@ -4,8 +4,12 @@ build/
 .flutter-plugins
 .flutter-plugins-dependencies
 lib/l10n/app_localizations*.dart
+# Firebase client config (not secret; access is enforced by backend/firestore.rules).
+# Owner decision 2026-11-28: the app's own files are committed; any other copy stays ignored.
 **/GoogleService-Info.plist
+!ios/Runner/GoogleService-Info.plist
 **/google-services.json
+!android/app/google-services.json
 lib/firebase_options.dart
 backend/functions/node_modules/
 backend/functions/lib/
@@ -13,3 +17,4 @@ backend/functions/lib/
 *.iml
 .idea/
 .claude/worktrees/
+__pycache__/

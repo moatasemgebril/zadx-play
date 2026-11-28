@@ -18,6 +18,9 @@ It is safe to run more than once. It:
   5. adds JUnit for the pure-Kotlin rule tests in android/app/src/test (LockRulesTest)
   6. sets the launcher label of the variant; for Zad X Kids also replaces the Accessibility /
      Device Admin descriptions with neutral text and removes the adhan notification sound
+  7. Zad X Play only: applies the Google Services Gradle plugin so android/app/google-services.json
+     (Firebase project zad-x-play, app com.zadx.app) is used. Zad X Kids has no Firebase app yet,
+     so the plugin is left off (the app then runs on-device only)
 """
 import argparse
 import re
@@ -144,6 +147,44 @@ def neutralise_for_kids() -> None:
             adhan.parent.rmdir()
 
 
+GMS_PLUGIN = "com.google.gms.google-services"
+GMS_VERSION = "4.4.2"
+
+
+def _add_to_plugins_block(path: Path, line: str) -> None:
+    s = path.read_text()
+    if GMS_PLUGIN in s:
+        return
+    if not re.search(r"^plugins\s*\{", s, re.M):
+        sys.exit(f"{path}: no plugins {{ }} block (unexpected flutter create template)")
+    # Last line of the block, after the Android and Flutter plugins.
+    s = re.sub(r"^(plugins\s*\{.*?)^\}", lambda m: m.group(1) + "    " + line + "\n}", s, count=1, flags=re.M | re.S)
+    path.write_text(s)
+    print(f"google-services plugin added to {path}")
+
+
+def wire_google_services(enabled: bool) -> None:
+    app_gradle = next((p for p in (APP / "build.gradle.kts", APP / "build.gradle") if p.exists()), None)
+    root = APP.parent
+    settings = next((p for p in (root / "settings.gradle.kts", root / "settings.gradle") if p.exists()), None)
+    if app_gradle is None or settings is None:
+        sys.exit("gradle files not found: run flutter create first")
+    kts = app_gradle.suffix == ".kts"
+    if not enabled:
+        s = app_gradle.read_text()
+        s2 = re.sub(r"^\s*id\s*\(?[\"']%s[\"']\)?\s*\n" % re.escape(GMS_PLUGIN), "", s, flags=re.M)
+        if s2 != s:
+            app_gradle.write_text(s2)
+            print("google-services plugin removed (no Firebase app for this variant)")
+        return
+    if not (APP / "google-services.json").exists():
+        print("android/app/google-services.json missing: Firebase stays off")
+        return
+    _add_to_plugins_block(settings, f'id("{GMS_PLUGIN}") version "{GMS_VERSION}" apply false' if kts
+                          else f'id "{GMS_PLUGIN}" version "{GMS_VERSION}" apply false')
+    _add_to_plugins_block(app_gradle, f'id("{GMS_PLUGIN}")' if kts else f'id "{GMS_PLUGIN}"')
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--variant", choices=sorted(VARIANTS), default="islamic")
@@ -153,5 +194,6 @@ if __name__ == "__main__":
     remove_template_activity()
     merge_manifest()
     set_label(variant["label"])
+    wire_google_services(enabled=args.variant == "islamic")
     if args.variant == "kids":
         neutralise_for_kids()

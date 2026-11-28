@@ -17,8 +17,19 @@ end
 add_file(project, runner, 'Runner', 'AppLockPlugin.swift')
 add_file(project, runner, 'Shared', 'SharedStore.swift')
 
+# Firebase config (ios/Runner/GoogleService-Info.plist) goes in the app bundle as a resource.
+runner_group = project.main_group.children.find { |g| g.display_name == 'Runner' }
+if runner_group && File.exist?('ios/Runner/GoogleService-Info.plist') &&
+   runner_group.files.none? { |f| f.display_name == 'GoogleService-Info.plist' }
+  runner.add_resources([runner_group.new_reference('GoogleService-Info.plist')])
+end
+
 (project.build_configurations + runner.build_configurations).each do |config|
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
 end
+# Same bundle id as the Firebase iOS app and the store listing (flutter create makes com.zadx.zadx).
+runner.build_configurations.each do |config|
+  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.zadx.app'
+end
 project.save
-puts 'Added AppLockPlugin.swift + SharedStore.swift to Runner; iOS 16.0'
+puts 'Added AppLockPlugin.swift + SharedStore.swift to Runner; iOS 16.0; bundle id com.zadx.app; Firebase plist'

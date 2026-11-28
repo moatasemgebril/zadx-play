@@ -138,7 +138,13 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - Firestore (default) created in **eur3 (Europe)**, Standard edition, production mode (deny-all until our backend/firestore.rules are deployed).
 - Authentication: **Anonymous** enabled (auto clean-up OFF, so parents' anonymous accounts are not deleted after 30 days).
 - Apps registered: Android `com.zadx.app`, iOS `com.zadx.app`, Web "Zad X Play Web" (no Hosting).
-- TODO (team): set the iOS bundle identifier to `com.zadx.app` in ios/scripts/add_native_files.rb (flutter create defaults to `com.zadx.zadx`); run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart; deploy backend/firestore.rules (free via `firebase deploy --only firestore:rules`).
+- iOS bundle identifier set to `com.zadx.app` in ios/scripts/add_native_files.rb (2026-11-28).
+- TODO (team): run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart.
+- backend/firestore.rules (main @ 44b0782) published to the live project from the console, 2026-11-28 08:40 PT (replaces deny-all). Redeploy after every rules change. The `deviceHeartbeats` index is only for the Functions path, not deployed.
+- iOS: ios/Runner/GoogleService-Info.plist committed (owner decision 2026-11-28: Firebase client config lives in the public repo; rules + App Check are the protection) and added to the Runner bundle by add_native_files.rb.
+- Android: android/app/google-services.json committed; android/scripts/integrate_native.py applies the Google Services Gradle plugin (4.4.2) for Zad X Play only. Zad X Kids (com.zadx.kids) has no Firebase app yet and runs on-device only — register it in the console if Kids needs family sync.
+- Web: no firebase_options.dart yet, so the web build stays local-only (Firebase.initializeApp() without options).
+- TODO (team, before launch): restrict the API keys in Google Cloud (Android key → com.zadx.app + SHA-1, iOS key → bundle id) and enforce App Check on Firestore.
 - Cloud Functions need the Blaze plan (card required). Owner wants zero cost: keep the app working without Functions where possible (Firestore rules + client logic), and list Blaze as an owner decision.
 
 ## Quran Foundation approval (2026-11-21, written reply from basit@quran.com)
