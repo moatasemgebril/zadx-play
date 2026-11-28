@@ -42,8 +42,8 @@ class WalletState {
   /// automatically after the prayer window (see `lockStateFor`).
   final DateTime? prayerLockSince;
 
-  /// Synced family: the server's credits {taskId: minutes} (written only by the `approveTask`
-  /// Cloud Function for a parent device, R-32). A task counts as approved, and earns minutes,
+  /// Synced family: the server's credits {taskId: minutes} (written only by a parent-device
+  /// approval that backend/firestore.rules checks, R-32). A task counts as approved, and earns minutes,
   /// only with an entry here, whatever `progress` says. Null for a local-only family, where an
   /// approval on this device (behind the parent PIN) sets the task to done.
   final Map<String, int>? approved;
@@ -214,8 +214,9 @@ class WalletController extends Notifier<WalletState> {
   // ---- parent actions (guarded by the parent PIN in the UI) -----------------
   //
   // Local-only family: the decision is applied on this device, as before.
-  // Synced family (R-32): the SERVER decides. `approveTask` / `rejectTask` check server-side that
-  // this is a parent device and credit the minutes; the result comes back through [watchDay].
+  // Synced family (R-32): the SERVER decides. `approveTask` / `rejectTask` are Firestore writes
+  // that the security rules accept only from a parent device, with bounded minutes credited once
+  // (no Cloud Functions, zero-cost backend); the result comes back through [watchDay].
   // Offline, the decision is queued here and sent when online. A paired child device cannot
   // approve, even with the PIN (the server would refuse): these return false and the UI asks
   // the parent to approve from the parent phone.

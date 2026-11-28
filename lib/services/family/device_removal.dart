@@ -18,15 +18,18 @@ import 'firestore_family_repository.dart';
 
 /// "This device was removed from the family" (BACKLOG P1-3a).
 ///
-/// When a parent removes a linked device (`removeLinkedDevice`, P1-3), the server takes its uid out
-/// of `members` and revokes its tokens. The removed device then only sees permission-denied from
-/// Firestore. This file turns that into a calm "ask a parent" screen and a safe reset:
+/// When a parent removes a linked device (P1-3), the parent's app takes its uid out of `members`
+/// in one rules-checked Firestore commit that also writes `families/{id}/removedDevices/{uid}`
+/// (zero-cost backend, no Cloud Functions: docs/ZERO-COST-BACKEND.md). The removed device then
+/// only sees permission-denied from Firestore. This file turns that into a calm "ask a parent"
+/// screen and a safe reset:
 ///
 /// * **Detection.** A permission-denied on the live family-doc listener is only a HINT (a rules
-///   mistake could cause it too). The device is treated as removed only when the server says so
-///   explicitly: the `checkDeviceMembership` callable answers `{member: false}` for this device's
-///   own uid, twice in a row ([RemovalDetector]). Offline, timeouts, errors or a function that is
-///   not deployed are "unknown" and never count (offline-first: no blocking error for the child).
+///   mistake could cause it too). The device is treated as removed only on an explicit answer
+///   read from the SERVER (never the offline cache): the family doc is refused AND this device's
+///   own removal marker exists ([membershipFromFirestore]), twice in a row ([RemovalDetector]).
+///   Offline, timeouts, errors or a missing marker are "unknown" and never count (offline-first:
+///   no blocking error for the child).
 /// * **Child safety.** The removed state is saved before anything else and forces a LOCKED policy
 ///   (`removedLockPolicy` in app_lock_service.dart), on every plan, until a parent enters the
 ///   parent PIN on this device ([DeviceRemovalController.parentSetUpAgain]). Clearing the old
@@ -39,13 +42,26 @@ import 'firestore_family_repository.dart';
 /// What the server said about this device's membership.
 enum MembershipProbe { member, notMember, unknown }
 
-/// The `checkDeviceMembership` answer: only an explicit boolean counts, anything else is unknown.
+/// The legacy `checkDeviceMembership` answer (optional Cloud Function, needs Blaze): only an
+/// explicit boolean counts, anything else is unknown.
 MembershipProbe membershipFromServer(Object? data) {
   if (data is Map) {
     final member = data['member'];
     if (member == true) return MembershipProbe.member;
     if (member == false) return MembershipProbe.notMember;
   }
+  return MembershipProbe.unknown;
+}
+
+/// The zero-cost answer from two SERVER reads (never the offline cache):
+/// * [familyMembers]: `members` of the family doc when the read was allowed, null when it was
+///   refused (permission-denied). Allowed and listing [uid] = member.
+/// * [removedMarker]: whether `families/{id}/removedDevices/{uid}` exists (null = not read).
+///   Only "family refused AND marker exists" is an explicit "not a member"; everything else
+///   (a rules mistake, a deleted family, a never-written marker) is unknown.
+MembershipProbe membershipFromFirestore({required String uid, List<Object?>? familyMembers, bool? removedMarker}) {
+  if (familyMembers != null) return familyMembers.contains(uid) ? MembershipProbe.member : MembershipProbe.unknown;
+  if (removedMarker == true) return MembershipProbe.notMember;
   return MembershipProbe.unknown;
 }
 
@@ -56,7 +72,8 @@ abstract class MembershipSource {
   /// Emits when a live listener on the family doc is refused (permission-denied). A hint only.
   Stream<void> accessDenied();
 
-  /// Asks the server whether this device is still a member. Never throws.
+  /// Asks the server (Firestore, never its cache) whether this device is still a member. Never
+  /// throws.
   Future<MembershipProbe> probe();
 }
 
