@@ -1,17 +1,37 @@
 # Zad X backend (Firebase)
 
-## Setup
+## Zero cost: Spark plan, no server code (owner decision 2026-11-28)
+The app runs on the free **Spark** plan: Anonymous Auth, Firestore and Hosting only. No Cloud
+Functions, no Secret Manager, no card. The family core (pairing codes, device removal and the
+"was this device removed?" check, task approval, the Free-plan child) is plain client writes that
+`firestore.rules` enforces; design and threat notes: [docs/ZERO-COST-BACKEND.md](../docs/ZERO-COST-BACKEND.md).
+
 ```bash
 npm i -g firebase-tools
 firebase login
-firebase use --add            # pick/create the Zad X project
+firebase use --add                                   # pick/create the Zad X project (Spark plan)
+cd functions && npm run deploy:rules                 # = firebase deploy --only firestore:rules
+firebase deploy --only firestore:indexes             # if firestore.indexes.json changed
+```
+Optional, free: a Firestore TTL policy on `expiresAt` for collection group `audit` (removal audit
+entries, about one year). Rules tests: see "Firestore rules tests" below (CI runs them on every PR).
+
+**`functions/` is optional and needs Blaze (card).** The source stays for a possible later owner
+decision (store verification, AI assistant, notifications, Windows guard HTTP API, heartbeats). The
+app no longer depends on these callables: `createPairingCode`, `redeemPairingCode`,
+`removeLinkedDevice`, `checkDeviceMembership`, `approveTask`, `rejectTask`, `setFreeChild`
+(still in `src/index.ts`, unused by the app). Everything below about functions, secrets and
+webhooks applies only if Blaze is ever enabled.
+
+## Setup (optional, Blaze only)
+```bash
 cd functions && npm install && npm run build
 firebase functions:secrets:set ANTHROPIC_API_KEY   # from console.anthropic.com
 firebase functions:secrets:set APPLE_PRIVATE_KEY   # the .p8 key, or type `unset` for now (iOS fails closed)
 ```
 Then deploy with the **Deploy runbook** below (never rules and functions in one step).
 
-## Deploy runbook (functions first, rules last)
+## Deploy runbook (optional, Blaze only: functions first, rules last)
 `npm run deploy` is disabled on purpose; it prints this order and stops.
 
 1. **Secrets exist.** `APPLE_PRIVATE_KEY` must exist before any functions deploy, because
@@ -46,13 +66,20 @@ families/{familyId}
   referralCode, referredBy, referralPaid, referrals{year}  (functions only)
   children/{childId}/days/{yyyy-MM-dd}   progress (child submissions), usedMinutes, prayerLock, prayerLockAt (server time)
                                          prayerLockSinceMs: legacy device time, no client may write it
-                                         approved{taskId: minutes}, earnedMinutes, requiredDone  (approveTask only)
+                                         approved{taskId: minutes}, earnedMinutes, requiredDone, approval{taskId, by, at}
+                                         (parent-device approval write only, rules-checked)
   assistantUsage/{yyyy-MM-dd}            Basic plan daily AI quota
+  members, childDevices{uid: childId}, parentDevices{uid: linkedAt}, memberOp{...}   (rules-checked join / removal)
+  freeChildId                            (parent devices only, rules-checked)
+  removedDevices/{uid} {removedAt}       removal marker, `get` by that uid only
+  audit/{autoId}                         device-removal audit, append-only
+  devices/{guardUid}                     Zad X Guard registered with a windows code (Phase 2 client)
+pairingCodes/{sha256("zadx-pair-v1:"+code)} → familyId, target, childId?, createdBy, createdAt (get only, 10 min)
 referralCodes/{CODE} → familyId
 purchases/{sha256(store token)} → familyId, store   (functions only: one purchase = one family)
 ```
 
-`parentDevices: {uid: linkedAt}` on the family doc records phones linked with a parent code (functions only).
+Full model, rules and threat notes: docs/ZERO-COST-BACKEND.md.
 
 ## One-off migration: purchase tokens (run before/at the deploy of fix/family-entitlement-restore)
 Older family docs may still hold the raw `purchaseToken`, which every member (child devices
