@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/backend.dart';
 import '../../data/models/child_profile.dart';
 import 'child_pause.dart';
+import 'device_removal.dart';
 import 'family_repository.dart';
 import '../../data/models/plan.dart';
 
@@ -18,7 +21,7 @@ import '../../data/models/plan.dart';
 ///   children/{childId}         {nickname, avatar} — no other personal data
 ///     days/{yyyy-MM-dd}        FamilyDay (`approved`, `earnedMinutes`, `requiredDone` are
 ///                              written only by the approveTask Cloud Function, R-32)
-class FirestoreFamilyRepository implements FamilyRepository {
+class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
   FirestoreFamilyRepository({
     required this.familyId,
     FirebaseFirestore? db,
@@ -216,6 +219,34 @@ class FirestoreFamilyRepository implements FamilyRepository {
       throw DeviceRemovalRejected(_removalReasons.contains(e.message) ? e.message! : e.code);
     } catch (_) {
       throw const DeviceRemovalRejected('unknown');
+    }
+  }
+
+  /// Removed-device hint (P1-3a): a refused family-doc listener. Data and other errors are dropped.
+  @override
+  Stream<void> accessDenied() => _db.doc('families/$familyId').snapshots().transform(
+        StreamTransformer<DocumentSnapshot<Map<String, dynamic>>, void>.fromHandlers(
+          handleData: (_, __) {},
+          handleError: (error, _, sink) {
+            if (isPermissionDenied(error)) sink.add(null);
+          },
+        ),
+      );
+
+  /// The explicit server answer (`checkDeviceMembership`, admin SDK) about this device's own uid.
+  /// A revoked session was signed out by Firebase Auth: a new anonymous session asks instead (it
+  /// is not a member either). Offline, timeouts and any error are [MembershipProbe.unknown].
+  @override
+  Future<MembershipProbe> probe() async {
+    try {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser == null) await auth.signInAnonymously().timeout(const Duration(seconds: 10));
+      final res = await _functions
+          .httpsCallable('checkDeviceMembership')
+          .call({'familyId': familyId}).timeout(const Duration(seconds: 15));
+      return membershipFromServer(res.data);
+    } catch (_) {
+      return MembershipProbe.unknown;
     }
   }
 

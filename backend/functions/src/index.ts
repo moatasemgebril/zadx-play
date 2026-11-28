@@ -10,6 +10,7 @@
  *  approveTask / rejectTask – parent devices approve a child's task; minutes are credited only here (R-32)
  *  createPairingCode / redeemPairingCode – link child phones and Windows PCs to a family
  *  removeLinkedDevice – a parent removes a linked phone (child device or another parent phone)
+ *  checkDeviceMembership – a device asks whether IT is still in its family (removed-device screen, P1-3a)
  *  devicePolicy / reportUsage – HTTP API used by the Windows guard (device secret auth)
  *  reportProtection / checkHeartbeats – tamper alerts: a child device reports that its protection
  *                     was turned off, or stops reporting for a day (docs/decisions/DEVICE-PROTECTION.md)
@@ -48,7 +49,9 @@ import {
 } from "./apple-logic";
 import { APPLE_PRIVATE_KEY, appleDeps } from "./apple";
 // Removing a linked device (BACKLOG P1-3).
-import { deviceRemovalAudit, parseRemoveDeviceRequest, removeDeviceDecision } from "./devices-logic";
+import {
+  deviceMembershipAnswer, deviceRemovalAudit, parseMembershipRequest, parseRemoveDeviceRequest, removeDeviceDecision,
+} from "./devices-logic";
 
 initializeApp();
 const db = getFirestore();
@@ -817,6 +820,24 @@ export const removeLinkedDevice = onCall({ region: "europe-west1" }, async (req)
     console.error("removeLinkedDevice: cleanup failed", e instanceof Error ? e.name : typeof e);
   }
   return { removed: true, role: decision.targetRole };
+});
+
+/**
+ * BACKLOG P1-3a: the explicit "was this device removed from the family?" signal. A removed device
+ * only sees permission-denied from Firestore, which could also come from a rules mistake; the app
+ * resets itself only on this server answer (`member: false`), read with the admin SDK. The caller
+ * learns one boolean about its own uid, nothing about other members.
+ */
+export const checkDeviceMembership = onCall({ region: "europe-west1" }, async (req) => {
+  const uid = requireUid(req.auth);
+  const request = parseMembershipRequest(req.data);
+  if (!request) throw new HttpsError("invalid-argument", "Bad request.");
+  await enforceRateLimit("membershipCheck", uid, 30, 60 * 60_000);
+  const family = await db.doc(`families/${request.familyId}`).get();
+  return deviceMembershipAnswer(
+    family.exists ? { members: family.get("members"), childDevices: family.get("childDevices") } : null,
+    uid,
+  );
 });
 
 // ---------------------------------------------------------------------------

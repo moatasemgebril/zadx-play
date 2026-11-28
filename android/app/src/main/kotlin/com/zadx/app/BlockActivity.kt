@@ -41,7 +41,9 @@ class BlockActivity : Activity() {
             "bedtime" -> if (arabic) "وقت النوم\nنوم الهنا! التطبيقات هتتفتح الصبح" else "Bedtime\nSleep well! Apps open in the morning"
             "study" -> if (arabic) "وقت المذاكرة\nالتطبيقات هتتفتح لما الوقت يخلص" else "Study time\nApps open again when it is over"
             "reading" -> if (arabic) "وقت القراية\nهات كتاب أو قصة!" else "Reading time\nGrab a book or a story!"
-            "noTime" -> if (arabic) "خلص وقتك النهارده\nاعمل مهمة تكسب وقت" else "Out of time today\nDo a task to earn more"
+            // The parent removed this device from the family (BACKLOG P1-3a): locked until set up again.
+            "removed" -> if (arabic) "الجهاز ده محتاج بابا أو ماما\nاطلب منهم يربطوه بالعائلة تاني" else "This device needs a parent\nAsk them to link it to the family again"
+            "noTime" ->if (arabic) "خلص وقتك النهارده\nاعمل مهمة تكسب وقت" else "Out of time today\nDo a task to earn more"
             else -> when {
                 allApps && arabic -> "خلّص مهامك الأول\nوبعدها التطبيق يتفتح"
                 allApps -> "Finish your tasks first\nthen the app unlocks"
