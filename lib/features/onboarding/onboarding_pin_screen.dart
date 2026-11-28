@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../shared/widgets/zad_widgets.dart';
+import '../parent/pin_recovery.dart';
+import '../parent/pin_recovery_screen.dart';
 import '../parent/pin_security.dart';
 import '../settings/settings_controller.dart';
 
@@ -40,6 +42,10 @@ Future<bool> openOnboardingPin(BuildContext context) async {
 
 /// "For parents" onboarding step: create the parent PIN (4–6 digits, typed twice) and
 /// confirm being the parent or guardian. Stored as a salted PBKDF2 hash ([PinSecurity]).
+///
+/// Then a one-time recovery code is shown ([RecoveryCodeReveal]); the parent types its last
+/// 4 characters, and only then are the PIN and the code's hash saved together. Until then
+/// nothing is stored (closing the app restarts this step).
 class OnboardingPinScreen extends ConsumerStatefulWidget {
   const OnboardingPinScreen({super.key, this.popWhenDone = false});
 
@@ -60,6 +66,10 @@ class _OnboardingPinScreenState extends ConsumerState<OnboardingPinScreen> {
   bool _isParent = false;
   NewPinError? _error;
 
+  /// Set after a valid PIN: the recovery step is shown; both are saved after it is confirmed.
+  String? _pendingPin;
+  String? _recoveryCode;
+
   @override
   void dispose() {
     _pin.dispose();
@@ -75,9 +85,26 @@ class _OnboardingPinScreenState extends ConsumerState<OnboardingPinScreen> {
       setState(() => _error = error);
       return;
     }
-    ref.read(settingsProvider.notifier).setParentPinHash(PinSecurity.hashPin(pin));
     _pin.clear();
     _confirm.clear();
+    setState(() {
+      _error = null;
+      _pendingPin = pin;
+      _recoveryCode = RecoveryCode.generate();
+    });
+  }
+
+  /// The parent confirmed the recovery code: save its hash, then the PIN (which makes
+  /// [FirstRunGate] open the app).
+  Future<void> _finish() async {
+    final pin = _pendingPin;
+    final code = _recoveryCode;
+    if (pin == null || code == null) return;
+    _pendingPin = null; // a second tap while saving does nothing
+    final settings = ref.read(settingsProvider.notifier);
+    await ref.read(pinRecoveryStoreProvider).commit(code);
+    settings.setParentPinHash(PinSecurity.hashPin(pin));
+    _recoveryCode = null;
     if (widget.popWhenDone && mounted) Navigator.of(context).pop(true);
   }
 
@@ -109,7 +136,9 @@ class _OnboardingPinScreenState extends ConsumerState<OnboardingPinScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
               child: ZadCard(
-                child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                child: _recoveryCode != null
+                    ? RecoveryCodeReveal(code: _recoveryCode!, onConfirmed: _finish)
+                    : Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Align(
                     alignment: AlignmentDirectional.centerStart,
                     child: Container(

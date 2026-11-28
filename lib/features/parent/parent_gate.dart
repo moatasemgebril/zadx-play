@@ -10,6 +10,7 @@ import '../../shared/widgets/zad_widgets.dart';
 import '../onboarding/onboarding_pin_screen.dart';
 import '../settings/settings_controller.dart';
 import 'parent_session.dart';
+import 'pin_recovery_screen.dart';
 import 'pin_security.dart';
 
 export 'parent_session.dart' show parentUnlockedProvider;
@@ -104,6 +105,15 @@ class _ParentGateState extends ConsumerState<ParentGate> {
     ref.read(parentUnlockedProvider.notifier).unlock();
   }
 
+  Future<void> _forgotPin() async {
+    final changed = await openForgotPin(context);
+    if (!changed || !mounted) return;
+    _ctrl.clear();
+    setState(() => _error = false);
+    _startTickerIfLocked();
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(context.l10n.recoveryDone)));
+  }
+
   @override
   Widget build(BuildContext context) {
     if (ref.watch(parentUnlockedProvider)) {
@@ -152,6 +162,15 @@ class _ParentGateState extends ConsumerState<ParentGate> {
             ),
             const SizedBox(height: 8),
             FilledButton(onPressed: lockedFor > 0 ? null : _submit, child: Text(l10n.approve)),
+            const SizedBox(height: 4),
+            // Needs the recovery code shown once at setup; there is no other reset (no long-press,
+            // no hidden gesture), so a child cannot reset the PIN from here.
+            TextButton(
+              key: const Key('forgotPinButton'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48), foregroundColor: AppColors.purpleDark),
+              onPressed: _forgotPin,
+              child: Text(l10n.forgotPin, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+            ),
           ]),
         ),
       ),
