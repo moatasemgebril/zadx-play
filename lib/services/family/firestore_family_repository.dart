@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter/foundation.dart';
 
-import '../../core/backend.dart';
 import '../../core/server_functions.dart';
 import '../../data/models/child_profile.dart';
 import 'child_pause.dart';
