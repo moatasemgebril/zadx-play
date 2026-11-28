@@ -173,7 +173,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.longPress(find.byType(TextField));
     await tester.pumpAndSettle();
-    await tester.longPress(find.byIcon(Icons.shield_rounded));
+    await tester.longPress(find.byType(ParentGate), warnIfMissed: false); // anywhere on the gate
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('forgotPinScreen')), findsNothing);
     expect(find.text('PARENT AREA'), findsNothing);
@@ -230,7 +230,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('recoverySetupScreen')), findsOneWidget);
 
-      final container = ProviderScope.containerOf(tester.element(find.byType(ParentGate)));
+      final container = ProviderScope.containerOf(tester.element(find.byKey(const Key('recoverySetupScreen'))));
       container.read(parentUnlockedProvider.notifier).lock();
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('recoverySetupScreen')), findsNothing);
