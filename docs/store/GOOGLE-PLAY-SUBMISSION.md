@@ -7,7 +7,18 @@
 - نصوص المتجر جاهزة: `docs/marketing/STORE-LISTING.md` (عربي + إنجليزي)
 - نص إقرار Accessibility وDevice Admin جاهز: `docs/STORE_CHECKLIST.md` (قسم Google)
 - الأسعار المقترحة: `docs/marketing/PRICING-AND-LAUNCH.md` (قرارك)
-- **حساب Google Play Console اتعمل (المالك، 2026-11-27) بإيميل `zadxsupport@gmail.com`.**
+- **حساب Google Play Console اتعمل (المالك، 2026-11-27) بإيميل `zadxsupport@gmail.com` — حساب شخصي (Personal)**،
+  يعني لازم اختبار مغلق: 12 مختبِر أو أكتر لمدة 14 يوم متواصلين قبل طلب النشر.
+- **جروب المختبِرين:** `zadx-play-testers@googlegroups.com` (أي حد معاه اللينك يقدر ينضم؛ قايمة الأعضاء
+  للمديرين بس). بيتضاف للاختبار المغلق في Play Console كـ "Google Group".
+- **لينك الاشتراك في الاختبار (بيشتغل بعد ما الاختبار المغلق يتنشر):** https://play.google.com/apps/testing/com.zadx.app
+- **سياسة الخصوصية:** https://moatasemgebril.github.io/zadx-play/privacy.html (`web/privacy.html`، بتتنشر مع
+  الويب من main). نسخة 1.0 للاختبار؛ محامي الخصوصية يراجعها قبل النشر الكامل.
+- **ملف النشر (.aab):** workflow `zadx-play-release.yml` بيبني AAB موقّع بمفتاح الرفع لما يتعمل tag `play-v*`
+  (أو يدويًا)، ويحطه في الـ pre-release `play-latest`. محتاج 4 secrets في GitHub (المالك بيحطها بنفسه):
+  `ZADX_UPLOAD_KEYSTORE_B64`, `ZADX_UPLOAD_KEYSTORE_PASSWORD`, `ZADX_UPLOAD_KEY_ALIAS`, `ZADX_UPLOAD_KEY_PASSWORD`.
+  ده مفتاح الرفع بس؛ Play App Signing بيمسك مفتاح التوقيع الحقيقي، ولو مفتاح الرفع ضاع Google تقدر تعيده.
+- التطبيق بيستهدف Android 16 (API 36) زي ما Google بتطلب للتطبيقات الجديدة من 2026-08-31.
 - أيقونة المتجر 512×512: `docs/store/assets/play-icon-512.png`. صورة Feature 1024×500: ٤ اختيارات في
   `docs/store/assets/feature-graphic-option-{a,b,c,d}.jpg` (المالك يختار واحدة). الاتنين من رسومات المالك
   (`tools/gen_brand_assets.py`).
@@ -62,8 +73,8 @@
 
 ## اللي الفريق لسه هيعمله (في الـ BACKLOG)
 
-- [ ] بناء **AAB release موقّع** في الـ CI بمفتاح رفع (upload key). المفتاح يتعمل مرة واحدة ويتحط في GitHub Secrets (خطوات للمالك، مش في الريبو أبدًا). Play App Signing يمسك مفتاح التوقيع النهائي.
-- [ ] صفحة سياسة الخصوصية + شروط الاستخدام منشورة على لينك ثابت (بعد مراجعة محامي الخصوصية).
+- [x] بناء **AAB release موقّع** (`zadx-play-release.yml`، 2026-11-28). مستني الـ 4 secrets من المالك.
+- [x] سياسة الخصوصية v1.0 على GitHub Pages (2026-11-28). [ ] مراجعة محامي + شروط الاستخدام قبل النشر الكامل.
 - [x] أيقونة 512 + Feature graphic (٤ اختيارات) — 2026-11-27.
 - [ ] صور الشاشات (2–8 للموبايل).
 - [ ] فيديو Accessibility للمراجِع.
