@@ -35,3 +35,4 @@ Status values: Approved · Awaiting reply · Not sent · Blocked.
 
 ## Owner decision 2026-11-28: zero cost
 No paid lawyers, certificates or services. The privacy-lawyer track (ZwillGen) is closed. Any reply that asks for money is logged and not answered; free/official options only.
+- 2026-11-28 owner: AGIP and Klemchuk (trademark) stay **information only** — no payment, no engagement, no commitment.
