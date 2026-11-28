@@ -8,19 +8,24 @@ import '../../core/backend.dart';
 import '../../data/models/child_profile.dart';
 import 'child_pause.dart';
 import 'device_removal.dart';
+import 'family_core_logic.dart';
 import 'family_repository.dart';
 import '../../data/models/plan.dart';
 
-/// Firestore layout (see backend/firestore.rules):
+/// Firestore layout (see backend/firestore.rules and docs/ZERO-COST-BACKEND.md). Zero cost:
+/// Firebase Spark plan, no Cloud Functions; every family-core invariant is enforced by the rules.
 ///
 /// families/{familyId}
 ///   members: [uid...]          parents + paired child devices
-///   childDevices: {uid: childId} paired child devices (Cloud Functions only)
-///   parentDevices: {uid: linkedAt} linked parent phones (Cloud Functions only); a member is
-///                              removed only by the removeLinkedDevice Cloud Function (P1-3)
+///   childDevices: {uid: childId} paired child devices (written only by a rules-checked pairing join)
+///   parentDevices: {uid: linkedAt} linked parent phones (same)
+///   memberOp: {...}            the last membership change (join / remove), checked by the rules
+///   freeChildId                the child that stays active on Free (parent devices only)
+///   removedDevices/{uid}       {removedAt}: removal marker, readable only by that uid (P1-3a)
+///   audit/{autoId}             device-removal audit, append-only
 ///   children/{childId}         {nickname, avatar} — no other personal data
-///     days/{yyyy-MM-dd}        FamilyDay (`approved`, `earnedMinutes`, `requiredDone` are
-///                              written only by the approveTask Cloud Function, R-32)
+///     days/{yyyy-MM-dd}        FamilyDay (`approved`, `earnedMinutes`, `requiredDone` change only
+///                              in a parent-device approval write, R-32)
 class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
   FirestoreFamilyRepository({
     required this.familyId,
@@ -59,6 +64,7 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
           // Legacy device-clock value from older builds: never trusted, only the server time counts.
           data.remove('prayerLockSinceMs');
           data.remove('updatedAt');
+          data.remove('approval'); // rules bookkeeping of the last approval (holds a Timestamp)
           // Server-only credits: an absent map means "nothing approved yet" (never null here).
           data['approved'] = FamilyDay.parseCredits(data['approved']) ?? <String, int>{};
           return FamilyDay.fromJson(data);
@@ -128,29 +134,83 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
     required int minutes,
     required List<String> requiredTaskIds,
     required bool isPrayer,
-  }) =>
-      _callApproval('approveTask', {
-        'familyId': familyId,
-        'childId': childId,
-        'day': day,
-        'taskId': taskId,
-        'minutes': minutes,
-        'requiredTaskIds': requiredTaskIds,
-        'isPrayer': isPrayer,
-      });
+  }) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw const ApprovalRejected('unauthenticated');
+    final error = approvalRequestError(
+      day: day,
+      taskId: taskId,
+      minutes: minutes,
+      requiredTaskIds: requiredTaskIds,
+      now: DateTime.now(),
+    );
+    if (error != null || !ChildProfile.isValidId(childId)) throw ApprovalRejected(error ?? 'invalid-argument');
+    final ref = _dayDoc(childId, day);
+    // One transaction on the day doc: read the credits, add this one (once, capped), write. The
+    // rules (parentApprovalOk) allow it only for a parent device and check every number again.
+    await _guardApproval(() => _db.runTransaction<void>((tx) async {
+          final snap = await tx.get(ref);
+          final data = snap.data() ?? const <String, dynamic>{};
+          final out = applyApproval(
+            approvedBefore: data['approved'],
+            earnedBefore: data['earnedMinutes'],
+            taskId: taskId,
+            minutes: minutes,
+            requiredTaskIds: requiredTaskIds,
+          );
+          final update = <String, dynamic>{
+            'day': day,
+            'approval': {'taskId': taskId, 'by': uid, 'at': FieldValue.serverTimestamp()},
+            'approved': {taskId: out.credit},
+            'earnedMinutes': out.earnedMinutes,
+            'requiredDone': out.requiredDone,
+            'progress': {
+              taskId: {'status': 'done', 'count': progressCount(data['progress'], taskId)},
+            },
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': uid,
+          };
+          // Approving "I prayed" ends the prayer lock (before the window, only a parent can end it).
+          if (isPrayer) {
+            update['prayerLock'] = false;
+            if (data.containsKey('prayerLockSinceMs')) update['prayerLockSinceMs'] = FieldValue.delete();
+            if (data.containsKey('prayerLockAt')) update['prayerLockAt'] = FieldValue.delete();
+          }
+          tx.set(ref, update, SetOptions(merge: true));
+        }));
+  }
 
   @override
-  Future<void> rejectTask({required String childId, required String day, required String taskId}) =>
-      _callApproval('rejectTask', {'familyId': familyId, 'childId': childId, 'day': day, 'taskId': taskId});
+  Future<void> rejectTask({required String childId, required String day, required String taskId}) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw const ApprovalRejected('unauthenticated');
+    if (!isApprovalDay(day, DateTime.now()) || !isTaskId(taskId) || !ChildProfile.isValidId(childId)) {
+      throw const ApprovalRejected('invalid-argument');
+    }
+    // Back to "todo" (credits already given stay). A plain parent write: no credit field changes.
+    await _guardApproval(() => _dayDoc(childId, day).set({
+          'day': day,
+          'progress': {
+            taskId: {'status': 'todo', 'count': 0},
+          },
+          'updatedAt': FieldValue.serverTimestamp(),
+          'updatedBy': uid,
+        }, SetOptions(merge: true)));
+  }
 
-  /// Errors that will not go away by retrying become [ApprovalRejected]; the rest (offline,
-  /// timeouts, server busy) are rethrown so the caller queues the approval.
+  /// Errors that will not go away by retrying become [ApprovalRejected] (e.g. permission-denied
+  /// on a child device); the rest (offline, timeouts, contention) are rethrown so the caller
+  /// queues the approval.
   static const _transient = {'unavailable', 'deadline-exceeded', 'internal', 'unknown', 'aborted', 'resource-exhausted', 'cancelled'};
 
-  Future<void> _callApproval(String name, Map<String, Object?> payload) async {
+  /// A write that waits for the server (a plain `set` never fails offline: it would wait for the
+  /// connection forever) has 20 seconds; a timeout is transient.
+  static const _writeTimeout = Duration(seconds: 20);
+
+  Future<void> _guardApproval(Future<void> Function() write) async {
     try {
-      await _functions.httpsCallable(name).call(payload);
-    } on FirebaseFunctionsException catch (e) {
+      await write().timeout(_writeTimeout);
+    } on FirebaseException catch (e) {
       if (_transient.contains(e.code)) rethrow;
       throw ApprovalRejected(e.code);
     }
@@ -208,18 +268,51 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
       .where((s) => s.exists)
       .map((s) => parseLinkedDevices(s.data()!, FirebaseAuth.instance.currentUser?.uid));
 
-  /// Reasons the `removeLinkedDevice` Function sends as the error message.
-  static const _removalReasons = {'last_parent', 'parent_required', 'device_not_found', 'not_member'};
-
+  /// Parent device: removes [deviceUid] in ONE transaction that the rules check together
+  /// (removeOk / auditEntryOk / removedDevices in backend/firestore.rules): the member leaves
+  /// `members`, `childDevices` and `parentDevices`; its removal marker (the explicit answer its
+  /// own app reads, P1-3a) and an append-only audit entry (uids + role + time, no child data) are
+  /// written in the same commit. Never the last parent device. Refusals are
+  /// [DeviceRemovalRejected] with the reason the UI knows (`last_parent`, `parent_required`, ...).
   @override
   Future<void> removeLinkedDevice(String deviceUid) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw const DeviceRemovalRejected('not_member');
+    if (!isSafeId(deviceUid)) throw const DeviceRemovalRejected('device_not_found');
+    final familyRef = _db.doc('families/$familyId');
+    final auditRef = familyRef.collection('audit').doc();
+    final markerRef = familyRef.collection('removedDevices').doc(deviceUid);
+    String? refused;
     try {
-      await _functions.httpsCallable('removeLinkedDevice').call({'familyId': familyId, 'deviceUid': deviceUid});
-    } on FirebaseFunctionsException catch (e) {
-      throw DeviceRemovalRejected(_removalReasons.contains(e.message) ? e.message! : e.code);
+      refused = await _db.runTransaction<String?>((tx) async {
+        final snap = await tx.get(familyRef);
+        final decision = removeDeviceDecision(snap.data() ?? const <String, dynamic>{}, uid, deviceUid);
+        final role = decision.role;
+        if (role == null) return decision.reason ?? 'unknown';
+        tx.update(familyRef, {
+          'members': FieldValue.arrayRemove([deviceUid]),
+          'childDevices.$deviceUid': FieldValue.delete(),
+          'parentDevices.$deviceUid': FieldValue.delete(),
+          'memberOp': {'op': 'remove', 'uid': deviceUid, 'by': uid, 'at': FieldValue.serverTimestamp(), 'audit': auditRef.id},
+        });
+        tx.set(markerRef, {'removedAt': FieldValue.serverTimestamp()});
+        tx.set(auditRef, {
+          'action': 'device_removed',
+          'byUid': uid,
+          'targetUid': deviceUid,
+          'targetRole': role.name,
+          'at': FieldValue.serverTimestamp(),
+          // Optional Firestore TTL policy on `expiresAt` (collection group `audit`): about a year.
+          'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 365))),
+        });
+        return null;
+      }).timeout(_writeTimeout);
+    } on FirebaseException catch (e) {
+      throw DeviceRemovalRejected(e.code);
     } catch (_) {
       throw const DeviceRemovalRejected('unknown');
     }
+    if (refused != null) throw DeviceRemovalRejected(refused);
   }
 
   /// Removed-device hint (P1-3a): a refused family-doc listener. Data and other errors are dropped.
@@ -233,18 +326,26 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
         ),
       );
 
-  /// The explicit server answer (`checkDeviceMembership`, admin SDK) about this device's own uid.
-  /// A revoked session was signed out by Firebase Auth: a new anonymous session asks instead (it
-  /// is not a member either). Offline, timeouts and any error are [MembershipProbe.unknown].
+  /// The explicit answer about this device's own uid, from two SERVER reads (never the cache):
+  /// the family doc (readable = member), and when that is refused, this device's removal marker
+  /// `removedDevices/{uid}` (exists = removed; see [membershipFromFirestore]). No session, offline,
+  /// timeouts and any other error are [MembershipProbe.unknown].
   @override
   Future<MembershipProbe> probe() async {
     try {
-      final auth = FirebaseAuth.instance;
-      if (auth.currentUser == null) await auth.signInAnonymously().timeout(const Duration(seconds: 10));
-      final res = await _functions
-          .httpsCallable('checkDeviceMembership')
-          .call({'familyId': familyId}).timeout(const Duration(seconds: 15));
-      return membershipFromServer(res.data);
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return MembershipProbe.unknown;
+      const server = GetOptions(source: Source.server);
+      const timeout = Duration(seconds: 15);
+      try {
+        final family = await _db.doc('families/$familyId').get(server).timeout(timeout);
+        final members = family.data()?['members'];
+        return membershipFromFirestore(uid: uid, familyMembers: members is List ? List<Object?>.from(members) : const []);
+      } on FirebaseException catch (e) {
+        if (e.code != 'permission-denied') return MembershipProbe.unknown;
+      }
+      final marker = await _db.doc('families/$familyId/removedDevices/$uid').get(server).timeout(timeout);
+      return membershipFromFirestore(uid: uid, removedMarker: marker.exists);
     } catch (_) {
       return MembershipProbe.unknown;
     }
@@ -262,9 +363,12 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
         return FamilyPlanStatus.fromFamilyDoc(d);
       });
 
+  /// Parent device: the child that stays active on Free. A plain family-doc write that the rules
+  /// (freeChildOk) allow only for a parent device and only for `child-1` or an existing child.
   @override
   Future<bool> setFreeChild(String childId) async {
-    await _functions.httpsCallable('setFreeChild').call({'familyId': familyId, 'childId': childId});
+    if (!ChildProfile.isValidId(childId)) return false;
+    await _db.doc('families/$familyId').update({'freeChildId': childId}).timeout(_writeTimeout);
     return true;
   }
 

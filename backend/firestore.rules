@@ -6,10 +6,14 @@ service cloud.firestore {
     function isMember(familyId) {
       return signedIn() && request.auth.uid in get(/databases/$(database)/documents/families/$(familyId)).data.members;
     }
-    // Written only by Cloud Functions (admin SDK): entitlement, referral, membership.
+    // Never written by the family settings update. Entitlement and referral fields: Cloud Functions
+    // only (admin SDK; optional, needs Blaze). Membership (`members`, `childDevices`,
+    // `parentDevices`, `memberOp`) and `freeChildId`: only through the rules-checked family-core
+    // writes below (pairing join, device removal, free child). docs/ZERO-COST-BACKEND.md
     function serverOnlyFamilyKeys() {
       return ['plan', 'plans', 'planApp', 'planExpiresAt', 'inTrial', 'store', 'purchaseToken', 'referrals', 'referredBy',
-              'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt', 'freeChildId'];
+              'referralPaid', 'referralCode', 'members', 'childDevices', 'parentDevices', 'createdAt', 'freeChildId',
+              'memberOp'];
     }
     // Shape of a synced day (lib/services/family/family_repository.dart FamilyDay).
     function validDay(day) {
@@ -26,9 +30,9 @@ service cloud.firestore {
     }
 
     // ---- Multi-child -------------------------------------------------------
-    // families/{id}.childDevices = { uid: childId } is written only by Cloud Functions
-    // (redeemPairingCode). A member listed there is a child device bound to one child;
-    // any other member is a parent device.
+    // families/{id}.childDevices = { uid: childId } is written only by a rules-checked pairing join
+    // (joinOk below: the child device adds itself with the child its code names). A member listed
+    // there is a child device bound to one child; any other member is a parent device.
     function boundChildOf(familyId) {
       return get(/databases/$(database)/documents/families/$(familyId)).data.get('childDevices', {}).get(request.auth.uid, null);
     }
@@ -51,13 +55,14 @@ service cloud.firestore {
     }
 
     // ---- Task approval + prayer lock (R-32) --------------------------------
-    // Minutes are credited ONLY by the approveTask Cloud Function after it checks server-side that
-    // the caller is a parent device. No client (parent or child) writes these day fields.
+    // Minutes are credited ONLY by a parent-device approval write (parentApprovalOk below: one
+    // task per write, 0..120 minutes, credited once, at most 600 a day). A child device never writes
+    // these day fields, and no device writes them outside an approval.
     // `prayerLockSinceMs` (device clock of the lock start) is no longer synced: a child could set it
     // to the past to shorten its own lock. The lock window counts only from the server-stamped
-    // `prayerLockAt`. Only approveTask (admin SDK) touches it, to delete legacy values.
+    // `prayerLockAt`. Only a parent approval may delete a legacy value.
     function serverOnlyDayKeys() {
-      return ['approved', 'earnedMinutes', 'requiredDone', 'prayerLockSinceMs'];
+      return ['approved', 'earnedMinutes', 'requiredDone', 'prayerLockSinceMs', 'approval'];
     }
     // Fields of removed features: no client (parent or child) may set, change or add them.
     // `prayerPaused` (the "excused" prayer pause) was removed by owner decision 2026-11-22.
@@ -99,6 +104,256 @@ service cloud.firestore {
     }
     // -----------------------------------------------------------------------
 
+    // ---- Zero-cost family core (Spark plan, no Cloud Functions) -----------------------------
+    // docs/ZERO-COST-BACKEND.md. Every membership change is ONE client commit (transaction) that
+    // carries `memberOp` on the family doc; the rules check it against the code / audit /
+    // removal-marker docs of the same commit (get = before, getAfter/existsAfter = after).
+    function familyPath(familyId) {
+      return /databases/$(database)/documents/families/$(familyId);
+    }
+    function pairingCodePath(codeId) {
+      return /databases/$(database)/documents/pairingCodes/$(codeId);
+    }
+    function isSafeId(id) {
+      return id is string && id.matches('^[A-Za-z0-9_-]{1,128}$');
+    }
+    // Pairing code doc id = sha256("zadx-pair-v1:" + code) in lowercase hex
+    // (lib/services/family/pairing_code.dart). Knowing the id = knowing the code.
+    function isCodeId(id) {
+      return id is string && id.matches('^[0-9a-f]{64}$');
+    }
+    // A code lives 10 minutes from the SERVER time it was created (no device clock involved).
+    function codeLive(code) {
+      return code.createdAt is timestamp && request.time < code.createdAt + duration.value(10, 'm');
+    }
+    // The code's creator must still be a parent device of the family: codes made by a removed
+    // parent phone stop working at once.
+    function creatorIsParent(fam, code) {
+      return code.createdBy in fam.members && !(code.createdBy in fam.get('childDevices', {}));
+    }
+    // Parent devices = members that are not bound to a child.
+    function parentCount(fam) {
+      return fam.members.toSet().difference(fam.get('childDevices', {}).keys().toSet()).size();
+    }
+
+    // Join with a phone or parent code (PairingService.redeem): the redeemer adds ONLY itself,
+    // ONLY with the role the code grants, and deletes the code in the same commit (single use).
+    function joinOpOk(op) {
+      return op is map && op.keys().hasOnly(['op', 'uid', 'code', 'at']) && op.op == 'join'
+        && op.uid == request.auth.uid && op.at == request.time && isCodeId(op.code);
+    }
+    function joinOk(familyId) {
+      let op = request.resource.data.get('memberOp', null);
+      return signedIn() && joinOpOk(op) && joinWithCode(familyId, op.code, get(pairingCodePath(op.code)).data);
+    }
+    function joinWithCode(familyId, codeId, code) {
+      let d = request.resource.data;
+      let old = resource.data;
+      let uid = request.auth.uid;
+      let oldKids = old.get('childDevices', {});
+      let newKids = d.get('childDevices', {});
+      let oldParents = old.get('parentDevices', {});
+      let newParents = d.get('parentDevices', {});
+      return code.familyId == familyId
+        && codeLive(code)
+        && creatorIsParent(old, code)
+        && !existsAfter(pairingCodePath(codeId))
+        && !(uid in old.members) && !(uid in oldKids) && !(uid in oldParents)
+        && d.members == old.members.concat([uid])
+        && d.diff(old).affectedKeys().hasOnly(['members', 'childDevices', 'parentDevices', 'memberOp'])
+        && ((code.target == 'phone'
+              && newKids.diff(oldKids).affectedKeys().hasOnly([uid])
+              && newKids.get(uid, null) == code.childId
+              && newParents == oldParents)
+          || (code.target == 'parent'
+              && newParents.diff(oldParents).affectedKeys().hasOnly([uid])
+              && newParents.get(uid, null) == request.time
+              && newKids == oldKids));
+    }
+
+    // Remove a linked device (FirestoreFamilyRepository.removeLinkedDevice): a parent device takes
+    // ONE member out of members/childDevices/parentDevices, never the last parent, and writes the
+    // removal marker + the audit entry in the same commit.
+    function removeOpOk(op) {
+      return op is map && op.keys().hasOnly(['op', 'uid', 'by', 'at', 'audit']) && op.op == 'remove'
+        && op.by == request.auth.uid && op.at == request.time && isSafeId(op.uid) && isSafeId(op.audit);
+    }
+    function removeOk(familyId) {
+      let op = request.resource.data.get('memberOp', null);
+      return isParent(familyId) && removeOpOk(op) && removeMember(familyId, op.uid, op.audit);
+    }
+    function removeMember(familyId, x, auditId) {
+      let d = request.resource.data;
+      let old = resource.data;
+      let oldKids = old.get('childDevices', {});
+      let newKids = d.get('childDevices', {});
+      let oldParents = old.get('parentDevices', {});
+      let newParents = d.get('parentDevices', {});
+      return x in old.members
+        && d.members == old.members.removeAll([x])
+        && d.diff(old).affectedKeys().hasOnly(['members', 'childDevices', 'parentDevices', 'memberOp'])
+        && newKids.diff(oldKids).affectedKeys().hasOnly([x]) && !(x in newKids)
+        && newParents.diff(oldParents).affectedKeys().hasOnly([x]) && !(x in newParents)
+        && parentCount(d) >= 1
+        && existsAfter(/databases/$(database)/documents/families/$(familyId)/audit/$(auditId))
+        && existsAfter(/databases/$(database)/documents/families/$(familyId)/removedDevices/$(x));
+    }
+    // True when this commit's family write is the removal of [uid].
+    function removedNow(familyId, uid) {
+      let op = getAfter(familyPath(familyId)).data.get('memberOp', {});
+      return op.get('op', '') == 'remove' && op.get('uid', '') == uid && op.get('at', null) == request.time;
+    }
+
+    // Free plan = one child: a parent device picks the child that stays active (setFreeChild).
+    function freeChildOk(familyId) {
+      let d = request.resource.data;
+      return isParent(familyId)
+        && d.diff(resource.data).affectedKeys().hasOnly(['freeChildId'])
+        && d.freeChildId is string && validChildId(d.freeChildId)
+        && (d.freeChildId == 'child-1'
+            || exists(/databases/$(database)/documents/families/$(familyId)/children/$(d.freeChildId)));
+    }
+
+    // Client-asserted store plan (docs/decisions/SPARK-APP-NO-FUNCTIONS.md, accepted risk): a PARENT
+    // device shares the plan its own store confirmed as plans.play / plans.kids. Paid tiers only,
+    // never a trial, fixed shape, stamped with the writer and the server time. The legacy top-level
+    // plan fields, store, purchase and referral keys stay closed to every client.
+    function planTiers() {
+      return ['basic', 'plus'];
+    }
+    function tamperReasons() {
+      return ['accessibility_off', 'device_admin_off', 'screen_time_off', 'clock_changed'];
+    }
+    function planEntryOk(p) {
+      return p is map
+        && p.keys().hasOnly(['plan', 'planExpiresAt', 'inTrial', 'source', 'updatedBy', 'updatedAt'])
+        && p.keys().hasAll(['plan', 'planExpiresAt', 'inTrial', 'source', 'updatedBy', 'updatedAt'])
+        && p.plan in planTiers() && p.inTrial == false && p.source == 'device'
+        && p.planExpiresAt is string && p.planExpiresAt.size() <= 40
+        && p.updatedBy == request.auth.uid && p.updatedAt == request.time;
+    }
+    function planUpdateOk(familyId) {
+      let d = request.resource.data;
+      let before = resource.data.get('plans', {});
+      let after = d.get('plans', {});
+      let changed = after.diff(before).affectedKeys();
+      return isParent(familyId)
+        && d.diff(resource.data).affectedKeys().hasOnly(['plans'])
+        && before is map && after is map
+        && changed.hasOnly(['play', 'kids'])
+        && (!changed.hasAny(['play']) || planEntryOk(after.get('play', null)))
+        && (!changed.hasAny(['kids']) || planEntryOk(after.get('kids', null)));
+    }
+    // A list of known tamper reason codes (no free text).
+    function reasonList(v) {
+      return v is list && v.size() <= 4 && v.hasOnly(tamperReasons());
+    }
+
+    // Family settings (adhan lock, games, lock mode, ...) are parent-only (R-33). A paired child
+    // device reads the family doc but never writes it.
+    function settingsUpdateOk(familyId) {
+      return isMember(familyId)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
+        && (!('settings' in request.resource.data) || request.resource.data.settings is map)
+        && isParent(familyId);
+    }
+
+    // Pairing code doc: written by a parent device of the family, for an existing child (phone,
+    // windows) or for no child (parent). Fixed fields; createdAt must be the server time.
+    function pairingCodeCreateOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['familyId', 'target', 'childId', 'createdBy', 'createdAt'])
+        && d.createdBy == request.auth.uid && d.createdAt == request.time
+        && isSafeId(d.familyId) && isParent(d.familyId)
+        && ((d.target == 'parent' && !('childId' in d))
+          || (d.target in ['phone', 'windows'] && validChildId(d.get('childId', ''))
+              && exists(/databases/$(database)/documents/families/$(d.familyId)/children/$(d.childId))));
+    }
+    // The redeemer deletes the code in the same commit as its join (phone / parent code) or as its
+    // Windows guard registration (windows code).
+    function codeRedeemedNow(codeId, code) {
+      return (code.target in ['phone', 'parent'] && joinedNow(codeId, getAfter(familyPath(code.familyId)).data.get('memberOp', {})))
+        || (code.target == 'windows'
+          && existsAfter(/databases/$(database)/documents/families/$(code.familyId)/devices/$(request.auth.uid))
+          && getAfter(/databases/$(database)/documents/families/$(code.familyId)/devices/$(request.auth.uid)).data.get('code', '') == codeId);
+    }
+    function joinedNow(codeId, op) {
+      return op.get('op', '') == 'join' && op.get('uid', '') == request.auth.uid
+        && op.get('code', '') == codeId && op.get('at', null) == request.time;
+    }
+
+    // Zad X Guard (Windows) registration with a windows code (rules ready; the guard client moves in
+    // Phase 2): the PC signs in anonymously and creates devices/{its uid}, deleting the code in the
+    // same commit.
+    function windowsJoinOk(familyId) {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['type', 'childId', 'name', 'code', 'createdAt'])
+        && d.type == 'windows' && d.createdAt == request.time
+        && d.name is string && d.name.size() <= 60
+        && isCodeId(d.code)
+        && windowsCodeOk(familyId, d, get(pairingCodePath(d.code)).data);
+    }
+    function windowsCodeOk(familyId, d, code) {
+      return code.target == 'windows' && code.familyId == familyId && code.childId == d.childId
+        && codeLive(code)
+        && creatorIsParent(get(familyPath(familyId)).data, code)
+        && !existsAfter(pairingCodePath(d.code));
+    }
+
+    // Device-removal audit entry: append-only, written by the removing parent in the removal
+    // commit. Uids + role + time only (no child data).
+    function auditEntryOk(familyId, entryId) {
+      let d = request.resource.data;
+      let op = getAfter(familyPath(familyId)).data.get('memberOp', {});
+      let fam = get(familyPath(familyId)).data;
+      return d.keys().hasOnly(['action', 'byUid', 'targetUid', 'targetRole', 'at', 'expiresAt'])
+        && d.keys().hasAll(['action', 'byUid', 'targetUid', 'targetRole', 'at'])
+        && d.action == 'device_removed' && d.byUid == request.auth.uid && d.at == request.time
+        && (!('expiresAt' in d) || d.expiresAt is timestamp)
+        && op.get('op', '') == 'remove' && op.get('audit', '') == entryId
+        && op.get('uid', '') == d.targetUid && op.get('at', null) == request.time
+        && d.targetRole == (d.targetUid in fam.get('childDevices', {}) ? 'child' : 'parent');
+    }
+
+    // Task approval by a PARENT device (FirestoreFamilyRepository.approveTask), R-32. One task per
+    // write, named in `approval`; its credit is 0..120 minutes, added once (a re-approval keeps the
+    // old credit), and earnedMinutes grows by exactly that credit, to at most 600 a day.
+    function approvalKeys() {
+      return ['approval', 'approved', 'earnedMinutes', 'requiredDone', 'progress', 'prayerLock', 'prayerLockAt',
+              'prayerLockSinceMs', 'updatedAt', 'updatedBy', 'day'];
+    }
+    function parentApprovalOk(old) {
+      let d = request.resource.data;
+      let changed = d.diff(old).affectedKeys();
+      return changed.hasOnly(approvalKeys()) && changed.hasAll(['approval'])
+        && approvalOpOk(d.approval)
+        && approvalCreditOk(old, d, d.approval.taskId)
+        && d.get('requiredDone', false) is bool
+        && (!changed.hasAny(['prayerLock']) || d.prayerLock == false)
+        && (!changed.hasAny(['prayerLockAt']) || !('prayerLockAt' in d))
+        && (!changed.hasAny(['prayerLockSinceMs']) || !('prayerLockSinceMs' in d))
+        && (!('updatedBy' in d) || d.updatedBy == request.auth.uid);
+    }
+    function approvalOpOk(a) {
+      return a is map && a.keys().hasOnly(['taskId', 'by', 'at']) && a.by == request.auth.uid && a.at == request.time
+        && a.taskId is string && a.taskId.matches('^[A-Za-z0-9_-]{1,64}$');
+    }
+    function approvalCreditOk(old, d, taskId) {
+      let before = old.get('approved', {});
+      let after = d.get('approved', {});
+      let already = taskId in before;
+      let credit = after.get(taskId, -1);
+      let earned = d.get('earnedMinutes', -1);
+      return before is map && after is map
+        && after.diff(before).affectedKeys().hasOnly([taskId])
+        && credit is int && credit >= 0 && credit <= 120
+        && (!already || credit == before[taskId])
+        && earned is int
+        && earned == old.get('earnedMinutes', 0) + (already ? 0 : credit)
+        && (already || earned <= 600);
+    }
+    // -----------------------------------------------------------------------
+
     match /families/{familyId} {
       // Every member reads the family doc, child devices included: that is how a child device
       // gets the plan the parent paid for (plan, planExpiresAt, inTrial, store). Those fields stay
@@ -111,15 +366,16 @@ service cloud.firestore {
         // The server's 7-day family trial counts from createdAt, so it must be the real time.
         && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == request.time)
         && (!('settings' in request.resource.data) || request.resource.data.settings is map);
-      // Plan, referral, purchase and membership fields are written only by Cloud Functions (admin SDK).
-      allow update: if isMember(familyId)
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyFamilyKeys())
-        // parentDevices {uid: linkedAt}: written only by redeemPairingCode (parent code).
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['parentDevices'])
-        && (!('settings' in request.resource.data) || request.resource.data.settings is map)
-        // R-33: family settings (adhan lock, games, lock mode, ...) are parent-only. A paired child
-        // device reads the family doc but never writes it.
-        && isParent(familyId);
+      // Four kinds of update, nothing else: parent settings (R-33), the parent's Free-plan child,
+      // a pairing join (the redeemer adds itself) and a device removal (parent only, never the last
+      // parent). Plan, referral and purchase fields are never client-written.
+      allow update: if settingsUpdateOk(familyId) || freeChildOk(familyId) || joinOk(familyId) || removeOk(familyId)
+        || planUpdateOk(familyId);
+      // A phone that joined another family as a parent phone deletes its own untouched fresh family
+      // (sole member, no plan / referral / membership fields), so no orphan family is left behind.
+      allow delete: if isMember(familyId)
+        && resource.data.members == [request.auth.uid]
+        && resource.data.keys().hasOnly(['members', 'createdAt', 'settings']);
 
       // Multi-child: parents manage every child; a paired child device sees only its own child.
       match /children/{childId} {
@@ -131,19 +387,39 @@ service cloud.firestore {
           allow read: if isParent(familyId) || isChildDevice(familyId, childId);
           // A child device deleting its day would reset its used minutes and prayer lock.
           allow delete: if isParent(familyId);
+          // Parent devices: everything but the credit fields, or one rules-checked approval.
           allow create: if validDay(day) && (
-            (isParent(familyId) && !request.resource.data.keys().hasAny(serverOnlyDayKeys().concat(removedDayKeys())))
+            (isParent(familyId)
+              && (!request.resource.data.keys().hasAny(serverOnlyDayKeys().concat(removedDayKeys()))
+                  || parentApprovalOk({})))
             || (isChildDevice(familyId, childId) && childDayCreateOk()));
           allow update: if validDay(day) && (
             (isParent(familyId)
-              && !request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyDayKeys().concat(removedDayKeys())))
+              && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(serverOnlyDayKeys().concat(removedDayKeys()))
+                  || parentApprovalOk(resource.data)))
             || (isChildDevice(familyId, childId) && childDayUpdateOk()));
         }
       }
 
-      // Windows guard devices: created and read by Cloud Functions only.
+      // Windows guard devices. devices/{uid}: a Zad X Guard PC registered itself with a windows code
+      // (windowsJoinOk) and reads only its own doc. Docs made by the old Cloud Function (auto id,
+      // secretHash) stay closed. Revoking / updating guards is Phase 2.
       match /devices/{deviceId} {
-        allow read, write: if false;
+        allow create: if signedIn() && deviceId == request.auth.uid && windowsJoinOk(familyId);
+        allow get: if signedIn() && deviceId == request.auth.uid;
+        allow list, update, delete: if false;
+      }
+
+      // Removal marker (BACKLOG P1-3a): written by the removing parent in the removal commit.
+      // The removed device may `get` ONLY its own marker: the explicit "you were removed" answer
+      // that replaces the checkDeviceMembership Cloud Function. Holds the time only.
+      match /removedDevices/{uid} {
+        allow get: if signedIn() && request.auth.uid == uid;
+        allow create, update: if isParent(familyId)
+          && request.resource.data.keys().hasOnly(['removedAt'])
+          && request.resource.data.removedAt == request.time
+          && removedNow(familyId, uid);
+        allow list, delete: if false;
       }
 
       match /assistantUsage/{day} {
@@ -151,11 +427,45 @@ service cloud.firestore {
         allow write: if false;
       }
 
-      // Device-removal audit (removeLinkedDevice, BACKLOG P1-3): uids + role + time. Cloud Functions only.
-      // Removing a member is done only by that Function: `members`, `childDevices` and
-      // `parentDevices` are server-only above, and a removed device fails `isMember` everywhere.
+      // Parent alerts without push (replaces notifyParent / reportProtection): one doc per event,
+      // written by a child device for its own child, or by a parent device (one-device family).
+      // Only ids, codes and times: `detail` is a task id or prayer name, `reasons` known codes.
+      match /events/{eventId} {
+        allow read, delete: if isParent(familyId);
+        allow create: if isMember(familyId)
+          && request.resource.data.keys().hasOnly(['type', 'childId', 'at', 'by', 'detail', 'reasons'])
+          && request.resource.data.type in ['task_submitted', 'adhan', 'protection']
+          && validChildId(request.resource.data.get('childId', ''))
+          && (isParent(familyId) || isChildDevice(familyId, request.resource.data.childId))
+          && request.resource.data.at == request.time
+          && request.resource.data.by == request.auth.uid
+          && (!('detail' in request.resource.data)
+              || (request.resource.data.detail is string && request.resource.data.detail.size() <= 64))
+          && (!('reasons' in request.resource.data) || reasonList(request.resource.data.reasons));
+        allow update: if false;
+      }
+
+      // "Last seen" + current protection problems of a child device (replaces checkHeartbeats).
+      // Written only by the device bound to that child; read by parents and that device.
+      match /presence/{childId} {
+        allow read: if isParent(familyId) || isChildDevice(familyId, childId);
+        allow create, update: if isChildDevice(familyId, childId)
+          && request.resource.data.keys().hasOnly(['childId', 'lastSeen', 'platform', 'by', 'protection'])
+          && request.resource.data.childId == childId
+          && request.resource.data.lastSeen == request.time
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.platform is string && request.resource.data.platform.size() <= 16
+          && (!('protection' in request.resource.data) || reasonList(request.resource.data.protection));
+        allow delete: if isParent(familyId);
+      }
+
+      // Device-removal audit (BACKLOG P1-3): uids + role + time. APPEND-ONLY: the removing parent
+      // creates it in the removal commit (auditEntryOk); nobody reads, changes or deletes it from a
+      // client (an optional TTL policy on `expiresAt` cleans it up). A removed device fails
+      // `isMember` everywhere.
       match /audit/{entryId} {
-        allow read, write: if false;
+        allow create: if isParent(familyId) && auditEntryOk(familyId, entryId);
+        allow read, update, delete: if false;
       }
 
       // private/billing = { purchaseToken } (raw store token): Cloud Functions only.
@@ -169,8 +479,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    match /pairingCodes/{code} {
-      allow read, write: if false;
+    // pairingCodes/{sha256 hex of the code} = {familyId, target, childId?, createdBy, createdAt}.
+    // No server rate limit on Spark, so: ~49.5-bit codes, 10-minute life from the server time,
+    // single use, `get` only (never list), and a missing or expired code is the same denial.
+    match /pairingCodes/{codeId} {
+      allow get: if signedIn() && codeLive(resource.data);
+      allow create: if signedIn() && isCodeId(codeId) && pairingCodeCreateOk();
+      // The creator may withdraw its own code; the redeemer consumes it in its join commit.
+      allow delete: if signedIn()
+        && (resource.data.createdBy == request.auth.uid || codeRedeemedNow(codeId, resource.data));
+      allow list, update: if false;
     }
 
     match /referralCodes/{code} {
