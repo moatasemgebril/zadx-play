@@ -263,7 +263,10 @@ void main() {
       expect(sink.shown, isEmpty);
     });
 
-    testWidgets('child device: "last seen" is written at start, then at most every 15 minutes', (tester) async {
+    // A plain async test (not testWidgets): the child providers start streams whose zero-delay
+    // Riverpod refresh timers would trip the fake-async "timers pending" check.
+    test('child device: "last seen" is written at start, then at most every 15 minutes', () async {
+      TestWidgetsFlutterBinding.ensureInitialized();
       SharedPreferences.setMockInitialValues({ChildStorage.boundKey: ChildProfile.defaultId});
       prefs = await SharedPreferences.getInstance();
       final repo = _PresenceRepo();
@@ -277,15 +280,15 @@ void main() {
       }
 
       final first = start();
-      await tester.pump();
+      await pumpEventQueue();
       expect(repo.touched, [ChildProfile.defaultId]);
       first.dispose();
       final second = start(); // app restarted right away
-      await tester.pump();
+      await pumpEventQueue();
       expect(repo.touched, hasLength(1));
       expect(prefs.getInt(presenceLastWriteKey), isNotNull);
       second.dispose(); // stops the 15-minute timer before the test ends
-      await tester.pump(); // lets Riverpod's zero-delay refresh timer run
+      await pumpEventQueue();
     });
 
     testWidgets('parent phone: never writes presence', (tester) async {
