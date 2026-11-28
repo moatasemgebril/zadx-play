@@ -185,7 +185,7 @@ Details: docs/ADDONS-REGISTRY.md, docs/marketing/STORE-LISTING.md, docs/approval
 - [x] **P2:** the CC BY 3.0 adhan credit in lib/features/parent/credits_card.dart lacks the licence URL and the source link → **done, pending CI, 2026-11-23 PM**: licence URL, Commons source link and changes (trimmed, normalised, converted to MP3) shown as selectable text in AR/EN; test `test/credits_card_test.dart`.
 - [x] **P2:** remove/trim .github/workflows/fetch-adhan.yml — re-running it would re-add CC BY-SA adhans and overwrite ADHAN-CREDITS.txt → **done, pending CI, 2026-11-23 PM**: workflow removed; adhans are added by hand only after licence review (docs/ADDONS-REGISTRY.md §3).
 - **Docs:** ARCHITECTURE.md plans table still lists adhkar under Basic (owner made adhkar free on 2026-11-21); STORE_CHECKLIST says a 14-day intro offer while the app gives a 7-day trial → owner decides one.
-- **Owner decision:** Cloud Functions + Secret Manager need the Blaze plan (Spark can't run them); decide Blaze with a budget alert/cap before backend launch.
+- ~~**Owner decision:** Blaze for Cloud Functions~~ → **Decided 2026-11-28: zero cost, Spark only, no Blaze** (see "Zero-cost backend" below).
 
 ## Family setup & payment review (product manager, 2026-11-21 evening, owner question)
 Flow today: same Zad X app on the parent phone and the child device (Windows = Zad X Guard); parent creates the PIN on the device (PR #28 adds a first-run PIN screen with confirm); children added in the Parent dashboard (Free 1 / Basic 2 / Plus 5); child device linked with a 6-digit code from the parent phone (10 min); payment = store in-app subscription (Google Play / App Store), verified by `verifyPurchase`; no code/password is ever sent after payment. One-device mode works offline today; linking + payments need Firebase (apps, Firestore, Blaze for Functions) and store products.
@@ -203,3 +203,13 @@ Flow today: same Zad X app on the parent phone and the child device (Windows = Z
 - ~~**P1:** even after PR #28, the paid-plan assistant lives on the Help screen, which children can open → put it behind the parent PIN.~~ Already fixed by `AssistantParentLock` (lib/features/help/assistant_parent_lock.dart, test/assistant_parent_lock_test.dart); stale line closed 2026-11-28.
 - FAQ faq6–faq12 + new step 1 added (help/faq-setup-payment); faq8/10/11 describe the launch flow and depend on the P0 fixes + Firebase.
 - PR #32 AppSec re-review (B → A after fixes): `parentDevices` added to serverOnlyFamilyKeys (done). Open P2: remove/revoke a linked phone (parent-only action); parent link code → 8–10 chars + confirmation on the issuing phone; server-side PIN check for code creation. Legacy child phones without `childDevices` would count as parents — no production families exist yet (Firebase not live), so no backfill needed; re-check before launch.
+
+## Zero-cost backend (owner decision 2026-11-28, P1 — plan in the next MORNING cycle)
+Spark (free) has Auth + Firestore + Hosting but **no Cloud Functions / Secret Manager**. Every callable must get a free design or be dropped:
+- Pairing codes (`createPairingCode`/`redeemPairingCode`), task approval (`approveTask`), device removal (`removeLinkedDevice`, `checkDeviceMembership`): move to Firestore rules + client writes (rules-enforced invariants, emulator tests); removed device = member doc missing, read by rules.
+- Store purchase verification (`verifyPurchase`, RTDN): no server → rely on on-device store APIs (Play Billing / StoreKit 2 signed transactions) with the 7-day cached entitlement; accept the weaker anti-fraud; never trust a client-written plan for other devices without a parent device re-check.
+- AI assistant (Anthropic key needs a server secret): hide it until a free safe option exists — a key must never ship in the app.
+- Windows Guard HTTP API (`devicePolicy`/`reportUsage`): Firestore with a per-device auth account instead of HTTP functions.
+- Tamper heartbeats (`checkHeartbeats`, scheduled): parent device checks last-seen when it opens the app.
+- Windows code signing: no paid certificate → ship unsigned with clear SmartScreen steps for parents, or drop Windows Guard from v1 (owner call later).
+- Privacy policy/COPPA/GDPR-K: in-house from official free guidance (no lawyer).
