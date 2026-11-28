@@ -2,6 +2,9 @@
 
 Product: Zad X Play (Islamic kids' app). Brand: Zad X. Owner: Moatasem Gebril.
 Current design: https://claude.ai/artifact/4BzBKtLrSH4JJvdQx6U6Yv · Project notes: https://claude.ai/artifact/GMt77Hu5FWieAgss7sp7h9
+Brand (owner decision 2026-11-27): the "ZX" artwork is the app icon of both apps; "ZX ZAD X" is the logo inside
+Zad X Play (`BrandLogo`). Brand navy backdrop for the splash and the parent area only; child screens stay bright.
+All brand images come from `tools/gen_brand_assets.py` (sources in `tools/branding/source/`).
 
 ## One work cycle
 1. zadx-orchestrator reads BACKLOG.md + reports/, then picks the top priorities.

@@ -7,6 +7,10 @@
 - نصوص المتجر جاهزة: `docs/marketing/STORE-LISTING.md` (عربي + إنجليزي)
 - نص إقرار Accessibility وDevice Admin جاهز: `docs/STORE_CHECKLIST.md` (قسم Google)
 - الأسعار المقترحة: `docs/marketing/PRICING-AND-LAUNCH.md` (قرارك)
+- **حساب Google Play Console اتعمل (المالك، 2026-11-27) بإيميل `zadxsupport@gmail.com`.**
+- أيقونة المتجر 512×512: `docs/store/assets/play-icon-512.png`. صورة Feature 1024×500: ٤ اختيارات في
+  `docs/store/assets/feature-graphic-option-{a,b,c,d}.jpg` (المالك يختار واحدة). الاتنين من رسومات المالك
+  (`tools/gen_brand_assets.py`).
 
 ---
 
@@ -47,7 +51,7 @@
    - Target audience: **الأهل** هم المستخدم الأساسي، بس فيه شاشات للأطفال → سياسة **Families** بتنطبق: مفيش إعلانات، مفيش SDKs تحليلات ممنوعة، والمشتريات ورا PIN الأهل.
    - Data safety: الاسم المستعار للطفل بس، مزامنة Firestore، تسجيل دخول مجهول، والتطبيق المفتوح بيتقري على الجهاز بس ومش بيتجمع.
    - Permissions declarations: **Accessibility API** (+ فيديو قصير للمراجِع)، **Exact alarms** (أقفال الصلاة)، **Device admin** (اختياري).
-3. **Store listing**: الوصف القصير والطويل (جاهزين)، الأيقونة 512×512، صورة Feature 1024×500، 2–8 صور شاشة للموبايل (⚠️ الصور والجرافيك: شغل دورة التصميم الجاية).
+3. **Store listing**: الوصف القصير والطويل (جاهزين)، الأيقونة 512×512 وصورة Feature 1024×500 (جاهزين في `docs/store/assets/`)، 2–8 صور شاشة للموبايل (⚠️ صور الشاشات: شغل دورة التصميم الجاية).
 4. **Subscriptions**: `zadx_basic_monthly`, `zadx_basic_yearly`, `zadx_plus_monthly`, `zadx_plus_yearly` + عرض تجربة مجانية + RTDN على Pub/Sub → دالة `playNotifications` (محتاج Firebase Blaze — قرارك).
 
 ## المرحلة 4 — الاختبار والنشر
@@ -60,6 +64,7 @@
 
 - [ ] بناء **AAB release موقّع** في الـ CI بمفتاح رفع (upload key). المفتاح يتعمل مرة واحدة ويتحط في GitHub Secrets (خطوات للمالك، مش في الريبو أبدًا). Play App Signing يمسك مفتاح التوقيع النهائي.
 - [ ] صفحة سياسة الخصوصية + شروط الاستخدام منشورة على لينك ثابت (بعد مراجعة محامي الخصوصية).
-- [ ] صور الشاشات + Feature graphic + أيقونة 512.
+- [x] أيقونة 512 + Feature graphic (٤ اختيارات) — 2026-11-27.
+- [ ] صور الشاشات (2–8 للموبايل).
 - [ ] فيديو Accessibility للمراجِع.
 - [ ] نقل التلاوة لـ Quran Foundation API (شرط قبل النشر).

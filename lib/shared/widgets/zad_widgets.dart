@@ -30,19 +30,23 @@ class ZadCard extends StatelessWidget {
 }
 
 class PageTitle extends StatelessWidget {
-  const PageTitle(this.text, {super.key, this.subtitle});
+  const PageTitle(this.text, {super.key, this.subtitle, this.color = AppColors.ink, this.subtitleColor = AppColors.muted});
   final String text;
   final String? subtitle;
+
+  /// Pass `ZadScene.x.titleColor` / `bodyColor` when the title sits directly on a scene.
+  final Color color;
+  final Color subtitleColor;
 
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(text, style: AppTheme.display(28)),
+          Text(text, style: AppTheme.display(28, color: color)),
           if (subtitle != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text(subtitle!, style: const TextStyle(fontSize: 16, color: AppColors.muted)),
+              child: Text(subtitle!, style: TextStyle(fontSize: 16, color: subtitleColor)),
             ),
         ],
       );
@@ -188,8 +192,7 @@ class PatternBackground extends StatelessWidget {
   Widget build(BuildContext context) => Stack(children: [
         Positioned.fill(child: ColoredBox(color: tint)),
         Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _PatternPainter(seed)))),
-        // Logo watermark. Zad X Kids has no artwork logo yet (the Zad X Play logo shows a crescent
-        // and mosques), so it gets no watermark: docs/decisions/ZADX-KIDS-VARIANT.md.
+        // "ZX" watermark, Zad X Play only (the Kids bundle has no logo images).
         if (!kIsKids)
           Positioned.fill(
             child: IgnorePointer(
@@ -202,7 +205,7 @@ class PatternBackground extends StatelessWidget {
                     blendMode: BlendMode.dstIn,
                     child: Transform.rotate(
                       angle: -0.1,
-                      child: Image.asset(BrandLogo.islamicAsset, width: 340, excludeFromSemantics: true),
+                      child: Image.asset(BrandLogo.emblemAsset, width: 340, excludeFromSemantics: true),
                     ),
                   ),
                 ),

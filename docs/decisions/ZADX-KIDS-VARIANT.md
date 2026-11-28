@@ -90,7 +90,9 @@ Why a dart-define and not a second `main_kids.dart` or Android `productFlavors`:
 | Artwork | mosque, crescent, lanterns, eight-point star | treehouse, full moon, planets, dot grid: **no religious motif, no Arabic script** (section 0) |
 | Bundled assets | adhan MP3, logo | removed before the build (`tools/kids_variant_prepare.py`) |
 
-Reading is in both apps: the reading task / paper-book timer (branch `feat/splash-and-reading`) needs no variant switch. Anything that shows a logo (e.g. the new splash screen) must use `BrandLogo`, never `assets/images/zadx_logo.jpg` directly.
+Reading is in both apps: the reading task / paper-book timer (branch `feat/splash-and-reading`) needs no variant switch. Anything that shows a logo (e.g. the new splash screen) must use `BrandLogo`, never the logo images in `assets/images/` directly. (2026-11-27: the
+old `zadx_logo.jpg` was replaced by the "ZX" artwork; both apps share the "ZX" launcher icon, and the
+Kids bundle still ships no logo image.)
 
 ## 3. How it works in the code
 

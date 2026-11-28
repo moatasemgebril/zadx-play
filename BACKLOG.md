@@ -4,6 +4,20 @@ The orchestrator reads this file at the start of every cycle (see CLAUDE.md).
 Owner requests come first within the priority order. Close an item by moving it
 to "Done" with the PR link; record decisions in the ZADX LOG.
 
+## Owner requests — 2026-11-27
+
+- [x] **New brand artwork ("ZX")** — branch `design/zx-brand-refresh`. Owner decisions (asked one by one):
+  1. App icon on every device = the "ZX" artwork, for **both** Zad X Play and Zad X Kids (Android adaptive
+     icon, iOS, web, Windows, macOS, Google Play 512 icon).
+  2. Logo inside Zad X Play = "ZX ZAD X" (`BrandLogo`); the splash shows "ZX" + the "Zad X" wordmark.
+     Kids keeps its drawn "ZAD X KIDS" wordmark inside the app.
+  3. Brand navy backdrop (code-drawn, no image) for the **splash and the parent area** (parent, settings,
+     help, subscription) only. Child screens (home, games, tasks, Quran) keep their bright scenes.
+  4. Google Play Console account opened by the owner with `zadxsupport@gmail.com`.
+  Tooling: `tools/gen_brand_assets.py`. Store art: `docs/store/assets/` (feature graphic: owner picks a/b/c/d).
+- [ ] Device check of the new icon (Pixel circle mask, Samsung squircle) and of the navy parent area.
+- [ ] Optional: Android 13 themed (monochrome) icon layer.
+
 ## Owner requests — 2026-11-24
 
 - [x] **PlayStation lock steps in the app** (owner: people should see them): `PsLockSteps` (lib/features/parent/ps_lock_steps.dart) in the parent Consoles card, shown on every plan, 7 steps AR/EN, neutral words (same in Kids). Test: `test/ps_lock_steps_test.dart`.

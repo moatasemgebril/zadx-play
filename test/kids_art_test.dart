@@ -115,7 +115,11 @@ void main() {
         expect(p.contentColors, isNotEmpty);
         for (final c in p.contentColors) {
           final bg = Contrast.over(p.scrim, c);
-          for (final text in [AppColors.muted, AppColors.ink, AppColors.purpleDark, AppColors.mintText]) {
+          // Dark scenes (Zad X brand navy) carry light text; light scenes carry ink / muted.
+          final texts = p.dark
+              ? [AppColors.onNavy, AppColors.onNavyMuted, AppColors.yellow]
+              : [AppColors.muted, AppColors.ink, AppColors.purpleDark, AppColors.mintText];
+          for (final text in texts) {
             expect(Contrast.ratio(text, bg), greaterThanOrEqualTo(4.5), reason: '$text on $c');
           }
         }

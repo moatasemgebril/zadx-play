@@ -14,6 +14,7 @@ class ScenePalette {
     required this.contentColors,
     this.scrim = const Color(0x00000000),
     this.textOnScene = true,
+    this.dark = false,
   });
 
   /// Every opaque colour the scene paints where content can scroll.
@@ -25,6 +26,11 @@ class ScenePalette {
   /// False for scenes that never carry loose text (night sky behind opaque
   /// cards, the decorative prayer-sky strip).
   final bool textOnScene;
+
+  /// Dark scene (the Zad X brand navy): loose text uses the light colours
+  /// `AppColors.onNavy` / `AppColors.onNavyMuted` instead of ink / muted, and the
+  /// readability test checks those instead.
+  final bool dark;
 }
 
 abstract final class ArtColors {
@@ -74,6 +80,16 @@ abstract final class ArtColors {
   static const nightSkyline = Color(0xFF0B1540);
   static const moonGlow = Color(0xFFFFE7A3);
 
+  // Zad X brand navy backdrop (owner artwork 2026-11-27). Bands are the backdrop with a faint
+  // white veil already blended in (opaque, so the contrast test can check them).
+  static const brandTop = Color(0xFF0A225E);
+  static const brandMid = Color(0xFF0B1B4C);
+  static const brandLow = Color(0xFF081338);
+  static const brandBand = Color(0xFF162C66);
+  static const brandBandSoft = Color(0xFF112458);
+  static const brandSkyGlow = Color(0xFF4CC9F0);
+  static const brandGoldGlow = Color(0xFFFFC83D);
+
   // Parent area.
   static const parentBg = Color(0xFFF5F8FF);
   static const parentLine = Color(0xFFDCE5F7);
@@ -117,8 +133,20 @@ abstract final class ScenePalettes {
   /// Decorative strip, never carries text.
   static const prayer = ScenePalette(textOnScene: false, contentColors: []);
 
+  /// Zad X Kids parent area: light pattern.
   static const parent = ScenePalette(
     contentColors: [ArtColors.parentBg, ArtColors.parentLine, ArtColors.parentLineSoft, ArtColors.white],
+  );
+
+  /// Zad X Play parent area (owner decision 2026-11-27): the brand navy backdrop. The colours
+  /// include the strongest points of the sky and gold glows over a band.
+  static const parentBrand = ScenePalette(
+    dark: true,
+    contentColors: [
+      ArtColors.brandTop, ArtColors.brandMid, ArtColors.brandLow, ArtColors.brandBand, ArtColors.brandBandSoft,
+      Color(0xFF1F457C), // brandBand + 16 % sky glow (strongest point)
+      Color(0xFF2D3C62), // brandBand + 10 % gold glow (strongest point)
+    ],
   );
 }
 

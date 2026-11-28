@@ -1,6 +1,9 @@
 import 'package:flutter/widgets.dart';
 
+import '../../core/theme/app_colors.dart';
+import 'art_shapes.dart';
 import 'scene_palettes.dart';
+import 'scenes/brand_backdrop.dart';
 import 'scenes/games_scene.dart';
 import 'scenes/home_scene.dart';
 import 'scenes/night_scene.dart';
@@ -27,8 +30,8 @@ enum ZadScene {
   /// Never shown in Zad X Kids; there it has a full moon and a little house, no crescent or dome.
   prayer,
 
-  /// Parent area, settings, help, subscription: light geometric pattern
-  /// (Zad X Kids: rounded squares and dots instead of the eight-point star).
+  /// Parent area, settings, help, subscription. Zad X Play: the brand navy backdrop
+  /// (owner decision 2026-11-27); Zad X Kids: a light grid of rounded squares and dots.
   parent,
 }
 
@@ -39,8 +42,14 @@ extension ZadSceneInfo on ZadScene {
         ZadScene.tasks => ScenePalettes.tasks,
         ZadScene.quran => ScenePalettes.quran,
         ZadScene.prayer => ScenePalettes.prayer,
-        ZadScene.parent => ScenePalettes.parent,
+        ZadScene.parent => artReligiousMotifs ? ScenePalettes.parentBrand : ScenePalettes.parent,
       };
+
+  /// Colour of headings placed directly on this scene (not inside a card).
+  Color get titleColor => palette.dark ? AppColors.onNavy : AppColors.ink;
+
+  /// Colour of body / note text placed directly on this scene (not inside a card).
+  Color get bodyColor => palette.dark ? AppColors.onNavyMuted : AppColors.muted;
 
   /// Length of one seamless loop. Calmer areas loop more slowly.
   Duration? get loop => switch (this) {
@@ -142,7 +151,7 @@ class _ZadSceneBackgroundState extends State<ZadSceneBackground> with SingleTick
         ),
       ZadScene.quran => (const NightStaticPainter(), NightMotionPainter(t)),
       ZadScene.prayer => (PrayerSkyStaticPainter(widget.prayerPhase), PrayerSkyMotionPainter(t, widget.prayerPhase)),
-      ZadScene.parent => (const ParentStaticPainter(), null),
+      ZadScene.parent => (artReligiousMotifs ? const BrandBackdropPainter() : const ParentStaticPainter(), null),
     };
   }
 

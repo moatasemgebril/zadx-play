@@ -117,7 +117,7 @@ class _Header extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(16, MediaQuery.paddingOf(context).top + 10, 16, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          const BrandLogo(width: 150, height: 99),
+          const BrandLogo(width: 168, height: 68),
           const Spacer(),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
             Row(children: [

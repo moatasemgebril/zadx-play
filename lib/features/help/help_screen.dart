@@ -247,7 +247,7 @@ class _AboutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ZadCard(
         child: Row(children: [
-          const BrandLogo(width: 84, height: 56),
+          const BrandLogo(width: 112, height: 46),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

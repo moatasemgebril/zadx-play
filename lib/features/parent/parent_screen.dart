@@ -42,7 +42,7 @@ class ParentScreen extends ConsumerWidget {
       scene: ZadScene.parent,
       child: ParentGate(
         child: ListView(padding: const EdgeInsets.all(16), children: [
-          PageTitle(l10n.parentTitle),
+          PageTitle(l10n.parentTitle, color: ZadScene.parent.titleColor),
           const SizedBox(height: 12),
           const _PlanCard(),
           const SizedBox(height: 12),

@@ -23,6 +23,15 @@ class AppColors {
   static const pendingText = Color(0xFF6B4E00);
   static const psBlue = Color(0xFF1D4ED8);
 
+  /// Zad X brand navy backdrop (owner artwork 2026-11-27): splash and the parent area of Zad X Play.
+  static const brandNavyTop = Color(0xFF0A225E); // = navy, so the native splash hands over seamlessly
+  static const brandNavyMid = Color(0xFF0B1B4C);
+  static const brandNavyLow = Color(0xFF081338);
+
+  /// Text placed directly on the brand navy backdrop (≥ 4.5:1 on every backdrop colour, tested).
+  static const onNavy = Color(0xFFFFFFFF);
+  static const onNavyMuted = Color(0xFFC9D3EE);
+
   /// Background tint per main section.
   static const pageTints = {
     'home': Color(0xFFFFF8F0),

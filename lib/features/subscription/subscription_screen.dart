@@ -37,9 +37,12 @@ class SubscriptionScreen extends ConsumerWidget {
         // screen (home banner, upgrade sheet, deep link) sees the PIN prompt.
         child: ParentGate(
           child: ListView(padding: const EdgeInsets.all(16), children: [
-            Text(l10n.subIntro, style: const TextStyle(fontSize: 17, color: AppColors.muted)),
+            // Loose text sits on the parent scene (brand navy in Zad X Play): scene text colours.
+            Text(l10n.subIntro, style: TextStyle(fontSize: 17, color: ZadScene.parent.bodyColor)),
             const SizedBox(height: 12),
             SegmentedButton<BillingPeriod>(
+              // Solid white segments, readable on any scene.
+              style: SegmentedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: AppColors.ink),
               segments: [
                 ButtonSegment(value: BillingPeriod.monthly, label: Text(l10n.monthly, style: const TextStyle(fontSize: 16))),
                 ButtonSegment(value: BillingPeriod.yearly, label: Text('${l10n.yearly} · ${l10n.saveUpTo}', style: const TextStyle(fontSize: 15))),
@@ -67,8 +70,12 @@ class SubscriptionScreen extends ConsumerWidget {
             const SizedBox(height: 14),
             const _ReferralCard(),
             const SizedBox(height: 10),
-            Text(l10n.pricesNote, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
-            TextButton(onPressed: () => ref.read(subscriptionServiceProvider).restore(), child: Text(l10n.restorePurchases)),
+            Text(l10n.pricesNote, style: TextStyle(fontSize: 14, color: ZadScene.parent.bodyColor)),
+            TextButton(
+              style: ZadScene.parent.palette.dark ? TextButton.styleFrom(foregroundColor: AppColors.yellow) : null,
+              onPressed: () => ref.read(subscriptionServiceProvider).restore(),
+              child: Text(l10n.restorePurchases),
+            ),
             // The store subscription belongs to another Zad X family (e.g. a new phone): it is
             // never joined automatically; the parent links this phone with a parent code.
             if (ref.watch(purchaseInOtherFamilyProvider).valueOrNull ?? false) ...[
