@@ -204,7 +204,10 @@ Flow today: same Zad X app on the parent phone and the child device (Windows = Z
 - FAQ faq6–faq12 + new step 1 added (help/faq-setup-payment); faq8/10/11 describe the launch flow and depend on the P0 fixes + Firebase.
 - PR #32 AppSec re-review (B → A after fixes): `parentDevices` added to serverOnlyFamilyKeys (done). Open P2: remove/revoke a linked phone (parent-only action); parent link code → 8–10 chars + confirmation on the issuing phone; server-side PIN check for code creation. Legacy child phones without `childDevices` would count as parents — no production families exist yet (Firebase not live), so no backfill needed; re-check before launch.
 
-## Zero-cost backend (owner decision 2026-11-28, P1 — plan in the next MORNING cycle)
+## Zero-cost backend (owner decision 2026-11-28) — Phase 1 DONE (PR #54 + #55, CI green)
+Done: pairing, device removal/membership, task approve/reject, free child, audit → Firestore rules (53 emulator rules tests); purchases on device + parent shares the plan; AI assistant and referral rewards hidden; in-app family alerts + last seen instead of push; `FeatureFlags.serverFunctions` off. Details: docs/ZERO-COST-BACKEND.md, docs/decisions/SPARK-APP-NO-FUNCTIONS.md.
+**Phase 2 (next):** Windows Guard on Firestore (no HTTP functions); remove the `cloud_functions` dependency once nothing needs it; App Check (free) enforced on Firestore before launch; FLAG_SECURE on code screens; on-device subscription check tests on a real phone; deploy rules with `firebase deploy --only firestore:rules` (free).
+Original plan (kept for reference):
 Spark (free) has Auth + Firestore + Hosting but **no Cloud Functions / Secret Manager**. Every callable must get a free design or be dropped:
 - Pairing codes (`createPairingCode`/`redeemPairingCode`), task approval (`approveTask`), device removal (`removeLinkedDevice`, `checkDeviceMembership`): move to Firestore rules + client writes (rules-enforced invariants, emulator tests); removed device = member doc missing, read by rules.
 - Store purchase verification (`verifyPurchase`, RTDN): no server → rely on on-device store APIs (Play Billing / StoreKit 2 signed transactions) with the 7-day cached entitlement; accept the weaker anti-fraud; never trust a client-written plan for other devices without a parent device re-check.
