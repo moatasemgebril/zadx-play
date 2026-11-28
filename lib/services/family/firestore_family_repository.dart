@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter/foundation.dart';
@@ -35,13 +34,10 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
   FirestoreFamilyRepository({
     required this.familyId,
     FirebaseFirestore? db,
-    FirebaseFunctions? functions,
-  })  : _db = db ?? FirebaseFirestore.instance,
-        _functions = functions ?? zadFunctions();
+  }) : _db = db ?? FirebaseFirestore.instance;
 
   final String familyId;
   final FirebaseFirestore _db;
-  final FirebaseFunctions _functions;
 
   /// Used minutes last known to be on the server, per "childId/day". The app sends only the
   /// minutes added since then (FieldValue.increment), so it never lowers the server value (the
