@@ -169,11 +169,11 @@ void main() {
   testWidgets('long-presses never reset the PIN or open anything', (tester) async {
     final prefs = await _pumpGate(tester);
     final before = prefs.getString('settings.pin');
-    await tester.longPress(find.byKey(const Key('forgotPinButton')));
-    await tester.pumpAndSettle();
+    // (A held press on the "Forgot PIN?" button is just a tap: it opens the code screen, which
+    // still needs the recovery code. Hidden long-press gestures are what must not exist.)
     await tester.longPress(find.byType(TextField));
     await tester.pumpAndSettle();
-    await tester.longPress(find.byType(ParentGate), warnIfMissed: false); // anywhere on the gate
+    await tester.longPress(find.byIcon(Icons.shield_rounded), warnIfMissed: false);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('forgotPinScreen')), findsNothing);
     expect(find.text('PARENT AREA'), findsNothing);
