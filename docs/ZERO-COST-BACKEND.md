@@ -116,6 +116,32 @@ carry `at == request.time`, so an old `memberOp` can never be replayed.
 - `freeChildOk`: parent device, only `freeChildId` changes, valid id, `child-1` or an existing
   child doc. Child devices cannot pick themselves.
 
+### App side without Functions (rules for branch `feat/spark-no-functions-app`)
+Spec: `docs/decisions/SPARK-APP-NO-FUNCTIONS.md` on that branch.
+- **`plans.play` / `plans.kids`** (`planUpdateOk`): parent devices only; only `plans` changes,
+  only those two keys; each changed entry is exactly `{plan in [basic, plus], planExpiresAt
+  (string ≤ 40), inTrial: false, source: 'device', updatedBy: caller, updatedAt: server time}`.
+  Client-asserted plan = accepted owner risk (weaker anti-fraud, not weaker child safety).
+  Legacy top-level `plan`/`planApp`/`planExpiresAt`/`inTrial`, `store`, `purchaseToken` and
+  referral keys stay closed to every client.
+- **`events/{id}`** (replaces `notifyParent` / `reportProtection` pushes): created by a member —
+  a child device only for its own child, a parent device for any child; keys ⊆ {type, childId,
+  at, by, detail, reasons}; type ∈ {task_submitted, adhan, protection}; `at` = server time,
+  `by` = caller; `detail` string ≤ 64; `reasons` ≤ 4 known tamper codes. Read and delete: parents
+  only. Never updated.
+- **`presence/{childId}`** (replaces `checkHeartbeats`): created/updated only by the device bound
+  to that child; keys ⊆ {childId, lastSeen, platform, by, protection}; `lastSeen` = server time;
+  `platform` string ≤ 16; `protection` ≤ 4 known tamper codes. Read: parents and that device.
+  Delete: parents.
+
+## App Check before launch (free)
+Turn on Firebase **App Check** and **enforce it for Firestore** before the first public release:
+Play Integrity (Android), App Attest / DeviceCheck (Apple) and reCAPTCHA Enterprise (web) all
+have free tiers on Spark, no card. It is the free replacement for the server rate limits: only
+genuine Zad X builds can spend the project's read/write quota or try pairing codes. Steps: register
+the apps in App Check, ship a build with the `firebase_app_check` provider, watch the metrics for a
+few days in "unenforced" mode, then enforce. Owner action (Firebase console), no cost.
+
 ## Threat notes: no server rate limit
 
 Callables had per-IP / per-uid / global rate limits. Spark has none, so:
