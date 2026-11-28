@@ -9,6 +9,7 @@ import 'services/family/children_controller.dart';
 import 'services/family/family_repository.dart';
 import 'core/platform.dart';
 import 'core/theme/app_theme.dart';
+import 'features/family/removed_device_screen.dart';
 import 'features/onboarding/onboarding_pin_screen.dart';
 import 'features/prayer/prayer_calculator.dart';
 import 'features/shell/sound_coordinator.dart';
@@ -19,6 +20,7 @@ import 'router.dart';
 import 'services/app_lock/app_lock_service.dart';
 import 'services/app_lock/protection_monitor.dart';
 import 'services/audio/sfx_service.dart';
+import 'services/family/device_removal.dart';
 import 'services/notifications/prayer_notification_service.dart';
 import 'variant/kids_localizations.dart';
 
@@ -82,6 +84,8 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
     ref.watch(protectionMonitorProvider);
     // Star / task / unlock sounds.
     ref.watch(soundCoordinatorProvider);
+    // A parent removed this device from the family (P1-3a): detect it and reset safely.
+    ref.watch(deviceRemovalWatcherProvider);
 
     return MaterialApp.router(
       title: AppConfig.storeName,
@@ -97,8 +101,14 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
         GlobalCupertinoLocalizations.delegate,
       ],
       routerConfig: appRouter,
-      // First run: the parent creates the PIN before child mode is reachable.
-      builder: (context, child) => FirstRunGate(child: child ?? const SizedBox.shrink()),
+      // First run: the parent creates the PIN before child mode is reachable. A device removed
+      // from the family shows only the "removed" screen (locked) until a parent sets it up again.
+      builder: (context, child) => FirstRunGate(
+        child: RemovedDeviceGate(
+          onSetUpDone: () => appRouter.go(Routes.parent),
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
     );
   }
 

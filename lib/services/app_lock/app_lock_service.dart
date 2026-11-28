@@ -19,6 +19,7 @@ import '../../features/settings/settings_controller.dart';
 import '../../features/tasks/wallet_controller.dart';
 import '../billing/subscription_service.dart';
 import '../family/children_controller.dart';
+import '../family/device_removal.dart';
 import 'lock_rules.dart';
 
 export 'lock_rules.dart';
@@ -324,6 +325,9 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
   final wallet = ref.watch(walletProvider);
   final settings = ref.watch(settingsProvider);
   final tasksEnabled = ref.watch(lockTasksEnabledProvider);
+  // Removed from the family (P1-3a): locked on every plan until a parent sets the device up again
+  // behind the parent PIN. Checked first, so clearing the old family's data never unlocks games.
+  if (ref.watch(deviceRemovalProvider)) return removedLockPolicy(settings);
   // Free plan = one child: a paired device whose child is paused has no task/time limits
   // (owner decision 2026-11-21), but it still locks games at the adhan for the Free prayer window
   // (owner decision 2026-11-24, docs/decisions/FREE-ONE-CHILD.md). Its data is kept and the full
@@ -352,6 +356,17 @@ final lockPolicyProvider = Provider<LockPolicy>((ref) {
     scheduleTimeZone: kIsKids ? ref.watch(scheduleTimeZoneProvider) : null,
   );
 });
+
+/// The policy of a device removed from its family (BACKLOG P1-3a, pure, unit-tested): games are
+/// locked (reason `removed`), with no minutes, whatever the plan, the tasks or the daily limit.
+LockPolicy removedLockPolicy(AppSettings settings) => lockPolicyFrom(
+      locked: true,
+      reason: 'removed',
+      remainingMinutes: 0,
+      settings: settings,
+      baseLocked: true,
+      baseReason: 'removed',
+    );
 
 /// The policy of a paired device whose child is paused on the Free plan (pure, unit-tested):
 /// no task or daily-time limit, but games still lock at the adhan for [freePrayerLockWindow]

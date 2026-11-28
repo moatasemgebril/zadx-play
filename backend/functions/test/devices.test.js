@@ -114,3 +114,30 @@ test("audit entry: who removed whom and when, nothing about the child", () => {
   assert.equal(a.atMs, now);
   assert.equal(a.expiresAt.getTime(), now + d.DEVICE_AUDIT_RETENTION_MS);
 });
+
+// ---- checkDeviceMembership (BACKLOG P1-3a): the removed device's explicit signal ----------------
+
+test("membership request: only a safe familyId is accepted", () => {
+  assert.deepEqual(d.parseMembershipRequest({ familyId: "fam_1" }), { familyId: "fam_1" });
+  assert.equal(d.parseMembershipRequest({ familyId: "../x" }), null);
+  assert.equal(d.parseMembershipRequest({ familyId: 7 }), null);
+  assert.equal(d.parseMembershipRequest(null), null);
+  assert.equal(d.parseMembershipRequest(["fam_1"]), null);
+});
+
+test("membership answer: members (parent or child device) are members", () => {
+  assert.deepEqual(d.deviceMembershipAnswer(family(), PARENT), { member: true });
+  assert.deepEqual(d.deviceMembershipAnswer(family(), KID1), { member: true });
+});
+
+test("membership answer: a removed device, a stranger or a missing family is not a member", () => {
+  const afterRemoval = family({ members: [PARENT, PARENT2, KID2], childDevices: { [KID2]: "c2" } });
+  assert.deepEqual(d.deviceMembershipAnswer(afterRemoval, KID1), { member: false });
+  assert.deepEqual(d.deviceMembershipAnswer(family(), STRANGER), { member: false });
+  assert.deepEqual(d.deviceMembershipAnswer(null, KID1), { member: false });
+  assert.deepEqual(d.deviceMembershipAnswer({ members: "broken", childDevices: null }, KID1), { member: false });
+});
+
+test("membership answer reveals one boolean only (no members, roles or child ids)", () => {
+  assert.deepEqual(Object.keys(d.deviceMembershipAnswer(family(), KID1)), ["member"]);
+});
