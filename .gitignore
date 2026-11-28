@@ -17,3 +17,4 @@ backend/functions/lib/
 *.iml
 .idea/
 .claude/worktrees/
+__pycache__/
