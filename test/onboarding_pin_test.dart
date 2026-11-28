@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:zadx/features/onboarding/onboarding_pin_screen.dart';
 import 'package:zadx/features/parent/parent_gate.dart';
+import 'package:zadx/features/parent/pin_recovery.dart';
 import 'package:zadx/features/parent/pin_security.dart';
 import 'package:zadx/features/settings/settings_controller.dart';
 import 'package:zadx/l10n/app_localizations.dart';
@@ -28,7 +29,20 @@ Future<SharedPreferences> _pumpApp(WidgetTester tester, {String? pinHash, Widget
   return prefs;
 }
 
-Future<void> _fill(WidgetTester tester, String pin, String again, {bool parent = true}) async {
+/// The recovery code on screen (shown once, after a valid PIN).
+String _shownCode(WidgetTester tester) => tester.widget<Text>(find.byKey(const Key('recoveryCodeText'))).data!;
+
+/// Types [lastFour] into the recovery confirmation and continues.
+Future<void> _confirmRecovery(WidgetTester tester, String lastFour) async {
+  await tester.ensureVisible(find.byKey(const Key('recoveryConfirmField')));
+  await tester.enterText(find.byKey(const Key('recoveryConfirmField')), lastFour);
+  await tester.ensureVisible(find.byKey(const Key('recoveryConfirmButton')));
+  await tester.tap(find.byKey(const Key('recoveryConfirmButton')));
+  await tester.pumpAndSettle();
+}
+
+/// Fills the PIN step; with [confirmRecovery] also confirms the recovery code that follows.
+Future<void> _fill(WidgetTester tester, String pin, String again, {bool parent = true, bool confirmRecovery = true}) async {
   await tester.enterText(find.byKey(const Key('onboardingPin')), pin);
   await tester.enterText(find.byKey(const Key('onboardingPinConfirm')), again);
   if (parent) {
@@ -38,6 +52,9 @@ Future<void> _fill(WidgetTester tester, String pin, String again, {bool parent =
   await tester.ensureVisible(find.byKey(const Key('onboardingPinSave')));
   await tester.tap(find.byKey(const Key('onboardingPinSave')));
   await tester.pumpAndSettle();
+  if (confirmRecovery && find.byKey(const Key('recoveryCodeText')).evaluate().isNotEmpty) {
+    await _confirmRecovery(tester, RecoveryCode.lastFour(_shownCode(tester)));
+  }
 }
 
 void main() {
@@ -82,6 +99,60 @@ void main() {
     expect(PinSecurity.verifyPin('2468', stored!), isTrue);
     expect(find.text('CHILD HOME'), findsOneWidget);
     expect(find.byKey(const Key('onboardingPinScreen')), findsNothing);
+  });
+
+  testWidgets('a valid PIN shows a one-time recovery code; nothing is saved until it is confirmed', (tester) async {
+    final prefs = await _pumpApp(tester);
+    await _fill(tester, '2468', '2468', confirmRecovery: false);
+    final code = _shownCode(tester);
+    expect(RecoveryCode.normalize(code), isNotNull);
+    expect(code, matches(RegExp(r'^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$')));
+    expect(find.text('Write this down and keep it away from your child.'), findsOneWidget);
+    expect(prefs.getString('settings.pin'), isNull);
+    expect(prefs.getString(PinRecoveryStore.hashKey), isNull);
+    expect(find.text('CHILD HOME'), findsNothing);
+
+    // Wrong last 4 characters: still on the recovery step, nothing saved.
+    final wrong = RecoveryCode.lastFour(code) == 'AAAA' ? 'BBBB' : 'AAAA';
+    await _confirmRecovery(tester, wrong);
+    expect(find.text("Those aren't the last 4 characters. Check the code again."), findsOneWidget);
+    expect(prefs.getString('settings.pin'), isNull);
+    expect(find.text(code), findsOneWidget);
+
+    // Lower case is accepted.
+    await _confirmRecovery(tester, RecoveryCode.lastFour(code).toLowerCase());
+    expect(find.text('CHILD HOME'), findsOneWidget);
+    expect(PinSecurity.verifyPin('2468', prefs.getString('settings.pin')!), isTrue);
+    final saved = prefs.getString(PinRecoveryStore.hashKey)!;
+    expect(saved, isNot(contains(RecoveryCode.normalize(code)!)));
+    expect(RecoveryCode.verify(code, saved), isTrue);
+    // The code is never stored in plain text anywhere.
+    for (final k in prefs.getKeys()) {
+      expect('${prefs.get(k)}', isNot(contains(code)), reason: k);
+    }
+  });
+
+  testWidgets('the recovery code is spelled out for screen readers and reads left to right in Arabic', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(ProviderScope(
+      overrides: [sharedPrefsProvider.overrideWithValue(prefs)],
+      child: MaterialApp(
+        locale: const Locale('ar'),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        builder: (context, child) => FirstRunGate(child: child!),
+        home: const Scaffold(body: Text('CHILD HOME')),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await _fill(tester, '1357', '1357', confirmRecovery: false);
+    final code = _shownCode(tester);
+    final text = tester.widget<Text>(find.byKey(const Key('recoveryCodeText')));
+    expect(text.semanticsLabel, contains(code.replaceAll('-', '').split('').join(' ')));
+    expect(Directionality.of(tester.element(find.byKey(const Key('recoveryCodeText')))), TextDirection.ltr);
+    expect(find.text('اكتب الكود ده على ورقة وخلّيه بعيد عن طفلك.'), findsOneWidget);
+    expect(tester.getSize(find.byKey(const Key('recoveryConfirmButton'))).height, greaterThanOrEqualTo(44));
   });
 
   testWidgets('with a PIN, the app opens straight to child mode', (tester) async {
