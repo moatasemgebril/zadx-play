@@ -214,6 +214,41 @@ service cloud.firestore {
             || exists(/databases/$(database)/documents/families/$(familyId)/children/$(d.freeChildId)));
     }
 
+    // Client-asserted store plan (docs/decisions/SPARK-APP-NO-FUNCTIONS.md, accepted risk): a PARENT
+    // device shares the plan its own store confirmed as plans.play / plans.kids. Paid tiers only,
+    // never a trial, fixed shape, stamped with the writer and the server time. The legacy top-level
+    // plan fields, store, purchase and referral keys stay closed to every client.
+    function planTiers() {
+      return ['basic', 'plus'];
+    }
+    function tamperReasons() {
+      return ['accessibility_off', 'device_admin_off', 'screen_time_off', 'clock_changed'];
+    }
+    function planEntryOk(p) {
+      return p is map
+        && p.keys().hasOnly(['plan', 'planExpiresAt', 'inTrial', 'source', 'updatedBy', 'updatedAt'])
+        && p.keys().hasAll(['plan', 'planExpiresAt', 'inTrial', 'source', 'updatedBy', 'updatedAt'])
+        && p.plan in planTiers() && p.inTrial == false && p.source == 'device'
+        && p.planExpiresAt is string && p.planExpiresAt.size() <= 40
+        && p.updatedBy == request.auth.uid && p.updatedAt == request.time;
+    }
+    function planUpdateOk(familyId) {
+      let d = request.resource.data;
+      let before = resource.data.get('plans', {});
+      let after = d.get('plans', {});
+      let changed = after.diff(before).affectedKeys();
+      return isParent(familyId)
+        && d.diff(resource.data).affectedKeys().hasOnly(['plans'])
+        && before is map && after is map
+        && changed.hasOnly(['play', 'kids'])
+        && (!changed.hasAny(['play']) || planEntryOk(after.get('play', null)))
+        && (!changed.hasAny(['kids']) || planEntryOk(after.get('kids', null)));
+    }
+    // A list of known tamper reason codes (no free text).
+    function reasonList(v) {
+      return v is list && v.size() <= 4 && v.hasOnly(tamperReasons());
+    }
+
     // Family settings (adhan lock, games, lock mode, ...) are parent-only (R-33). A paired child
     // device reads the family doc but never writes it.
     function settingsUpdateOk(familyId) {
@@ -334,7 +369,8 @@ service cloud.firestore {
       // Four kinds of update, nothing else: parent settings (R-33), the parent's Free-plan child,
       // a pairing join (the redeemer adds itself) and a device removal (parent only, never the last
       // parent). Plan, referral and purchase fields are never client-written.
-      allow update: if settingsUpdateOk(familyId) || freeChildOk(familyId) || joinOk(familyId) || removeOk(familyId);
+      allow update: if settingsUpdateOk(familyId) || freeChildOk(familyId) || joinOk(familyId) || removeOk(familyId)
+        || planUpdateOk(familyId);
       // A phone that joined another family as a parent phone deletes its own untouched fresh family
       // (sole member, no plan / referral / membership fields), so no orphan family is left behind.
       allow delete: if isMember(familyId)
@@ -389,6 +425,38 @@ service cloud.firestore {
       match /assistantUsage/{day} {
         allow read: if isMember(familyId);
         allow write: if false;
+      }
+
+      // Parent alerts without push (replaces notifyParent / reportProtection): one doc per event,
+      // written by a child device for its own child, or by a parent device (one-device family).
+      // Only ids, codes and times: `detail` is a task id or prayer name, `reasons` known codes.
+      match /events/{eventId} {
+        allow read, delete: if isParent(familyId);
+        allow create: if isMember(familyId)
+          && request.resource.data.keys().hasOnly(['type', 'childId', 'at', 'by', 'detail', 'reasons'])
+          && request.resource.data.type in ['task_submitted', 'adhan', 'protection']
+          && validChildId(request.resource.data.get('childId', ''))
+          && (isParent(familyId) || isChildDevice(familyId, request.resource.data.childId))
+          && request.resource.data.at == request.time
+          && request.resource.data.by == request.auth.uid
+          && (!('detail' in request.resource.data)
+              || (request.resource.data.detail is string && request.resource.data.detail.size() <= 64))
+          && (!('reasons' in request.resource.data) || reasonList(request.resource.data.reasons));
+        allow update: if false;
+      }
+
+      // "Last seen" + current protection problems of a child device (replaces checkHeartbeats).
+      // Written only by the device bound to that child; read by parents and that device.
+      match /presence/{childId} {
+        allow read: if isParent(familyId) || isChildDevice(familyId, childId);
+        allow create, update: if isChildDevice(familyId, childId)
+          && request.resource.data.keys().hasOnly(['childId', 'lastSeen', 'platform', 'by', 'protection'])
+          && request.resource.data.childId == childId
+          && request.resource.data.lastSeen == request.time
+          && request.resource.data.by == request.auth.uid
+          && request.resource.data.platform is string && request.resource.data.platform.size() <= 16
+          && (!('protection' in request.resource.data) || reasonList(request.resource.data.protection));
+        allow delete: if isParent(familyId);
       }
 
       // Device-removal audit (BACKLOG P1-3): uids + role + time. APPEND-ONLY: the removing parent

@@ -10,7 +10,7 @@ const { initializeTestEnvironment, assertFails, assertSucceeds } = require("@fir
 const { createHash } = require("crypto");
 const {
   doc, collection, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, Timestamp, increment, arrayUnion,
-  arrayRemove, deleteField, FieldPath, writeBatch,
+  arrayRemove, deleteField, FieldPath, writeBatch, addDoc,
 } = require("firebase/firestore");
 
 const DAY = "2026-11-22";
@@ -890,4 +890,111 @@ test("a phone deletes only its own untouched fresh family", async () => {
     await setDoc(doc(ctx.firestore(), "families/paid-1"), { members: [NEW], plan: "plus" });
   });
   await assertFails(deleteDoc(doc(as(NEW), "families/paid-1"))); // not untouched
+});
+
+// ---- App side without Functions (docs/decisions/SPARK-APP-NO-FUNCTIONS.md) -------------------
+
+/** plans.<app> as familyPlanSharerProvider writes it (client-asserted, accepted risk). */
+const devicePlan = (uid, extra = {}) => ({
+  plan: "plus", planExpiresAt: "2026-12-05T10:00:00.000Z", inTrial: false, source: "device",
+  updatedBy: uid, updatedAt: serverTimestamp(), ...extra,
+});
+
+test("plans: a parent device shares its store plan as plans.play / plans.kids, fixed shape", async () => {
+  await seed();
+  const fam = doc(as(PARENT), "families/f1");
+  await assertSucceeds(setDoc(fam, { plans: { play: devicePlan(PARENT) } }, { merge: true }));
+  await assertSucceeds(setDoc(doc(as(PARENT2), "families/f1"), { plans: { kids: devicePlan(PARENT2, { plan: "basic" }) } }, { merge: true }));
+  const after = await familyData();
+  assert.equal(after.plans.play.plan, "plus");
+  assert.equal(after.plans.kids.plan, "basic");
+  // Denied shapes.
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { plan: "family" }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { inTrial: true }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { source: "store" }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { planExpiresAt: "x".repeat(41) }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { planExpiresAt: Timestamp.now() }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { updatedBy: PARENT2 }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { updatedAt: Timestamp.now() }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT, { purchaseToken: "t" }) } }, { merge: true }));
+  await assertFails(setDoc(fam, { plans: { web: devicePlan(PARENT) } }, { merge: true })); // unknown app
+  await assertFails(setDoc(fam, { plans: { play: devicePlan(PARENT) }, "settings": { lockAtAdhan: false } }, { merge: true })); // one thing per write
+  // Legacy top-level plan, store, purchase and referral keys stay server-only.
+  for (const field of [{ plan: "plus" }, { planApp: "play" }, { planExpiresAt: "2099-01-01" }, { inTrial: true },
+    { store: "play" }, { purchaseToken: "t" }, { referralCode: "ZADX-AAAA" }, { referrals: { 2026: 3 } }]) {
+    await assertFails(setDoc(fam, field, { merge: true }), JSON.stringify(field));
+  }
+});
+
+test("plans: a child device or a stranger never writes plans", async () => {
+  await seed();
+  await assertFails(setDoc(doc(as(KID1), "families/f1"), { plans: { play: devicePlan(KID1) } }, { merge: true }));
+  await assertFails(updateDoc(doc(as(KID1), "families/f1"), { "plans.kids": devicePlan(KID1) }));
+  await assertFails(setDoc(doc(as(STRANGER), "families/f1"), { plans: { play: devicePlan(STRANGER) } }, { merge: true }));
+  assert.equal((await familyData()).plans, undefined);
+});
+
+const event = (uid, extra = {}) => ({ type: "task_submitted", childId: "c1", at: serverTimestamp(), by: uid, detail: "homework", ...extra });
+const events = (db) => collection(db, "families/f1/events");
+
+test("events: a child device reports for its own child; a parent device for any child", async () => {
+  await seed();
+  await assertSucceeds(addDoc(events(as(KID1)), event(KID1)));
+  await assertSucceeds(addDoc(events(as(KID1)), {
+    type: "protection", childId: "c1", at: serverTimestamp(), by: KID1, reasons: ["accessibility_off", "clock_changed"],
+  }));
+  await assertSucceeds(addDoc(events(as(KID2)), event(KID2, { type: "adhan", childId: "c2", detail: "asr" })));
+  await assertSucceeds(addDoc(events(as(PARENT)), event(PARENT, { childId: "c2" })));
+  // Parents read and delete; child devices do not read, nobody updates.
+  const list = await assertSucceeds(getDocs(events(as(PARENT))));
+  assert.equal(list.size, 4);
+  await assertFails(getDocs(events(as(KID1))));
+  const first = list.docs[0].id;
+  await assertFails(updateDoc(doc(as(PARENT), `families/f1/events/${first}`), { detail: "x" }));
+  await assertFails(deleteDoc(doc(as(KID1), `families/f1/events/${first}`)));
+  await assertSucceeds(deleteDoc(doc(as(PARENT), `families/f1/events/${first}`)));
+});
+
+test("events: denied writes (stranger, sibling, shape, time, writer, reasons)", async () => {
+  await seed();
+  await assertFails(addDoc(events(as(STRANGER)), event(STRANGER))); // stranger writing events
+  await assertFails(addDoc(events(env.unauthenticatedContext().firestore()), event("x")));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { childId: "c2" }))); // a sibling's child
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { type: "plan_changed" })));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { childId: "bad/id" })));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { at: Timestamp.now() })));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { by: PARENT })));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { detail: "x".repeat(65) })));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { nickname: "Sara" }))); // no personal data
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { type: "protection", reasons: ["vpn_on"] })));
+  await assertFails(addDoc(events(as(KID1)), event(KID1, { type: "protection", reasons: ["accessibility_off", "device_admin_off", "screen_time_off", "clock_changed", "clock_changed"] })));
+  await removeAsFunctionWould(KID2);
+  await assertFails(addDoc(events(as(KID2)), event(KID2, { childId: "c2" }))); // removed device
+});
+
+const presence = (db, child = "c1") => doc(db, `families/f1/presence/${child}`);
+const seen = (uid, extra = {}) => ({ childId: "c1", lastSeen: serverTimestamp(), platform: "android", by: uid, ...extra });
+
+test("presence: only the device bound to that child writes its last-seen; parents read and delete", async () => {
+  await seed();
+  await assertSucceeds(setDoc(presence(as(KID1)), seen(KID1)));
+  await assertSucceeds(setDoc(presence(as(KID1)), seen(KID1, { protection: ["accessibility_off"] })));
+  await assertSucceeds(getDoc(presence(as(PARENT))));
+  await assertSucceeds(getDoc(presence(as(KID1))));
+  await assertFails(getDoc(presence(as(KID2)))); // a sibling's device
+  await assertFails(getDoc(presence(as(STRANGER))));
+  // Denied writes.
+  await assertFails(setDoc(presence(as(KID2)), seen(KID2))); // not its child
+  await assertFails(setDoc(presence(as(PARENT)), seen(PARENT))); // parents never fake "last seen"
+  await assertFails(setDoc(presence(as(STRANGER)), seen(STRANGER)));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { childId: "c2" })));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { lastSeen: Timestamp.fromMillis(Date.now() + 86_400_000) })));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { by: PARENT })));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { platform: "x".repeat(17) })));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { platform: 3 })));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { protection: ["unknown_reason"] })));
+  await assertFails(setDoc(presence(as(KID1)), seen(KID1, { battery: 80 })));
+  // Delete: parents only.
+  await assertFails(deleteDoc(presence(as(KID1))));
+  await assertSucceeds(deleteDoc(presence(as(PARENT))));
 });
