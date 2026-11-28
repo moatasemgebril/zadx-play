@@ -1,30 +1,47 @@
 import 'dart:async';
 
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 
 import '../../core/app_config.dart';
-import '../../core/backend.dart';
+import '../../core/feature_flags.dart';
+import '../../core/server_functions.dart';
 import '../../data/models/plan.dart';
 import '../../features/prayer/prayer_providers.dart';
+import '../family/children_controller.dart';
 import '../family/family_repository.dart';
+import 'device_entitlement.dart';
 import 'entitlement_cache.dart';
 import 'trial_clock.dart';
 
-/// Store subscriptions (App Store / Google Play) + server-side verification.
+/// Store subscriptions (App Store / Google Play).
 ///
-/// Flow: buy() → store sheet → purchaseStream → `verifyPurchase` Cloud Function
-/// validates the receipt, stores the entitlement in Firestore and credits the
-/// referrer if [referralCode] was used → [entitlementProvider] updates.
+/// Zero-cost flow (default, owner decision 2026-11-28, [FeatureFlags.serverFunctions] off):
+/// buy() → store sheet → purchaseStream → the plan is read from the store's purchase state on
+/// THIS device ([deviceEntitlementFor]) → [entitlementProvider] updates. The purchase is
+/// acknowledged / finished on the device ([InAppPurchase.completePurchase]; Google Play refunds a
+/// purchase that is not acknowledged within 3 days). A parent phone then shares the plan with
+/// the family doc ([familyPlanSharerProvider]) so the child devices get it.
+///
+/// Blaze flow (flag on): the `verifyPurchase` Cloud Function validates the receipt, stores the
+/// entitlement in Firestore and credits the referrer if a referral code was used.
 class SubscriptionService {
-  SubscriptionService({InAppPurchase? iap, FirebaseFunctions? functions})
-      : _iap = iap ?? InAppPurchase.instance,
-        _functions = functions;
+  SubscriptionService({InAppPurchase? iap, ServerCalls? server, DateTime Function()? clock, TargetPlatform? platform})
+      : _iapOverride = iap,
+        _server = server ?? serverCallsFor(),
+        _clock = clock ?? DateTime.now,
+        _platform = platform;
 
-  final InAppPurchase _iap;
-  final FirebaseFunctions? _functions;
+  final InAppPurchase? _iapOverride;
+  InAppPurchase get _iap => _iapOverride ?? InAppPurchase.instance;
+  final ServerCalls _server;
+  final DateTime Function() _clock;
+  final TargetPlatform? _platform;
+  TargetPlatform get _targetPlatform => _platform ?? defaultTargetPlatform;
+
+  /// Plans this device's store confirmed in this session, per product (zero-cost flow).
+  final Map<String, Entitlement> _devicePurchases = {};
   final _entitlement = StreamController<Entitlement>.broadcast();
   final _otherFamily = StreamController<bool>.broadcast();
   bool _inOtherFamily = false;
@@ -48,8 +65,8 @@ class SubscriptionService {
 
   Stream<Entitlement> get entitlementStream => _entitlement.stream;
 
-  /// The last plan `verifyPurchase` confirmed in this session (events sent before anyone
-  /// listened are not lost).
+  /// The last plan this device's store (or `verifyPurchase` on Blaze) confirmed in this session
+  /// (events sent before anyone listened are not lost).
   Entitlement? get latest => _latest;
   Map<String, ProductDetails> get products => _products;
 
@@ -61,7 +78,7 @@ class SubscriptionService {
     // Google Play answers a restore silently (no sign-in prompt), so a paying family is
     // re-verified on every launch. iOS delivers renewals by itself; the parent can also tap
     // "Restore purchases" (an automatic restore could prompt for the Apple ID password).
-    if (defaultTargetPlatform == TargetPlatform.android) {
+    if (_targetPlatform == TargetPlatform.android) {
       await _iap.restorePurchases();
     }
   }
@@ -85,34 +102,85 @@ class SubscriptionService {
 
   Future<void> restore() => _iap.restorePurchases();
 
-  Future<void> _onPurchases(List<PurchaseDetails> purchases) async {
+  Future<void> _onPurchases(List<PurchaseDetails> purchases) => handlePurchases(purchases);
+
+  /// Grants the plan of every purchased / restored store purchase, then acknowledges it.
+  /// Pending (e.g. a cash payment not made yet), cancelled and failed purchases grant nothing.
+  @visibleForTesting
+  Future<void> handlePurchases(List<PurchaseDetails> purchases) async {
+    var deviceChanged = false;
     for (final p in purchases) {
       if (p.status == PurchaseStatus.purchased || p.status == PurchaseStatus.restored) {
-        try {
-          final result = await (_functions ?? zadFunctions()).httpsCallable('verifyPurchase').call({
-            'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
-            'productId': p.productID,
-            'verificationData': p.verificationData.serverVerificationData,
-            'referralCode': _pendingReferralCode,
-          });
-          final data = Map<String, dynamic>.from(result.data as Map);
-          _setInOtherFamily(false);
-          final ent = Entitlement(
-            // Unknown or missing tier = Free, never silently Basic.
-            tier: parsePlanTier(data['tier']),
-            inTrial: data['inTrial'] as bool? ?? false,
-            expiresAt: DateTime.tryParse(data['expiresAt'] as String? ?? ''),
-          );
-          _latest = ent;
-          _entitlement.add(ent);
-        } on FirebaseFunctionsException catch (e) {
-          if (isPurchaseInOtherFamily(e.message)) _setInOtherFamily(true);
-          debugPrint('verifyPurchase failed: ${e.code}');
-        } catch (e) {
-          debugPrint('verifyPurchase failed: $e');
+        if (_server.enabled) {
+          await _verifyOnServer(p);
+        } else {
+          deviceChanged = _grantOnDevice(p) || deviceChanged;
         }
       }
-      if (p.pendingCompletePurchase) await _iap.completePurchase(p);
+      // Acknowledge (Google Play) / finish (App Store) on the device: Play refunds a purchase that
+      // is not acknowledged within 3 days. A failed acknowledgement is retried by the next launch's
+      // restore (Play reports the purchase again with pendingCompletePurchase set).
+      if (p.pendingCompletePurchase) {
+        try {
+          await _iap.completePurchase(p);
+        } catch (e) {
+          debugPrint('completePurchase failed: $e');
+        }
+      }
+    }
+    if (deviceChanged) {
+      final best = bestDeviceEntitlement(_devicePurchases.values, _clock());
+      if (best != null) {
+        _latest = best;
+        _entitlement.add(best);
+      }
+    }
+  }
+
+  /// Zero-cost flow: trusts the store's purchase state on this device. True when it granted or
+  /// extended a plan.
+  bool _grantOnDevice(PurchaseDetails p) {
+    final now = _clock();
+    var date = parseTransactionDate(p.transactionDate);
+    // A purchase made right now may arrive before the store filled in its date.
+    if (date == null && p.status == PurchaseStatus.purchased) date = now.toUtc();
+    final ent = deviceEntitlementFor(
+      productId: p.productID,
+      googlePlay: _targetPlatform == TargetPlatform.android,
+      now: now,
+      transactionDate: date,
+    );
+    if (ent == null) return false;
+    final previous = _devicePurchases[p.productID];
+    if (previous != null && !(ent.expiresAt ?? now).isAfter(previous.expiresAt ?? now)) return false;
+    _devicePurchases[p.productID] = ent;
+    return true;
+  }
+
+  /// Blaze flow ([FeatureFlags.serverFunctions] on): `verifyPurchase` checks the receipt.
+  Future<void> _verifyOnServer(PurchaseDetails p) async {
+    try {
+      final result = await _server.call('verifyPurchase', {
+        'platform': _targetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
+        'productId': p.productID,
+        'verificationData': p.verificationData.serverVerificationData,
+        'referralCode': _pendingReferralCode,
+      });
+      final data = Map<String, dynamic>.from(result! as Map);
+      _setInOtherFamily(false);
+      final ent = Entitlement(
+        // Unknown or missing tier = Free, never silently Basic.
+        tier: parsePlanTier(data['tier']),
+        inTrial: data['inTrial'] as bool? ?? false,
+        expiresAt: DateTime.tryParse(data['expiresAt'] as String? ?? ''),
+      );
+      _latest = ent;
+      _entitlement.add(ent);
+    } on ServerCallException catch (e) {
+      if (isPurchaseInOtherFamily(e.message)) _setInOtherFamily(true);
+      debugPrint('verifyPurchase failed: ${e.code}');
+    } catch (e) {
+      debugPrint('verifyPurchase failed: $e');
     }
   }
 
@@ -129,9 +197,27 @@ const purchaseInOtherFamilyCode = 'purchase_in_other_family';
 bool isPurchaseInOtherFamily(String? message) => message == purchaseInOtherFamilyCode;
 
 final subscriptionServiceProvider = Provider<SubscriptionService>((ref) {
-  final s = SubscriptionService();
+  final s = SubscriptionService(server: ref.watch(serverCallsProvider));
   ref.onDispose(s.dispose);
   return s;
+});
+
+/// Zero-cost flow: a parent phone writes the plan its store confirmed to the family doc
+/// (`plans.<app>` = {plan, planExpiresAt, inTrial: false, source: 'device'}), so the child
+/// devices of the family get it ([familyEntitlementProvider]).
+///
+/// This plan is CLIENT-ASSERTED (owner decision 2026-11-28, accepted weaker anti-fraud): only
+/// Firestore rules (parent members only, known tier, bounded expiry) stand between a modified
+/// parent app and a free plan. Child safety does not depend on it: a paid tier only adds
+/// features, and each child device still enforces its own lock locally. A paired child device
+/// never writes the plan. On Blaze, `verifyPurchase` writes it instead.
+final familyPlanSharerProvider = Provider<void>((ref) {
+  if (ref.watch(featureFlagsProvider).serverFunctions) return;
+  ref.listen<Entitlement?>(storeEntitlementProvider.select((v) => v.valueOrNull), (previous, next) {
+    if (next == null || next.isFree || identical(previous, next)) return;
+    if (ref.read(childrenProvider).isBound) return;
+    ref.read(familyRepositoryProvider).shareFamilyPlan(next).catchError((Object e) => debugPrint('plan share failed: $e'));
+  }, fireImmediately: true);
 });
 
 /// True when this phone's store subscription belongs to another Zad X family: the
@@ -142,15 +228,17 @@ final purchaseInOtherFamilyProvider = StreamProvider<bool>((ref) async* {
   yield* service.inOtherFamilyStream;
 });
 
-/// The latest plan the store + `verifyPurchase` confirmed in this session (`null` until then).
+/// The latest plan this device's store (or `verifyPurchase` on Blaze) confirmed in this session
+/// (`null` until then).
 final storeEntitlementProvider = StreamProvider<Entitlement?>((ref) async* {
   final service = ref.watch(subscriptionServiceProvider);
   yield service.latest;
   yield* service.entitlementStream;
 });
 
-/// The plan stored on this device's family doc by `verifyPurchase` (bought on any family phone),
-/// server-confirmed snapshots only. Never emits without Firebase or a family (local mode).
+/// The plan stored on this device's family doc by a parent phone ([familyPlanSharerProvider]; by
+/// `verifyPurchase` on Blaze), from snapshots the server sent (never the offline cache). Never
+/// emits without Firebase or a family (local mode).
 final familyEntitlementProvider = StreamProvider<Entitlement?>(
   (ref) => ref.watch(familyRepositoryProvider).watchEntitlement(),
 );
