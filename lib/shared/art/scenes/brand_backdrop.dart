@@ -60,7 +60,7 @@ class BrandBackdropPainter extends CustomPainter {
           ArtColors.brandGoldGlow.withValues(alpha: 0.65),
           ArtColors.brandSkyGlow.withValues(alpha: 0.45),
           ArtColors.brandGoldGlow.withValues(alpha: 0.65),
-        ]);
+        ], const [0, 0.5, 1]);
       canvas.drawCircle(c, radius, stroke);
       final flare = Offset(c.dx - radius, c.dy);
       canvas.drawCircle(flare, 26 * u, glow(flare, 26 * u, ArtColors.brandGoldGlow, 0.55));
