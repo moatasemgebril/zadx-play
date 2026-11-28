@@ -142,7 +142,8 @@ Design: docs/ARCHITECTURE.md "Offline-first". The child side must work fully wit
 - TODO (team): run `flutterfire configure --project=zad-x-play` in CI or locally to generate firebase_options.dart.
 - backend/firestore.rules (main @ 44b0782) published to the live project from the console, 2026-11-28 08:40 PT (replaces deny-all). Redeploy after every rules change. The `deviceHeartbeats` index is only for the Functions path, not deployed.
 - iOS: ios/Runner/GoogleService-Info.plist committed (owner decision 2026-11-28: Firebase client config lives in the public repo; rules + App Check are the protection) and added to the Runner bundle by add_native_files.rb.
-- Waiting on owner: android/app/google-services.json; then apply the `com.google.gms.google-services` Gradle plugin in android/scripts/integrate_native.py.
+- Android: android/app/google-services.json committed; android/scripts/integrate_native.py applies the Google Services Gradle plugin (4.4.2) for Zad X Play only. Zad X Kids (com.zadx.kids) has no Firebase app yet and runs on-device only — register it in the console if Kids needs family sync.
+- Web: no firebase_options.dart yet, so the web build stays local-only (Firebase.initializeApp() without options).
 - TODO (team, before launch): restrict the API keys in Google Cloud (Android key → com.zadx.app + SHA-1, iOS key → bundle id) and enforce App Check on Firestore.
 - Cloud Functions need the Blaze plan (card required). Owner wants zero cost: keep the app working without Functions where possible (Firestore rules + client logic), and list Blaze as an owner decision.
 
