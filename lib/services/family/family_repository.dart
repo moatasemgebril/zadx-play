@@ -36,9 +36,9 @@ class FamilyDay {
   /// after the prayer window, measured from this time.
   final int? prayerLockSinceMs;
 
-  /// Server-only credits {taskId: minutes}, written by the `approveTask` Cloud Function after it
-  /// checked that the caller is a parent device (R-32). Null for a local-only family, where the
-  /// approval stays on this device. Never written by the app to Firestore.
+  /// Credits {taskId: minutes}, written only by a parent-device approval that the Firestore rules
+  /// check (role, one task, 0..120 minutes, once, 600 a day; R-32). Null for a local-only family,
+  /// where the approval stays on this device. Never written by a child device.
   final Map<String, int>? approved;
 
   /// Server time (UTC ms) the current prayer lock reached Firestore (`prayerLockAt`). The rules
@@ -256,15 +256,16 @@ abstract class FamilyRepository {
   Stream<List<LinkedDevice>> watchLinkedDevices();
 
   /// Parent device only (the server checks the role): removes [deviceUid] (a child device or
-  /// another parent phone, e.g. a lost one) from the family via the `removeLinkedDevice` Cloud
-  /// Function. Throws [DeviceRemovalRejected] on any failure; the last parent phone is refused.
+  /// another parent phone, e.g. a lost one) from the family in one rules-checked Firestore
+  /// commit. Throws [DeviceRemovalRejected] on any failure; the last parent phone is refused.
   Future<void> removeLinkedDevice(String deviceUid);
 
   /// Server-written plan fields of the family (read on paired child devices to know whether
   /// their child is paused on Free). Emits nothing for local-only.
   Stream<FamilyPlanStatus> watchFamilyStatus();
 
-  /// Parent device: tells the server which child stays active on Free (`setFreeChild`).
+  /// Parent device: tells the server which child stays active on Free (`freeChildId`, a
+  /// rules-checked parent write).
   /// Returns true once the server stored it; false when there is no server (local mode).
   Future<bool> setFreeChild(String childId);
 }

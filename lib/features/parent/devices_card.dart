@@ -108,11 +108,15 @@ class _DevicesCardState extends ConsumerState<DevicesCard> {
               border: Border.all(color: const Color(0xFFB9A6F5), width: 2),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Text(
-              Fmt.digits(_code!, 'en'),
-              textAlign: TextAlign.center,
-              textDirection: TextDirection.ltr,
-              style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: 8, color: AppColors.purpleDark),
+            // XXXXX-XXXXX (10 symbols, zero-cost pairing): scaled down on narrow phones.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                Fmt.digits(_code!, 'en'),
+                textAlign: TextAlign.center,
+                textDirection: TextDirection.ltr,
+                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: 3, color: AppColors.purpleDark),
+              ),
             ),
           ),
           const SizedBox(height: 4),
@@ -179,10 +183,15 @@ class _JoinFamilyCardState extends ConsumerState<JoinFamilyCard> {
         const SizedBox(height: 8),
         TextField(
           controller: _ctrl,
-          keyboardType: TextInputType.number,
-          maxLength: 6,
+          // Codes look like XXXXX-XXXXX (letters and digits; case and dashes do not matter).
+          keyboardType: TextInputType.visiblePassword,
+          textCapitalization: TextCapitalization.characters,
+          autocorrect: false,
+          enableSuggestions: false,
+          maxLength: 11,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 24, letterSpacing: 6),
+          textDirection: TextDirection.ltr,
+          style: const TextStyle(fontSize: 22, letterSpacing: 3),
           decoration: InputDecoration(
             labelText: l10n.pairEnterHint,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
