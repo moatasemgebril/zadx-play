@@ -20,5 +20,9 @@ add_file(project, runner, 'Shared', 'SharedStore.swift')
 (project.build_configurations + runner.build_configurations).each do |config|
   config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
 end
+# Same bundle id as the Firebase iOS app and the store listing (flutter create makes com.zadx.zadx).
+runner.build_configurations.each do |config|
+  config.build_settings['PRODUCT_BUNDLE_IDENTIFIER'] = 'com.zadx.app'
+end
 project.save
-puts 'Added AppLockPlugin.swift + SharedStore.swift to Runner; iOS 16.0'
+puts 'Added AppLockPlugin.swift + SharedStore.swift to Runner; iOS 16.0; bundle id com.zadx.app'
