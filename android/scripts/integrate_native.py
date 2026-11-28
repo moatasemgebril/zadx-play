@@ -18,6 +18,9 @@ It is safe to run more than once. It:
   5. adds JUnit for the pure-Kotlin rule tests in android/app/src/test (LockRulesTest)
   6. sets the launcher label of the variant; for Zad X Kids also replaces the Accessibility /
      Device Admin descriptions with neutral text and removes the adhan notification sound
+  7. targets Android 16 (API 36, required by Google Play for new apps since 2026-08-31) and, when
+     android/key.properties exists (written by the release workflow from GitHub Secrets, never
+     committed), signs release builds with the Play upload key; otherwise release stays debug-signed
 """
 import argparse
 import re
@@ -27,6 +30,7 @@ from pathlib import Path
 
 APP = Path("android/app")
 PKG = "com.zadx.app"  # namespace + Kotlin package (both variants)
+TARGET_SDK = 36  # Google Play: new apps and updates must target Android 16 (API 36) from 2026-08-31
 
 # applicationId (store id) and launcher label per variant. Keep in sync with lib/core/app_config.dart.
 VARIANTS = {
@@ -63,6 +67,9 @@ def patch_gradle(application_id: str = PKG) -> None:
     s = re.sub(r'namespace\s*=?\s*["\'][^"\']+["\']', f'namespace = {q}{PKG}{q}' if is_kts else f'namespace "{PKG}"', s)
     s = re.sub(r'applicationId\s*=?\s*["\'][^"\']+["\']', f'applicationId = {q}{application_id}{q}' if is_kts else f'applicationId "{application_id}"', s)
     s = re.sub(r'minSdk(Version)?\s*=?\s*[\w.]+', 'minSdk = 26' if is_kts else 'minSdkVersion 26', s)
+    s = re.sub(r'targetSdk(Version)?\s*=?\s*[\w.]+', f'targetSdk = {TARGET_SDK}' if is_kts else f'targetSdkVersion {TARGET_SDK}', s)
+    s = re.sub(r'compileSdk(Version)?\s*=?\s*[\w.]+', f'compileSdk = {TARGET_SDK}' if is_kts else f'compileSdkVersion {TARGET_SDK}', s)
+    s = add_release_signing(s, is_kts)
     if "CoreLibraryDesugaringEnabled" not in s:
         flag = "isCoreLibraryDesugaringEnabled = true" if is_kts else "coreLibraryDesugaringEnabled true"
         s = re.sub(r'compileOptions\s*\{', "compileOptions {\n        " + flag, s, count=1)
@@ -81,6 +88,42 @@ def patch_gradle(application_id: str = PKG) -> None:
             s += "\ndependencies {\n    " + dep + "\n}\n"
     path.write_text(s)
     print(f"patched {path}")
+
+def add_release_signing(s: str, is_kts: bool) -> str:
+    """Release builds use the Play upload key from android/key.properties when that file exists."""
+    if "zadxKeyProps" in s:
+        return s
+    if not is_kts:
+        print("warning: Groovy build.gradle: release signing not wired (expected build.gradle.kts)")
+        return s
+    s = "import java.io.FileInputStream\nimport java.util.Properties\n\n" + s
+    props = (
+        "// Play upload key (android/key.properties is written by CI from GitHub Secrets; never committed).\n"
+        "val zadxKeyProps = Properties().apply {\n"
+        "    val f = rootProject.file(\"key.properties\")\n"
+        "    if (f.exists()) FileInputStream(f).use { load(it) }\n"
+        "}\n\n"
+    )
+    s = re.sub(r'^android\s*\{', props + "android {", s, count=1, flags=re.M)
+    signing = (
+        "android {\n"
+        "    signingConfigs {\n"
+        "        create(\"release\") {\n"
+        "            if (zadxKeyProps.isNotEmpty()) {\n"
+        "                keyAlias = zadxKeyProps.getProperty(\"keyAlias\")\n"
+        "                keyPassword = zadxKeyProps.getProperty(\"keyPassword\")\n"
+        "                storeFile = file(zadxKeyProps.getProperty(\"storeFile\"))\n"
+        "                storePassword = zadxKeyProps.getProperty(\"storePassword\")\n"
+        "            }\n"
+        "        }\n"
+        "    }\n"
+    )
+    s = re.sub(r'^android\s*\{\n', signing, s, count=1, flags=re.M)
+    s = s.replace(
+        'signingConfig = signingConfigs.getByName("debug")',
+        'signingConfig = if (zadxKeyProps.isNotEmpty()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")',
+    )
+    return s
 
 def remove_template_activity() -> None:
     kotlin = APP / "src/main/kotlin"

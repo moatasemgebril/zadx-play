@@ -4,6 +4,19 @@ The orchestrator reads this file at the start of every cycle (see CLAUDE.md).
 Owner requests come first within the priority order. Close an item by moving it
 to "Done" with the PR link; record decisions in the ZADX LOG.
 
+## Owner requests — 2026-11-28 (Google Play closed test)
+
+- Owner: personal Play account (zadxsupport@gmail.com), $25 paid; says adhan + Quran approvals are in hand.
+  Asked the team to do everything that does not need him.
+- [x] Release AAB workflow (`.github/workflows/zadx-play-release.yml`, tag `play-v*`), targetSdk/compileSdk 36,
+  release signing from GitHub Secrets (`android/scripts/integrate_native.py`). Waiting for the owner to add the secrets.
+- [x] Privacy policy v1.0 (`web/privacy.html`, AR/EN) → GitHub Pages. Lawyer review before production.
+- [x] Testers Google Group `zadx-play-testers@googlegroups.com` (owner had to solve the CAPTCHA).
+- [ ] Owner-only: verify identity, trader status, Android device (Play Console app), phone number. "Create app" stays
+  disabled until done.
+- [ ] Then (team, in Play Console): create the app, store listing, app content (Data safety, Accessibility
+  declaration + video, content rating, target audience/Families, ads = no), closed test with the group, upload AAB.
+
 ## Owner requests — 2026-11-27
 
 - [x] **New brand artwork ("ZX")** — branch `design/zx-brand-refresh`. Owner decisions (asked one by one):
