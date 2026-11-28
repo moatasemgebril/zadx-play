@@ -1,5 +1,7 @@
 import 'dart:math' as math;
-import 'dart:ui';
+import 'dart:ui' show Gradient;
+
+import 'package:flutter/widgets.dart' hide Gradient;
 
 import '../scene_palettes.dart';
 import 'scene_common.dart';
