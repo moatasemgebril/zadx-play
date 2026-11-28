@@ -4,11 +4,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:flutter/foundation.dart';
+
 import '../../core/backend.dart';
+import '../../core/server_functions.dart';
 import '../../data/models/child_profile.dart';
 import 'child_pause.dart';
 import 'device_removal.dart';
+import 'family_events.dart';
 import 'family_repository.dart';
+import 'firestore_family_events.dart';
 import '../../data/models/plan.dart';
 
 /// Firestore layout (see backend/firestore.rules):
@@ -182,23 +187,49 @@ class FirestoreFamilyRepository implements FamilyRepository, MembershipSource {
   Future<void> saveSettings(Map<String, Object?> settings) =>
       _db.doc('families/$familyId').set({'settings': settings}, SetOptions(merge: true));
 
+  // ---- Parent alerts, presence, shared plan (zero-cost backend, firestore_family_events.dart) ----
+
+  /// Cloud Functions only on Blaze (`FeatureFlags.serverFunctions`); off by default.
+  final ServerCalls _server = serverCallsFor();
+  late final FirestoreFamilyEvents _alerts = FirestoreFamilyEvents(familyId: familyId, db: _db);
+
   @override
   Future<void> notifyParent(String childId, String type, {Map<String, Object?> data = const {}}) async {
-    await _functions.httpsCallable('notifyParent').call({
-      'familyId': familyId,
-      'childId': childId,
-      'type': type,
-      'data': data,
-    });
+    if (!_server.enabled) return _alerts.addEvent(type, childId, detail: eventDetailFrom(data));
+    try {
+      await _server.call('notifyParent', {'familyId': familyId, 'childId': childId, 'type': type, 'data': data});
+    } catch (e) {
+      debugPrint('notifyParent failed: $e');
+    }
   }
 
   @override
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {
-    await _functions.httpsCallable('reportProtection').call({
+    if (!_server.enabled) return _alerts.reportProtection(childId, platform: platform, reasons: reasons);
+    await _server.call('reportProtection', {
       'familyId': familyId,
       'childId': childId,
       'status': {'platform': platform, 'reasons': reasons},
     });
+  }
+
+  @override
+  Future<void> touchPresence(String childId, {required String platform}) => _alerts.touchPresence(childId, platform: platform);
+
+  @override
+  Stream<List<FamilyEvent>> watchEvents() => _alerts.watchEvents();
+
+  @override
+  Stream<Map<String, ChildPresence>> watchPresence() => _alerts.watchPresence();
+
+  @override
+  Future<void> pruneEvents() => _alerts.pruneEvents();
+
+  @override
+  Future<void> shareFamilyPlan(Entitlement plan) async {
+    // On Blaze `verifyPurchase` writes the plan (server-verified); never overwrite it from here.
+    if (_server.enabled) return;
+    await _alerts.shareFamilyPlan(plan);
   }
 
   @override

@@ -271,6 +271,9 @@ mixin KidsL10nOverrides on AppLocalizations {
   String get psAlertAdhan => _text('psAlertAdhan');
 
   @override
+  String get notifAdhan => _text('notifAdhan');
+
+  @override
   String get msAlertAdhan => _text('msAlertAdhan');
 
   @override

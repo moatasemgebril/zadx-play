@@ -1028,5 +1028,22 @@
   "recoveryCardTitleSet": "كود الاسترجاع جاهز",
   "recoveryCardBodySet": "لو الكود ضاع منك، اعمل واحد جديد. القديم هيبطل يشتغل.",
   "recoveryCardReplace": "اعمل كود جديد",
-  "recoverySaved": "اتحفظ كود الاسترجاع."
+  "recoverySaved": "اتحفظ كود الاسترجاع.",
+  "familyAlertsTitle": "تنبيهات العائلة",
+  "familyAlertsNote": "التنبيهات بتوصلك وإنت فاتح Zad X على الموبايل ده.",
+  "noFamilyAlerts": "مفيش تنبيهات في آخر ٧ أيام.",
+  "notifTaskSubmitted": "فيه مهمة مستنية موافقتك",
+  "notifAdhan": "دخل وقت الصلاة: اللعب اتوقف على جهاز طفلك",
+  "notifProtection": "تنبيه: حماية Zad X اتقفلت أو اتغيّرت على جهاز طفلك (إمكانية الوصول أو منع المسح أو Screen Time أو ساعة الجهاز). افتح Zad X على الجهاز ده واتأكد إنها شغّالة.",
+  "notifStale": "جهاز طفلك ما اتواصلش مع Zad X من أكتر من يوم. لو الجهاز كان مقفول تجاهل الرسالة، غير كده اتأكد إن الحماية لسه شغّالة.",
+  "lastSeen": "آخر ظهور: {time}",
+  "@lastSeen": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "lastSeenNever": "لسه ما ظهرش",
+  "deviceNotCheckingIn": "الجهاز ما اتواصلش من أكتر من يوم"
 }

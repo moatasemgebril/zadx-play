@@ -118,6 +118,8 @@ const Set<String> islamicOnlyL10nKeys = {
   'recitationComingSoon', 'licencePending', 'quranListenOffline',
   // Consoles: adhan alerts and play windows between prayers.
   'psNotifyAdhan', 'psSchedule', 'psAlertAdhan', 'msAlertAdhan', 'afterDhuhr', 'afterAsr', 'afterMaghrib',
+  // Parent alert for a prayer-time lock on a child device (zero-cost family events; never sent in Kids).
+  'notifAdhan',
   // Windows Zad X Guard (computes prayer locks; not offered in Kids v1).
   'computerNote',
   // Settings: adhan lock, prayer calculation, sacred-audio note.

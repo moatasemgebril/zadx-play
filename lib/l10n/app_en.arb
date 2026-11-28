@@ -549,5 +549,15 @@
   "recoveryCardTitleSet": "Recovery code is set",
   "recoveryCardBodySet": "Lost the code? Make a new one. The old one will stop working.",
   "recoveryCardReplace": "Make a new code",
-  "recoverySaved": "Recovery code saved."
+  "recoverySaved": "Recovery code saved.",
+  "familyAlertsTitle": "Family alerts",
+  "familyAlertsNote": "Alerts arrive while Zad X is open on this phone.",
+  "noFamilyAlerts": "No alerts in the last 7 days.",
+  "notifTaskSubmitted": "A task is waiting for your approval",
+  "notifAdhan": "Prayer time: play is paused on your child's device",
+  "notifProtection": "Alert: Zad X protection was turned off or changed on your child's device (accessibility, delete protection, Screen Time or the device clock). Open Zad X on that device to check it.",
+  "notifStale": "Your child's device has not checked in with Zad X for over a day. If it was switched off, ignore this; otherwise check that protection is still on.",
+  "lastSeen": "Last seen: {time}",
+  "lastSeenNever": "Not seen yet",
+  "deviceNotCheckingIn": "No check-in for over a day"
 }
