@@ -19,6 +19,11 @@ All brand images come from `tools/gen_brand_assets.py` (sources in `tools/brandi
 - Merge rule: a PR merges when its light PR checks are green and the Quality Gate approves. If a nightly/weekly/`main` heavy run fails, fixing it is P0 in the next morning cycle and no new features merge until it is green again.
 - Prototype republished at most once a day; Gmail source backup weekly (Fridays).
 
+## Zero cost (owner decision 2026-11-28)
+- No paid lawyers, certificates or services; use free tiers only (Firebase Spark: Auth, Firestore within free quotas, Hosting). No Blaze, no card.
+- The privacy-lawyer track is cancelled: the team writes the privacy policy and COPPA/GDPR-K checks from official free guidance; residual legal risk accepted by the owner.
+- Spark cannot run Cloud Functions: server logic must move to Firestore rules + client/offline logic (BACKLOG "Zero-cost backend").
+
 ## Order of priority
 Child safety & privacy > Islamic accuracy > security > working features > design polish > marketing.
 
