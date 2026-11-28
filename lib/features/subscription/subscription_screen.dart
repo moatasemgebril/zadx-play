@@ -5,6 +5,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../core/app_config.dart';
 import '../../core/app_variant.dart';
+import '../../core/feature_flags.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/platform.dart';
 import '../../core/theme/app_colors.dart';
@@ -28,6 +29,7 @@ class SubscriptionScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final period = ref.watch(_billingProvider);
+    final flags = ref.watch(featureFlagsProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.subTitle), backgroundColor: AppColors.navy, foregroundColor: Colors.white),
@@ -67,8 +69,12 @@ class SubscriptionScreen extends ConsumerWidget {
                 ],
               ]),
             ),
-            const SizedBox(height: 14),
-            const _ReferralCard(),
+            // Invite-a-friend rewards need server-side counting: hidden on the free Spark backend
+            // until a free design exists (owner decision 2026-11-28, FeatureFlags.referralRewards).
+            if (flags.referralRewards) ...[
+              const SizedBox(height: 14),
+              const _ReferralCard(),
+            ],
             const SizedBox(height: 10),
             Text(l10n.pricesNote, style: TextStyle(fontSize: 14, color: ZadScene.parent.bodyColor)),
             TextButton(
@@ -160,14 +166,16 @@ class _PlanCard extends ConsumerWidget {
       if (!kIsKids) (l10n.featAdhkar, has(AppFeature.adhkar)),
       (l10n.featCustomTasks, has(AppFeature.customUnlockTasks)),
       (l10n.featKids, Fmt.digits(plan.maxChildren, lang)),
-      (
-        l10n.featAi,
-        has(AppFeature.unlimitedAssistant)
-            ? l10n.unlimited
-            : has(AppFeature.assistant)
-                ? l10n.limited
-                : false
-      ),
+      // The AI assistant is not offered on the free Spark backend (no server for its key).
+      if (ref.watch(featureFlagsProvider).assistant)
+        (
+          l10n.featAi,
+          has(AppFeature.unlimitedAssistant)
+              ? l10n.unlimited
+              : has(AppFeature.assistant)
+                  ? l10n.limited
+                  : false
+        ),
       (l10n.featPs, has(AppFeature.consoleLinks)),
       (l10n.featReport, has(AppFeature.weeklyReport)),
     ];

@@ -11,10 +11,12 @@ import '../family/family_repository.dart';
 import 'app_lock_service.dart';
 
 /// Tamper alert (docs/decisions/DEVICE-PROTECTION.md): on start and every time Zad X comes back to
-/// the foreground, a device where protection was set up reports its state to the backend
-/// (`reportProtection`). The backend pushes newly appeared problems to the parent devices and sends
-/// a "not checking in" alert when a device has been silent for a day. Only reason codes are sent —
-/// never app names or usage.
+/// the foreground, a device where protection was set up reports its state (`reportProtection`).
+/// Zero-cost backend (default): the state goes to `presence/{childId}` and each newly appeared
+/// problem becomes one `protection` event that the parent app shows in-app and as a local
+/// notification; the parent app also warns about a device silent for a day (presence_reporter.dart,
+/// features/parent/family_alerts.dart). On Blaze the backend pushes instead. Only reason codes are
+/// sent — never app names or usage.
 final protectionMonitorProvider = Provider<void>((ref) {
   if (!AppPlatform.canLockGames) return;
   final service = ref.watch(appLockServiceProvider);

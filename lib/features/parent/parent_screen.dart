@@ -28,6 +28,7 @@ import 'children_card.dart';
 import 'credits_card.dart';
 import 'device_lock_card.dart';
 import 'devices_card.dart';
+import 'family_alerts.dart';
 import 'parent_gate.dart';
 import 'pin_recovery_screen.dart';
 import 'protection_card.dart';
@@ -52,6 +53,8 @@ class ParentScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
+          // Last seen per child device + alerts (zero-cost family events). Hidden in local mode.
+          const FamilyAlertsCard(),
           // Zad X Play only: Zad X Kids has no prayer tasks, prayer lock or prayer times.
           if (!kIsKids) const _HijriAdjustmentCard(),
           const PaidFeatureGate(feature: AppFeature.tasksRewards, child: _ApprovalsCard()),

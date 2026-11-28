@@ -11,6 +11,7 @@ import 'core/platform.dart';
 import 'core/theme/app_theme.dart';
 import 'features/family/removed_device_screen.dart';
 import 'features/onboarding/onboarding_pin_screen.dart';
+import 'features/parent/family_alerts.dart';
 import 'features/prayer/prayer_calculator.dart';
 import 'features/shell/sound_coordinator.dart';
 import 'features/schedule/schedule_controller.dart';
@@ -20,7 +21,9 @@ import 'router.dart';
 import 'services/app_lock/app_lock_service.dart';
 import 'services/app_lock/protection_monitor.dart';
 import 'services/audio/sfx_service.dart';
+import 'services/billing/subscription_service.dart';
 import 'services/family/device_removal.dart';
+import 'services/family/presence_reporter.dart';
 import 'services/notifications/prayer_notification_service.dart';
 import 'variant/kids_localizations.dart';
 
@@ -86,6 +89,11 @@ class _ZadXAppState extends ConsumerState<ZadXApp> {
     ref.watch(soundCoordinatorProvider);
     // A parent removed this device from the family (P1-3a): detect it and reset safely.
     ref.watch(deviceRemovalWatcherProvider);
+    // Zero-cost backend (no Cloud Functions): child devices keep "last seen" fresh, parent phones
+    // turn family events into local notifications and share the store plan with the family.
+    ref.watch(presenceReporterProvider);
+    ref.watch(familyAlertsNotifierProvider);
+    ref.watch(familyPlanSharerProvider);
 
     return MaterialApp.router(
       title: AppConfig.storeName,

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/app_variant.dart';
 import '../../data/models/child_profile.dart';
 import 'child_pause.dart';
+import 'family_events.dart';
 import 'firestore_family_repository.dart';
 import '../../data/models/plan.dart';
 
@@ -217,7 +218,8 @@ abstract class FamilyRepository {
   /// Settings other devices need (city, method, controlled games for Windows Guard).
   Future<void> saveSettings(Map<String, Object?> settings);
 
-  /// Push notification to the parent devices (handled server-side).
+  /// Alert for the parent devices. Zero-cost backend (default): an event doc the parent app shows
+  /// in-app and as a local notification ([FamilyEvent]); on Blaze: a server push. Never throws.
   Future<void> notifyParent(String childId, String type, {Map<String, Object?> data = const {}});
 
   /// Child profile (nickname + built-in avatar only) shared with the family's devices.
@@ -227,8 +229,28 @@ abstract class FamilyRepository {
   Future<void> deleteChild(String childId);
 
   /// Tamper alert heartbeat (docs/decisions/DEVICE-PROTECTION.md): reason codes only, e.g.
-  /// `accessibility_off`. The backend alerts the parent devices once per new reason.
+  /// `accessibility_off`. The parent devices are alerted once per new reason (zero-cost backend:
+  /// a `protection` event + the presence doc; on Blaze: the backend).
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons});
+
+  /// Child device: "this device is alive" (`presence/{childId}.lastSeen`, server time). The
+  /// caller limits it to one write per [presenceInterval]. No-op for local-only.
+  Future<void> touchPresence(String childId, {required String platform});
+
+  /// Parent device: the family's alert events of the last [eventRetention], newest first.
+  /// Emits nothing for local-only.
+  Stream<List<FamilyEvent>> watchEvents();
+
+  /// Parent device: last seen + protection state per child device ({childId: presence}).
+  /// Emits nothing for local-only.
+  Stream<Map<String, ChildPresence>> watchPresence();
+
+  /// Parent device: deletes events older than [eventRetention] (keeps the free quota small).
+  Future<void> pruneEvents();
+
+  /// Parent phone, zero-cost backend: writes the plan this phone's store confirmed to the family
+  /// doc (client-asserted, see `familyPlanSharerProvider`). No-op for local-only.
+  Future<void> shareFamilyPlan(Entitlement plan);
 
   /// Phones linked to the family ([parseLinkedDevices]). Emits nothing for local-only.
   Stream<List<LinkedDevice>> watchLinkedDevices();
@@ -290,6 +312,21 @@ class LocalFamilyRepository implements FamilyRepository {
 
   @override
   Future<void> reportProtection(String childId, {required String platform, required List<String> reasons}) async {}
+
+  @override
+  Future<void> touchPresence(String childId, {required String platform}) async {}
+
+  @override
+  Stream<List<FamilyEvent>> watchEvents() => const Stream<List<FamilyEvent>>.empty();
+
+  @override
+  Stream<Map<String, ChildPresence>> watchPresence() => const Stream<Map<String, ChildPresence>>.empty();
+
+  @override
+  Future<void> pruneEvents() async {}
+
+  @override
+  Future<void> shareFamilyPlan(Entitlement plan) async {}
 
   @override
   Stream<List<LinkedDevice>> watchLinkedDevices() => const Stream<List<LinkedDevice>>.empty();

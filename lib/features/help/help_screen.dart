@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_config.dart';
 import '../../core/app_variant.dart';
+import '../../core/feature_flags.dart';
 import '../../core/l10n_ext.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/formatters.dart';
@@ -15,12 +16,15 @@ import '../../shared/art/zad_art.dart';
 import '../../shared/widgets/brand_logo.dart';
 import '../../shared/widgets/zad_widgets.dart';
 
-class HelpScreen extends StatelessWidget {
+class HelpScreen extends ConsumerWidget {
   const HelpScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
+    // The AI assistant needs a server-held key (never in the app): hidden on the free Spark
+    // backend (owner decision 2026-11-28, FeatureFlags.assistant).
+    final showAssistant = ref.watch(featureFlagsProvider).assistant;
     final steps = [
       (l10n.how1T, l10n.how1B),
       (l10n.how2T, l10n.how2B),
@@ -53,8 +57,10 @@ class HelpScreen extends StatelessWidget {
           if (!kIsKids) ...[const _AboutCard(), const SizedBox(height: 14)],
           // Parent PIN first (child safety), then the plan check (_AssistantGate: server-verified
           // plan only, since the server refuses the assistant during the on-device trial).
-          const AssistantParentLock(child: _AssistantGate()),
-          const SizedBox(height: 14),
+          if (showAssistant) ...[
+            const AssistantParentLock(child: _AssistantGate()),
+            const SizedBox(height: 14),
+          ],
           ZadCard(
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               Text(l10n.howTitle, style: Theme.of(context).textTheme.titleMedium),
