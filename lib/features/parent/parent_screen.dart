@@ -29,6 +29,7 @@ import 'credits_card.dart';
 import 'device_lock_card.dart';
 import 'devices_card.dart';
 import 'parent_gate.dart';
+import 'pin_recovery_screen.dart';
 import 'protection_card.dart';
 import 'ps_lock_steps.dart';
 
@@ -45,6 +46,9 @@ class ParentScreen extends ConsumerWidget {
           PageTitle(l10n.parentTitle, color: ZadScene.parent.titleColor),
           const SizedBox(height: 12),
           const _PlanCard(),
+          const SizedBox(height: 12),
+          // Create (or replace) the offline PIN recovery code; non-blocking.
+          const RecoveryCodeCard(),
           const SizedBox(height: 12),
           const ChildrenCard(),
           const SizedBox(height: 12),
