@@ -95,3 +95,25 @@ export function deviceRemovalAudit(byUid: string, targetUid: string, targetRole:
     expiresAt: new Date(nowMs + DEVICE_AUDIT_RETENTION_MS),
   };
 }
+
+/**
+ * Payload of the `checkDeviceMembership` callable (BACKLOG P1-3a): {familyId}, a Firestore-safe id.
+ * The caller always asks about its OWN uid (from the auth token), never about another device.
+ */
+export function parseMembershipRequest(raw: unknown): { familyId: string } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const { familyId } = raw as Record<string, unknown>;
+  if (!isSafeId(familyId)) return null;
+  return { familyId };
+}
+
+/**
+ * The explicit "is this device still in the family?" answer for `checkDeviceMembership`, read
+ * with the admin SDK (so a rules bug can never make a device look removed). A missing family doc
+ * is "not a member". The answer is a single boolean about the caller itself: it reveals no
+ * members, roles or child data, and nothing about families the caller never belonged to beyond
+ * "you are not a member".
+ */
+export function deviceMembershipAnswer(family: FamilyMembership | null, uid: string): { member: boolean } {
+  return { member: family !== null && memberRole(family, uid) !== null };
+}
