@@ -100,7 +100,6 @@ Zad X Play — العب • تعلّم • تألّق
 • ألعاب Zad X التعليمية: حروف القرآن، وابنِ مسجدك، وغيرها.
 • تمارين رياضية بسيطة ومهام مخصّصة تضعها أنت.
 • أكثر من طفل: حتى ٢ في الأساسية وحتى ٥ في بلس.
-• مساعد لولي الأمر داخل التطبيق.
 • في بلس: تقرير أسبوعي لولي الأمر، واختصار لتطبيق الرقابة الأسرية الخاص بجهاز الألعاب المنزلي.
 
 ■ أنت المتحكم
@@ -146,7 +145,6 @@ A family app that helps you shape your child's screen time around Islamic habits
 • Zad X learning games: Quran Letters, Build Your Mosque and more.
 • Simple exercises and your own custom tasks.
 • More children: up to 2 on Basic, up to 5 on Plus.
-• An in-app assistant for parents.
 • Plus only: weekly parent report and a shortcut to your game console's family app.
 
 ■ YOU ARE IN CONTROL

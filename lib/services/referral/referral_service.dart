@@ -1,9 +1,9 @@
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/app_config.dart';
-import '../../core/backend.dart';
+import '../../core/feature_flags.dart';
+import '../../core/server_functions.dart';
 
 @immutable
 class ReferralStatus {
@@ -24,26 +24,32 @@ class ReferralStatus {
 ///
 /// All counting and crediting happens in the `referralStatus` / `verifyPurchase`
 /// Cloud Functions so it cannot be faked from the client.
+///
+/// Hidden today (owner decision 2026-11-28: zero cost, no Cloud Functions): the reward card is
+/// behind `FeatureFlags.referralRewards` until a free design exists, and [status] makes no call.
 class ReferralService {
-  ReferralService({FirebaseFunctions? functions}) : _functions = functions;
+  ReferralService({ServerCalls? server}) : _server = server ?? serverCallsFor();
 
-  final FirebaseFunctions? _functions;
-  FirebaseFunctions get _f => _functions ?? zadFunctions();
+  final ServerCalls _server;
 
   Future<ReferralStatus> status() async {
-    final res = await _f.httpsCallable('referralStatus').call();
-    final d = Map<String, dynamic>.from(res.data as Map);
+    final res = await _server.call('referralStatus');
+    final d = Map<String, dynamic>.from(res! as Map);
     return ReferralStatus(code: d['code'] as String, paidFriends: d['paidFriends'] as int? ?? 0);
   }
 }
 
-final referralServiceProvider = Provider<ReferralService>((_) => ReferralService());
+final referralServiceProvider = Provider<ReferralService>((ref) => ReferralService(server: ref.watch(serverCallsProvider)));
+
+/// Placeholder shown when there is no server answer.
+const _placeholderStatus = ReferralStatus(code: 'ZADX-0000');
 
 final referralStatusProvider = FutureProvider<ReferralStatus>((ref) async {
+  if (!ref.watch(featureFlagsProvider).referralRewards) return _placeholderStatus;
   try {
     return await ref.watch(referralServiceProvider).status();
   } catch (_) {
     // Offline / Firebase not configured yet: show a placeholder code.
-    return const ReferralStatus(code: 'ZADX-0000');
+    return _placeholderStatus;
   }
 });
