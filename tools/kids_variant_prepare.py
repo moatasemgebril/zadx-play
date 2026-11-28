@@ -20,12 +20,12 @@ import os
 import subprocess
 from pathlib import Path
 
-# Files that exist only for Zad X Play (adhan audio and its credits, the logo with a crescent and
-# mosques). The Kids code never references them (BrandLogo draws a wordmark instead).
+# Files that exist only for Zad X Play (adhan audio and its credits, the Zad X Play logo images).
+# The Kids code never references them (BrandLogo draws the Kids wordmark instead).
 REMOVE_GLOBS = [
     "assets/audio/adhan_*.mp3",
     "assets/audio/ADHAN-CREDITS.txt",
-    "assets/images/zadx_logo.jpg",
+    "assets/images/zadx_*",
 ]
 
 # Asset folders stay declared in pubspec.yaml, so each keeps one neutral file.

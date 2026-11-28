@@ -5,41 +5,59 @@ import '../../core/theme/app_colors.dart';
 
 /// The Zad X logo of this build. Use it everywhere a logo is shown (header, splash, about…).
 ///
-/// * Zad X Play: the artwork logo ([islamicAsset]).
+/// * Zad X Play (owner decision 2026-11-27): the "ZX ZAD X" wordmark ([wordmarkAsset]) on a navy
+///   plate, or with [emblem] just the "ZX" mark ([emblemAsset], transparent, for the splash).
+///   Both are cut from the owner's artwork by tools/gen_brand_assets.py.
 /// * Zad X Kids: a drawn "Zad X Kids" Latin wordmark in the Kids palette (teal, sun yellow,
-///   coral). The artwork logo has Arabic lettering, a crescent, mosques and the line "with
-///   Islamic Values", so it must never appear in Kids. TODO(owner): a neutral Kids artwork logo +
-///   launcher icon (docs/decisions/ZADX-KIDS-VARIANT.md).
+///   coral). The phone icon is the shared "ZX" (owner decision 2026-11-27); the Kids bundle has
+///   no logo image (tools/kids_variant_prepare.py removes them).
 class BrandLogo extends StatelessWidget {
-  const BrandLogo({super.key, this.width = 150, this.height = 99, this.variant = appVariant});
+  const BrandLogo({
+    super.key,
+    this.width = 168,
+    this.height = 68,
+    this.variant = appVariant,
+    this.emblem = false,
+  });
 
   /// Zad X Play only. Removed from the Kids bundle by tools/kids_variant_prepare.py.
-  static const islamicAsset = 'assets/images/zadx_logo.jpg';
+  static const wordmarkAsset = 'assets/images/zadx_wordmark.webp';
+
+  /// Zad X Play only ("ZX" without the words). Removed from the Kids bundle too.
+  static const emblemAsset = 'assets/images/zadx_emblem.webp';
 
   final double width;
   final double height;
 
   /// Which app's logo (default: this build). The Kids build always draws the Kids wordmark,
-  /// whatever is passed (`kIsKids` is a compile-time constant, so the artwork logo is tree-shaken).
+  /// whatever is passed (`kIsKids` is a compile-time constant, so the artwork is tree-shaken).
   final AppVariant variant;
 
-  /// True when this widget shows the Zad X Play artwork logo.
+  /// Zad X Play: show only the "ZX" mark (transparent) instead of the wordmark plate.
+  final bool emblem;
+
+  /// True when this widget shows Zad X Play artwork.
   bool get showsArtwork => !kIsKids && variant == AppVariant.islamic;
 
   @override
   Widget build(BuildContext context) {
     if (!kIsKids && variant == AppVariant.islamic) {
-      return ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: Image.asset(
-          islamicAsset,
-          width: width,
-          height: height,
-          fit: BoxFit.cover,
-          semanticLabel: 'Zad X',
-          gaplessPlayback: true,
-          errorBuilder: (_, __, ___) => SizedBox(width: width, height: height),
-        ),
+      final image = Image.asset(
+        emblem ? emblemAsset : wordmarkAsset,
+        width: width,
+        height: height,
+        fit: BoxFit.contain,
+        semanticLabel: 'Zad X',
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, __, ___) => SizedBox(width: width, height: height),
+      );
+      if (emblem) return image;
+      // The wordmark's soft glow is cut for navy: always show it on the brand navy plate,
+      // so it looks the same on the navy header and inside white cards.
+      return DecoratedBox(
+        decoration: BoxDecoration(color: AppColors.navy, borderRadius: BorderRadius.circular(14)),
+        child: image,
       );
     }
     return const KidsWordmark().sized(width, height);

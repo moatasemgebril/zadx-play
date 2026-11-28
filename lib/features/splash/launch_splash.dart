@@ -5,15 +5,17 @@ import 'package:flutter/material.dart';
 import '../../core/app_config.dart';
 import '../../core/app_variant.dart';
 import '../../core/theme/app_colors.dart';
+import '../../shared/art/scenes/brand_backdrop.dart';
 import '../../shared/widgets/brand_logo.dart';
 import '../settings/settings_controller.dart' show defaultLanguageFor;
 import '../startup/startup_fallback.dart';
 
 /// Brand launch screen, shown while the start-up work in `main()` runs. One per app:
 ///
-/// * **Zad X Play**: the Zad X logo ([BrandLogo]), the Latin "Zad X" wordmark and the identity
-///   line in Arabic and English ([IslamicBrand.identityAr] / [IslamicBrand.identityEn]) on a
-///   soft navy → purple gradient.
+/// * **Zad X Play**: the "ZX" mark ([BrandLogo] emblem), the Latin "Zad X" wordmark and the
+///   identity line in Arabic and English ([IslamicBrand.identityAr] / [IslamicBrand.identityEn])
+///   on the brand navy backdrop with a thin gold ring ([BrandBackdropPainter], owner artwork
+///   2026-11-27).
 /// * **Zad X Kids**: the Latin "ZAD X KIDS" wordmark ([BrandLogo] in Kids) on a bright, neutral
 ///   navy → teal sky with sun-yellow and coral light. No Arabic script, no religious line, no
 ///   artwork logo (docs/decisions/ZADX-KIDS-VARIANT.md).
@@ -289,7 +291,7 @@ class _SplashStageState extends State<_SplashStage> with TickerProviderStateMixi
       _hold = Timer(widget.reducedMotionHold, _onRevealed);
     } else {
       // Zad X Play only: the Kids bundle has no artwork logo (tools/kids_variant_prepare.py).
-      if (_play) precacheImage(const AssetImage(BrandLogo.islamicAsset), context, onError: (_, __) {});
+      if (_play) precacheImage(const AssetImage(BrandLogo.emblemAsset), context, onError: (_, __) {});
       _reveal.forward().whenComplete(_onRevealed);
     }
   }
@@ -340,24 +342,28 @@ class _SplashStageState extends State<_SplashStage> with TickerProviderStateMixi
         excludeSemantics: true,
         child: FadeTransition(
           opacity: ReverseAnimation(_exit),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: _play
-                    ? const [LaunchSplash.background, Color(0xFF1A2C7A), AppColors.purpleDark]
-                    : const [LaunchSplash.background, KidsColors.tealDeep, KidsColors.teal],
-                stops: const [0, 0.6, 1],
-              ),
-            ),
-            child: AnimatedBuilder(
-              animation: _reveal,
-              builder: (context, _) => _play
-                  ? _PlayContent(t: _reveal.value, animate: !_reduced)
-                  : _KidsContent(t: _reveal.value, animate: !_reduced),
-            ),
-          ),
+          child: _play
+              ? CustomPaint(
+                  painter: const BrandBackdropPainter(ring: true),
+                  child: AnimatedBuilder(
+                    animation: _reveal,
+                    builder: (context, _) => _PlayContent(t: _reveal.value, animate: !_reduced),
+                  ),
+                )
+              : DecoratedBox(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [LaunchSplash.background, KidsColors.tealDeep, KidsColors.teal],
+                      stops: [0, 0.6, 1],
+                    ),
+                  ),
+                  child: AnimatedBuilder(
+                    animation: _reveal,
+                    builder: (context, _) => _KidsContent(t: _reveal.value, animate: !_reduced),
+                  ),
+                ),
         ),
       ),
     );
@@ -369,7 +375,7 @@ double _interval(double t, double begin, double end, Curve curve) =>
 
 double _logoWidth(BuildContext context) => (MediaQuery.sizeOf(context).width * 0.62).clamp(160.0, 300.0);
 
-/// Zad X Play: logo, "Zad X" wordmark, a fine gold rule and the identity line (Arabic, English).
+/// Zad X Play: "ZX" mark, "Zad X" wordmark, a fine gold rule and the identity line (Arabic, English).
 class _PlayContent extends StatelessWidget {
   const _PlayContent({required this.t, required this.animate});
 
@@ -395,7 +401,7 @@ class _PlayContent extends StatelessWidget {
             height: logoWidth * 1.5,
             decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: RadialGradient(colors: [Color(0x666C3BEB), Color(0x006C3BEB)]),
+              gradient: RadialGradient(colors: [Color(0x554CC9F0), Color(0x004CC9F0)]),
             ),
           ),
         ),
@@ -408,10 +414,7 @@ class _PlayContent extends StatelessWidget {
               opacity: logo,
               child: Transform.scale(
                 scale: 0.9 + 0.1 * logo,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: BrandLogo(width: logoWidth, height: logoWidth * 0.66, variant: AppVariant.islamic),
-                ),
+                child: BrandLogo(width: logoWidth * 0.72, height: logoWidth * 0.72, variant: AppVariant.islamic, emblem: true),
               ),
             ),
             const SizedBox(height: 26),
